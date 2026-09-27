@@ -38,6 +38,7 @@
 - SSE cursor restart behavior verified across separate Python processes: a fresh backend instance returns a replayable event ID greater than previous process cursor. No runtime implementation change needed; live server reconnect remains to verify.
 - Bounded SSE client queue overflow verified to retain dropped-ID range and emit `replay_gap` before next accepted progress event; live-queue regression included in 9/9 passing event suite.
 - Fractional `30000/1001` FPS command and artifact validation agree on exact frame count over 60,000 seconds; render-integrity tests 5/5. Live fractional-rate AMF render remains pending.
+- Render start rejects source/output collisions by canonical path and physical hardlink identity before queueing; route regression covers video path, master-audio path, and hardlink alias.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

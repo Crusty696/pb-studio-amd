@@ -455,7 +455,16 @@ def _reject_render_output_identity(
                 status_code=400,
                 detail=f"Render-{label}-Pfad kann nicht kanonisiert werden",
             ) from exc
-        if os.path.normcase(str(input_path)) == output_key:
+        same_file = os.path.normcase(str(input_path)) == output_key
+        if not same_file and output_path.exists():
+            try:
+                same_file = os.path.samefile(output_path, input_path)
+            except OSError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Render-Ausgabeidentität für {label} kann nicht geprüft werden",
+                ) from exc
+        if same_file:
             raise HTTPException(
                 status_code=400,
                 detail=f"Render-Ausgabe darf nicht dieselbe Datei wie {label} sein",

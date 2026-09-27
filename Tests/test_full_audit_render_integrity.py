@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
+import os
 import subprocess
 from fractions import Fraction
 from pathlib import Path
@@ -236,7 +237,7 @@ def test_rational_non_integer_fps_frame_count_matches_artifact_validator(
     assert validation["expected_frames"] == expected_frames
 
 
-@pytest.mark.parametrize("same_as", ["video", "audio"])
+@pytest.mark.parametrize("same_as", ["video", "audio", "video-hardlink"])
 def test_start_render_rejects_input_output_identity_before_enqueue(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -246,7 +247,13 @@ def test_start_render_rejects_input_output_identity_before_enqueue(
     audio = tmp_path / "mix.wav"
     media.write_bytes(b"video")
     audio.write_bytes(b"audio")
-    output = media if same_as == "video" else audio
+    if same_as == "video":
+        output = media
+    elif same_as == "audio":
+        output = audio
+    else:
+        output = tmp_path / "source-hardlink.mp4"
+        os.link(media, output)
     request = RenderRequest(
         output_path=str(output), audio_path=str(audio),
     )
