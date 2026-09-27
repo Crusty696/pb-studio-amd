@@ -13,7 +13,7 @@
 | 7 | Cooldown tag counts do not prove provider recovery or caption accuracy | T002,T005,T014 / FR-430,FR-431 | MOCKED RECOVERY + OUTAGE/RECOVERY ROUTER REGRESSIONS; live provider recovery and semantic accuracy pending |
 | 8 | Unavailable model stage can report completed and block retry | T002 / FR-430 | FIXED + PERSISTED-RESUME REGRESSION: unavailable remains non-success and ordinary requested retry runs; live model recovery pending |
 | 9 | Probe failure conflated with missing audio track | T002 / FR-430 | FIXED + NO-STREAM/PROBE-ERROR/SUCCESS STAGE REGRESSION; real encoded-media probe pending |
-| 10 | Resume may skip vector-link/tombstone validation | T002 / FR-430 | OPEN |
+| 10 | Resume may skip vector-link/tombstone validation | T002 / FR-430 | FIXED + RED/GREEN RESUME REGRESSION: metadata alone cannot reuse embedding; requires live vector_map link, non-tombstoned in-range nonnegative FAISS ID, exact media path and content hash. Full user-project vector recovery remains pending |
 | 11 | UI can hide successful scenes on aggregate failure | T002 / FR-430 | FIXED + NATIVE VIEWMODEL REGRESSION: scene stage remains visible after later motion failure; GUI visual acceptance pending |
 | 12 | Old batch error can override later valid stage response | T002 / FR-430 | FIXED + NATIVE MULTI-PASS RECOVERY REGRESSION: lost scene response followed by complete server response clears stale request failure; GUI/network-loss live acceptance pending |
 | 13 | Empty model smoke output fabricated as success | T005 / FR-431 | OPEN |

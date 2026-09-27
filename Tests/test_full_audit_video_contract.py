@@ -298,8 +298,10 @@ def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
             return {"id": 12, "file_hash": "hash"}
 
     class FakeConnection:
+        rows = [(41,)]
+
         def execute(self, *_args):
-            return [(41,)]
+            return self.rows
 
     class FakeDatabase:
         def get_connection(self):
@@ -333,6 +335,36 @@ def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
 
     assert router._get_reusable_embedding_metadata(
         "C:/clip.mp4", 1, "hash", State(), type("Context", (), {"project_id": 1})()
+    ) is None
+
+    FakeVectors._tombstoned_ids.clear()
+    context = type("Context", (), {"project_id": 1})()
+    assert router._get_reusable_embedding_metadata(
+        "C:/clip.mp4", 1, "hash", State(), context
+    ) == {"embedding_dim": 1152, "embedding_samples": 1}
+
+    FakeVectors.metadata[41]["video_hash"] = None
+    assert router._get_reusable_embedding_metadata(
+        "C:/clip.mp4", 1, "hash", State(), context
+    ) is None
+
+    FakeVectors.metadata[41]["video_hash"] = "old-content-hash"
+    assert router._get_reusable_embedding_metadata(
+        "C:/clip.mp4", 1, "hash", State(), context
+    ) is None
+
+    FakeVectors.metadata[-1] = {
+        "path": "C:/clip.mp4",
+        "video_hash": "hash",
+    }
+    FakeConnection.rows = [(-1,)]
+    assert router._get_reusable_embedding_metadata(
+        "C:/clip.mp4", 1, "hash", State(), context
+    ) is None
+
+    FakeConnection.rows = []
+    assert router._get_reusable_embedding_metadata(
+        "C:/clip.mp4", 1, "hash", State(), context
     ) is None
 
 

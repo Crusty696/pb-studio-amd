@@ -1980,7 +1980,8 @@ def _get_reusable_embedding_metadata(
             tombstones = getattr(vector_store, "_tombstoned_ids", set())
             for faiss_id in faiss_ids:
                 if (
-                    faiss_id in tombstones
+                    faiss_id < 0
+                    or faiss_id in tombstones
                     or vector_store.index is None
                     or faiss_id >= vector_store.index.ntotal
                 ):
@@ -1988,7 +1989,7 @@ def _get_reusable_embedding_metadata(
                 metadata = vector_store.metadata.get(faiss_id) or {}
                 metadata_path = metadata.get("path")
                 metadata_hash = metadata.get("video_hash")
-                if metadata_hash not in (None, video_hash):
+                if metadata_hash != video_hash:
                     continue
                 if metadata_path and Path(metadata_path).resolve() == expected_path:
                     return {
