@@ -1114,7 +1114,7 @@ def test_chat_fragmented_tool_calls_assembled_and_executed_once():
 
     async def mock_handler(args, http_client=None):
         calls.append(args)
-        return {"result": "success"}
+        return {"result": "success", "error": None}
 
     reg = ToolRegistry()
     reg.register(Tool(
@@ -1144,13 +1144,18 @@ def test_chat_fragmented_tool_calls_assembled_and_executed_once():
     events = _run(go())
     tool_calls = [e for e in events if e.type == "tool_call"]
     tool_results = [e for e in events if e.type == "tool_result"]
+    tool_errors = [
+        e for e in events
+        if e.type == "error" and e.payload.get("stage") == "tool_dispatch"
+    ]
 
     assert len(tool_calls) == 1
     assert tool_calls[0].payload["id"] == "call_123"
     assert tool_calls[0].payload["name"] == "test_tool"
 
     assert len(tool_results) == 1
-    assert tool_results[0].payload["result"] == {"result": "success"}
+    assert tool_results[0].payload["result"] == {"result": "success", "error": None}
+    assert tool_errors == []
     assert len(calls) == 1
     assert calls[0] == {"query": "pb_studio"}
 
