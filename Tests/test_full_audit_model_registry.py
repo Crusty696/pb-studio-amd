@@ -39,3 +39,22 @@ def test_loaded_probe_failure_does_not_claim_model_is_unloaded_and_jit_ready():
     assert model.usable is True
     assert "unbekannt" in model.status_reason.lower()
     assert "JIT" not in model.status_reason
+
+
+def test_capability_probe_failure_is_visible_and_does_not_claim_usable():
+    model = ModelInventoryService._installed_entry(
+        provider="ollama",
+        model=LMStudioModelInfo(name="installed-model"),
+        loaded_names=frozenset(),
+        capabilities_by_name={},
+        verified_at="2026-09-27T00:00:00+00:00",
+        provider_status="degraded",
+        capability_error="Capability-Prüfung fehlgeschlagen (ConnectError).",
+        loaded_error=None,
+    )
+
+    assert model.installed is True
+    assert model.usable is False
+    assert model.capabilities == ()
+    assert "Capability-Prüfung fehlgeschlagen" in model.status_reason
+    assert "ConnectError" in model.status_reason

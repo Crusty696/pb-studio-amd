@@ -24,6 +24,7 @@
 - Video library ViewModel now falls back to its current dispatcher when tests or nonstandard hosts have no global WPF `Application`; avoids abandoned STA/Dispatcher operations while preserving production application's dispatcher.
 - Video embedding resume now requires exact matching media content hash plus active linked FAISS metadata; negative IDs, missing links, out-of-range IDs, and tombstones cannot reuse stale embedding status.
 - Model smoke endpoint has direct empty-provider-response coverage: reports failure with explicit reason and preserves the existing empty-string response schema, never fabricated “OK”.
+- Model inventory capability-probe failure is explicitly verified as installed-but-unverified/unusable, with failure detail surfaced in status reason instead of a silent DEBUG-only diagnosis.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 
