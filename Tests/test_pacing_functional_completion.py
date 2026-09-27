@@ -135,6 +135,59 @@ def test_preview_uses_project_context_and_reports_actual_interval(
     assert Path(response.preview_path).read_bytes() == b"preview artifact"
 
 
+def test_preview_route_passes_registered_master_audio_to_renderer(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    state = _PreviewState(timeline_end=3.0)
+    lock = _TrackingAsyncLock()
+    _prepare_preview(monkeypatch, lock)
+    audio = tmp_path / "master.wav"
+    audio.write_bytes(b"registered audio")
+    artifact = tmp_path / "preview-with-audio.mp4"
+    state.current_audio_path = str(audio)
+    state.get_audio_clips_snapshot = lambda: {7: {"path": str(audio)}}
+    captured: dict[str, str | None] = {}
+
+    def validate_audio_path(path, registered_paths, *, label):
+        captured["validated_path"] = path
+        captured["label"] = label
+        assert list(registered_paths) == [str(audio)]
+        return path
+
+    async def fake_to_thread(_func, _timeline, _start, duration, audio_path):
+        captured["renderer_audio_path"] = audio_path
+        artifact.write_bytes(b"rendered video and audio")
+        return {
+            "preview_path": str(artifact),
+            "duration": min(duration, 2.75),
+            "audio_included": audio_path is not None,
+        }
+
+    monkeypatch.setattr(
+        pacing_router,
+        "validate_registered_media_path",
+        validate_audio_path,
+    )
+    monkeypatch.setattr(pacing_router.asyncio, "to_thread", fake_to_thread)
+
+    response = asyncio.run(
+        pacing_router.generate_preview(
+            PreviewRequest(start_sec=0.25, duration=2.75),
+            state,
+        )
+    )
+
+    assert captured == {
+        "validated_path": str(audio),
+        "label": "Preview audio_path",
+        "renderer_audio_path": str(audio),
+    }
+    assert response.audio_included is True
+    assert response.duration == pytest.approx(2.75)
+    assert Path(response.preview_path).read_bytes() == b"rendered video and audio"
+
+
 def test_preview_rejects_start_outside_timeline_before_render(monkeypatch) -> None:
     state = _PreviewState(timeline_end=3.0)
     lock = _TrackingAsyncLock()
