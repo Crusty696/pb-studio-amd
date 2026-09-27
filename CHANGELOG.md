@@ -27,6 +27,7 @@
 - Model inventory capability-probe failure is explicitly verified as installed-but-unverified/unusable, with failure detail surfaced in status reason instead of a silent DEBUG-only diagnosis.
 - Tool-use activation is covered through the API for both capability-negative and capability-positive models; rejected activation leaves configuration and inventory unchanged.
 - ChatAgent now has a regression proving successful tool responses containing `error: null` do not emit a failure event.
+- Chat render’s video-only path is verified end-to-end at the tool/API boundary without requiring an audio path when audio is disabled.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

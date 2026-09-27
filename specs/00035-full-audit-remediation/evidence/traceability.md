@@ -48,7 +48,7 @@
 | 42 | Project counters read different sources | T009 / FR-437 | FIXED + REGRESSION; GUI pending |
 | 43 | Recovery discovery may skip temporarily inaccessible root | T009 / FR-437 | FIXED + REGRESSION; live ACL pending |
 | 44 | Valid `error:null` chat response presented as error | T005 / FR-431 | FIXED + CHAT-AGENT REGRESSION: successful tool result retains `error:null` without emitting tool-dispatch error event |
-| 45 | Chat render rejects valid video-only request | T005 / FR-431 | OPEN |
+| 45 | Chat render rejects valid video-only request | T005 / FR-431 | FIXED + TOOL-ROUTE REGRESSION: `include_audio=false` with omitted audio path reaches render endpoint with empty audio path and unchanged video-only flag |
 | 46 | Stale clear-history response can clear other project view | T005 / FR-437 | OPEN |
 | 47 | Failed-stage defaults can be used by Brain learning | T004 / FR-438 | OPEN |
 | 48 | Invalid training pair can be acknowledged as applied | T004 / FR-438 | OPEN |
