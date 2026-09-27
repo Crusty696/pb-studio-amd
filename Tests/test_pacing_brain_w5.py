@@ -47,10 +47,15 @@ def test_pacing_service_forwards_cached_brain_features(monkeypatch):
     reranker = _CapturingReranker()
     from pb_studio.brain.brain_service import BrainService
 
+    fake_brain_service = SimpleNamespace(
+        reranker=reranker,
+        unbind_project_state=lambda: None,
+        force_unbind_project_state=lambda: True,
+    )
     monkeypatch.setattr(
         BrainService,
         "get",
-        classmethod(lambda cls: SimpleNamespace(reranker=reranker)),
+        classmethod(lambda cls: fake_brain_service),
     )
     selector = ClipSelector()
     engine = SimpleNamespace(clip_selector=selector)
@@ -61,6 +66,8 @@ def test_pacing_service_forwards_cached_brain_features(monkeypatch):
         {"use_brain": True, "brain_min_confidence": 0.72},
         {
             "duration_seconds": 10.0,
+            "_analysis_status": "completed",
+            "_stage_status": {"beats": "completed", "spectral": "completed"},
             "energy_curve": [0.2, 0.8],
             "spectral_data": {"centroids": [100.0, 400.0]},
             "mood_tags": ["dark"],
@@ -89,10 +96,19 @@ def test_brain_selector_receives_real_features_and_threshold():
         "energy_curve": [0.1, 0.9],
         "centroid_curve": [0.2, 0.8],
         "duration_seconds": 10.0,
+        "analysis_status": "completed",
+        "stage_status": {"beats": "completed", "spectral": "completed"},
         "mood_tags": ["energetic"],
     }
     selector.brain_video_features_by_clip = {
         "7": {
+            "analysis_status": "completed",
+            "stage_status": {
+                "motion": "completed",
+                "scenes": "completed",
+                "colors": "completed",
+                "captions": "completed",
+            },
             "avg_motion": 0.75,
             "scenes": [{"start_time": 4.5, "end_time": 6.0}],
             "avg_brightness": 0.7,
