@@ -62,11 +62,11 @@ def test_annotate_attaches_brain_scores(brain_svc, tmp_path: Path):
         out = annotate_cuts_with_brain(
             cuts,
             weight_store=brain_svc.weights,
-            audio_analysis={"mood_tags": ["dark"], "energy_curve": [0.4, 0.7], "duration_seconds": 2.5},
+            audio_analysis={"analysis_status": "completed", "mood_tags": ["dark"], "energy_curve": [0.4, 0.7], "duration_seconds": 2.5},
             video_analysis_by_clip={
-                "clip_1": {"avg_motion": 0.6, "motion_category": "high",
+                "clip_1": {"analysis_status": "completed", "avg_motion": 0.6, "motion_category": "high",
                            "avg_brightness": 0.5, "avg_color_temp": 0.1},
-                "clip_2": {"avg_motion": 0.3, "motion_category": "low"},
+                "clip_2": {"analysis_status": "completed", "avg_motion": 0.3, "motion_category": "low"},
             },
             audio_clip_id=1,
             persist_to_state_conn=state,
