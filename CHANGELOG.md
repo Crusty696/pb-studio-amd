@@ -5,6 +5,7 @@
 
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
+- #17–21 preview workflow reverified: artifact path/audio/duration, rendered-preview selection and source-offset scrubbing covered by 38 Python and 8 native tests; GUI listening/playback remains pending handover.
 - #30–34 audio analysis verified: streaming key/spectral provenance and tail accounting remain covered; long-mix structure boundaries follow observed energy transitions with evidence-derived confidence, without invented section labels. Focused suites 35 passed, 1 skipped; real separated-stem comparison remains pending fixture availability.
 - #22–25/#29/#50–51 event/GPU lifecycle verified: queue/replay recovery reaches render-status reconciliation; GPU job deadline bounds lock wait and work, lock stays held until timed-out worker exits, and VRAM reservation/eviction happens only under serialization. Focused Python and native C# evidence recorded in Spec 00035 QC report.
 - #40–43/#52 project lifecycle: stale DB media reuse now refreshes from current import hash/probe and invalidates old analysis on changed content; project-switch stale save response, catalog counters, inaccessible recovery root and empty-timeline explicit Save path verified. Close still preserves timeline when RAM emptiness may be unsaved; GUI interaction remains pending.
