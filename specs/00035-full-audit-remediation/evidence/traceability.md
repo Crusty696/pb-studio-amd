@@ -4,8 +4,8 @@
 
 | # | Finding | Task / requirement | Status |
 |---:|---|---|---|
-| 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | FIXED + REGRESSION + LIVE SHORT/60-s EXPORTS + LIVE RATIONAL-FPS AMF EXPORT (180/180); original 54:59 media unavailable |
-| 2 | 437.861-second evidence-record gap | T008 / FR-435 | OPEN |
+| 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | HISTORICAL BACKEND LOG CONFIRMS 98,982/98,984; FIXED CODE PATH + REGRESSION + LIVE SHORT/60-s + RATIONAL-FPS AMF EXPORT (180/180); source/evidence bundle unavailable |
+| 2 | 437.861-second evidence-record gap | T008 / FR-435 | PARTIAL: backend log confirms prolonged render/validation silence while health checks continue; exact 437.861-s evidence pair requires missing incident `result.json`/`validation.json` |
 | 3 | Preview path/audio contract failure | T007 / FR-434 | FIXED + ROUTE REGRESSION + LIVE 3-s H.264/AAC PREVIEW; GUI audition pending |
 | 4 | Provider timeout/cooldown produces empty batch results | T005,T002 / FR-430,FR-431 | FIXED + RED/GREEN ROUTER REGRESSION: stop repeated provider probes after exhausted receipt, mark captions unavailable when no fallback exists; live recovery/batch acceptance pending |
 | 5 | Mocked render tests are not full-workflow proof | QC,T014 / TR-392,TR-393 | OPEN |
