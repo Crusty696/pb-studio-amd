@@ -33,7 +33,7 @@
 | 27 | Render source/output identity collision possible | T008 / FR-435 | FIXED + ROUTER REGRESSION: exact source path and distinct hardlink alias rejected before queue enqueue; canonical path plus inode identity checked |
 | 28 | Validation progress is not visible | T008 / FR-435 | FIXED + SERVICE→SSE→VIEWMODEL REGRESSION: named validation phases emitted and bypass 100-ms progress throttle; visible `ValidationText` receives phase/percent; interactive GUI observation pending |
 | 29 | Render-status poll has no UI caller | T010 / FR-436 | VERIFIED + NATIVE UI-RECOVERY REGRESSION: ProductionViewModel calls render-status API after replay-gap and applies authoritative progress/completion |
-| 30 | Drums-derived features can stand in for mix features | T003 / FR-432 | MOCKED ROUTER REGRESSION; real stem/media acceptance pending |
+| 30 | Drums-derived features can stand in for mix features | T003 / FR-432 | LIVE ORIGINAL-MIX ANALYSIS: existing 30-s WAV produced 2,584 spectral frames/10 bands and F minor; spectral/key provenance both `original_mix`, 100%/30-s coverage; mocked stem-separation comparison remains pending because no real stem fixture exists |
 | 31 | Key may use incomplete streaming chroma | T003 / FR-432 | FIXED + ROUTER REGRESSION; real-media key accuracy pending |
 | 32 | Beat-grid suspect status may be dropped | T003 / FR-432 | ROUTER + GENERATED DTO + ANALYSIS-COMMAND VIEWMODEL REGRESSIONS; live GUI presentation pending |
 | 33 | Long-file beat-grid may omit tail/capped coverage | T003 / FR-432 | FIXED + REGRESSIONS: full tail, sub-5-second tail and window cap; real long-media coverage pending |

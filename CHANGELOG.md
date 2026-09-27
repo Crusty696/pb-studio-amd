@@ -5,6 +5,8 @@
 
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
+- #30 real-media verification: existing 30-second WAV analyzed through the audio router; spectral/key provenance reports original mix with complete coverage. Real separated-stem comparison remains pending (no stem fixture available).
+
 ### Fixed & Verified (partial scope only)
 - Caption coverage counts each planned sample even when frame seek/decode fails; partial tags stay available with `partial` truth and exact unread frame indices instead of falsely reporting completed.
 - Video audio-key stage now uses a single tested mapping: confirmed missing or unusable audio is `unavailable`, measured key is `completed`, probe/extraction failure is retryable `failed` with error.
