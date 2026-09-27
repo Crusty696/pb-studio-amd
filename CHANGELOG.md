@@ -12,7 +12,8 @@
 - Music/theme ranking regressions now use normalized semantic-score paths and prove strong music/motion match outranks theme; bounded theme bonus may choose a near-tie for continuity.
 - Long-mix key regression proves the router uses full-run aggregate chroma, not its 600-second waveform snapshot, and reports original-mix source with complete coverage.
 - Long-mix source-role regression distinguishes beat-stem timing from original-mix energy, spectrum, and key provenance at the API boundary.
-- Validation: focused render tests 4 passed; audio structure/provenance/long-mix suites 20 passed; caption wrapper suite 35 passed; music pacing suite 8 passed. Full audit remediation and GUI/E2E acceptance remain open.
+- Suspect segmented beat-grid status is now tested through long-mix router output and retained by the generated WPF transport DTO; visible GUI presentation remains pending.
+- Validation: focused render tests 4 passed; audio structure/provenance/long-mix suites 20 passed; caption wrapper suite 35 passed; music pacing suite 8 passed; refreshed audio/provenance suite 19 passed; WPF suspect-grid DTO test 1 passed. Full audit remediation and GUI/E2E acceptance remain open.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

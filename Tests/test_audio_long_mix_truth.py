@@ -490,6 +490,79 @@ def test_long_mix_keeps_beat_stem_separate_from_original_mix_features(
     )
 
 
+def test_long_mix_router_preserves_suspect_segmented_beat_grid(
+    monkeypatch,
+    tmp_path,
+):
+    import librosa
+
+    from backend.routers.audio_router import _run_audio_analysis
+    from backend.schemas.audio_schemas import AudioAnalyzeRequest
+    from pb_studio.audio.beat_grid_segments import GridSegment
+    from pb_studio.audio.streaming_analyzer import (
+        StreamingAnalysisResult,
+        StreamingAudioAnalyzer,
+    )
+
+    audio = tmp_path / "mix.wav"
+    audio.write_bytes(b"placeholder")
+    streamed = StreamingAnalysisResult(
+        duration_seconds=1200.0,
+        bpm=120.0,
+        beats=[1.0, 1.5, 2.0],
+        energy_curve=[0.1, 0.2],
+        chroma_mean=[0.0] * 12,
+        spectral_times=[],
+        spectral_bands={},
+        spectral_centroids=[],
+        window_count=40,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
+    )
+    monkeypatch.setattr(librosa, "get_duration", lambda **_kwargs: 1200.0)
+    monkeypatch.setattr(
+        librosa,
+        "load",
+        lambda *_args, **_kwargs: (np.zeros(22050, dtype=np.float32), 22050),
+    )
+    monkeypatch.setattr(
+        StreamingAudioAnalyzer,
+        "analyze",
+        lambda *_args, **_kwargs: streamed,
+    )
+    suspect_segments = [
+        GridSegment(0.0, 600.0, 120.0, 0.0, 4.0, "plausible", 20),
+        GridSegment(600.0, 1200.0, 120.0, 0.2, 1.0, "suspect", 20),
+    ]
+    segment_calls = []
+
+    def segmented_grid(path, *, sr, kick_times):
+        segment_calls.append((path, sr, kick_times))
+        return suspect_segments
+
+    monkeypatch.setattr(
+        "pb_studio.audio.beat_grid_segments.segment_beat_grids_from_file",
+        segmented_grid,
+    )
+
+    result = _run_audio_analysis(
+        str(audio),
+        8,
+        AudioAnalyzeRequest(
+            clip_id=8,
+            detect_beats=True,
+            detect_structure=False,
+            spectral_analysis=False,
+            detect_key=False,
+        ),
+    )
+
+    assert segment_calls == [(str(audio), 22050, [])]
+    assert result["beat_grid"]["status"] == "suspect"
+    assert result["beat_grid"]["suspect_count"] == 1
+    assert result["beat_grid"]["segments"][1]["status"] == "suspect"
+
+
 def test_stage_failure_marks_analysis_partial(monkeypatch, tmp_path):
     import librosa
 
