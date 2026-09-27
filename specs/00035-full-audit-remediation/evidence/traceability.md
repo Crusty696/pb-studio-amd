@@ -7,10 +7,10 @@
 | 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | FIXED + REGRESSION + LIVE SHORT EXPORT; original long-media incident pending |
 | 2 | 437.861-second evidence-record gap | T008 / FR-435 | OPEN |
 | 3 | Preview path/audio contract failure | T007 / FR-434 | OPEN |
-| 4 | Provider timeout/cooldown produces empty batch results | T005,T002 / FR-430,FR-431 | OPEN |
+| 4 | Provider timeout/cooldown produces empty batch results | T005,T002 / FR-430,FR-431 | FIXED + RED/GREEN ROUTER REGRESSION: stop repeated provider probes after exhausted receipt, mark captions unavailable when no fallback exists; live recovery/batch acceptance pending |
 | 5 | Mocked render tests are not full-workflow proof | QC,T014 / TR-392,TR-393 | OPEN |
 | 6 | Incomplete frame captions can report completed | T002 / FR-430 | FIXED + SEEK/READ + STAGE-MERGE REGRESSIONS; semantic accuracy pending |
-| 7 | Cooldown tag counts do not prove provider recovery or caption accuracy | T002,T005,T014 / FR-430,FR-431 | MOCKED RECOVERY REGRESSION; live provider recovery and semantic accuracy pending |
+| 7 | Cooldown tag counts do not prove provider recovery or caption accuracy | T002,T005,T014 / FR-430,FR-431 | MOCKED RECOVERY + OUTAGE/RECOVERY ROUTER REGRESSIONS; live provider recovery and semantic accuracy pending |
 | 8 | Unavailable model stage can report completed and block retry | T002 / FR-430 | OPEN |
 | 9 | Probe failure conflated with missing audio track | T002 / FR-430 | FIXED + NO-STREAM/PROBE-ERROR/SUCCESS STAGE REGRESSION; real encoded-media probe pending |
 | 10 | Resume may skip vector-link/tombstone validation | T002 / FR-430 | OPEN |

@@ -167,6 +167,103 @@ def test_audio_key_outcomes_distinguish_no_stream_from_probe_error():
     assert detected["audio_key"] == "C major"
 
 
+def test_caption_provider_outage_is_not_retried_for_every_frame(monkeypatch):
+    router = _router()
+
+    class ThreeFrames:
+        def get(self, prop):
+            import cv2
+
+            return 12 if prop == cv2.CAP_PROP_FRAME_COUNT else 0
+
+        def set(self, *_args):
+            return True
+
+        def read(self):
+            return True, np.zeros((16, 16, 3), dtype=np.uint8)
+
+        def release(self):
+            pass
+
+    calls = 0
+
+    async def provider_unavailable(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return [], "none"
+
+    async def no_event(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("cv2.VideoCapture", lambda _path: ThreeFrames())
+    monkeypatch.setattr(
+        "pb_studio.video.lmstudio_vision_wrapper.extract_tags_and_model_via_lmstudio_async",
+        provider_unavailable,
+    )
+    monkeypatch.setattr("pb_studio.video.moondream.onnx_models_available", lambda: False)
+    monkeypatch.setattr(router, "publish_event", no_event)
+
+    result = asyncio.run(router._run_color_and_caption_analysis(
+        "clip.mp4", 8, generate_captions=True, analyze_colors=False
+    ))
+
+    assert calls == 1
+    assert result["stage_status"]["captions"] == "unavailable"
+    assert "provider" in result["stage_errors"]["captions"].lower()
+    assert router._derive_video_analysis_status(result["stage_status"]) == "failed"
+
+
+def test_caption_provider_outage_keeps_full_moondream_fallback(monkeypatch):
+    router = _router()
+
+    class ThreeFrames:
+        def get(self, prop):
+            import cv2
+
+            return 12 if prop == cv2.CAP_PROP_FRAME_COUNT else 0
+
+        def set(self, *_args):
+            return True
+
+        def read(self):
+            return True, np.zeros((16, 16, 3), dtype=np.uint8)
+
+        def release(self):
+            pass
+
+    calls = 0
+
+    async def provider_unavailable(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return [], "none"
+
+    async def no_event(*_args, **_kwargs):
+        return None
+
+    async def gpu_task(function, frames, **_kwargs):
+        return function(frames)
+
+    monkeypatch.setattr("cv2.VideoCapture", lambda _path: ThreeFrames())
+    monkeypatch.setattr(
+        "pb_studio.video.lmstudio_vision_wrapper.extract_tags_and_model_via_lmstudio_async",
+        provider_unavailable,
+    )
+    monkeypatch.setattr("pb_studio.video.moondream.onnx_models_available", lambda: True)
+    monkeypatch.setattr(router, "_run_moondream_inference_on_frames", lambda frames: [["fallback"] for _ in frames])
+    monkeypatch.setattr(router, "with_gpu_task", gpu_task)
+    monkeypatch.setattr(router, "publish_event", no_event)
+
+    result = asyncio.run(router._run_color_and_caption_analysis(
+        "clip.mp4", 9, generate_captions=True, analyze_colors=False
+    ))
+
+    assert calls == 1
+    assert result["tags"] == ["fallback"]
+    assert result["tag_source"] == "moondream"
+    assert result["stage_status"]["captions"] == "completed"
+
+
 def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
     router = _router()
     database_core = importlib.import_module("pb_studio.data.database_core")

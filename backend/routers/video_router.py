@@ -2491,6 +2491,8 @@ async def _run_color_and_caption_analysis(
             seen_tags = set()
             tag_sources = []
             caption_frames_with_tags = 0
+            caption_provider_unavailable: Optional[str] = None
+            moondream_available = False
 
             from pb_studio.config_manager import ConfigManager
             current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
@@ -2522,7 +2524,7 @@ async def _run_color_and_caption_analysis(
                 return max(0.0, caption_deadline - caption_loop.time())
 
             async def run_lm_studio_frames() -> None:
-                nonlocal caption_frames_with_tags
+                nonlocal caption_frames_with_tags, caption_provider_unavailable
                 for frame_number, f_rgb in enumerate(frames_rgb, start=1):
                     caption_progress["phase_active_frame"] = frame_number
                     tags, used_model = (
@@ -2542,6 +2544,16 @@ async def _run_color_and_caption_analysis(
                             tag_sources.append(used_model)
                     else:
                         moondream_frames_to_run.append(f_rgb)
+                        if used_model == "none":
+                            caption_provider_unavailable = (
+                                "Kein Vision-Provider verfuegbar; LM-Studio-Failover "
+                                "erschoepft oder Cooldown aktiv"
+                            )
+                            # The wrapper's "none" receipt means provider failover
+                            # is exhausted/cooling down. Do not repeat the same
+                            # provider probe for the remaining frames in this clip.
+                            moondream_frames_to_run.extend(frames_rgb[frame_number:])
+                            break
 
             await _publish_caption_progress(
                 clip_id,
@@ -2600,6 +2612,7 @@ async def _run_color_and_caption_analysis(
                     "clip_id": clip_id,
                 })
             elif moondream_frames_to_run and not moondream_onnx_models_available():
+                moondream_available = False
                 # Audit-Fix (2026-07-10): ONNX-Modelldateien fehlen (nur .pt-Checkpoint
                 # vorhanden, kein CPU-Fallback erlaubt - IRON RULE). Vorher wurde hier
                 # trotzdem with_gpu_task gestartet, das lautlos 0 Tags lieferte, aber
@@ -2616,6 +2629,7 @@ async def _run_color_and_caption_analysis(
                     "clip_id": clip_id,
                 })
             elif moondream_frames_to_run:
+                moondream_available = True
                 moondream_worker_detached = False
                 moondream_worker_started = asyncio.Event()
                 moondream_worker_finished = False
@@ -2771,15 +2785,30 @@ async def _run_color_and_caption_analysis(
                 ]
                 result["stage_errors"]["captions"] = "; ".join(partial_details)
             else:
-                failed_details = [
-                    detail
-                    for detail in (
-                        caption_timeout_error,
-                        caption_coverage_error,
-                        "Keine Tags von verfuegbarem Vision-Provider erzeugt",
-                    )
-                    if detail
-                ]
+                if (
+                    caption_provider_unavailable
+                    and not moondream_available
+                    and caption_timeout_error is None
+                ):
+                    result["stage_status"]["captions"] = "unavailable"
+                    failed_details = [
+                        detail
+                        for detail in (
+                            caption_provider_unavailable,
+                            caption_coverage_error,
+                        )
+                        if detail
+                    ]
+                else:
+                    failed_details = [
+                        detail
+                        for detail in (
+                            caption_timeout_error,
+                            caption_coverage_error,
+                            "Keine Tags von verfuegbarem Vision-Provider erzeugt",
+                        )
+                        if detail
+                    ]
                 result["stage_errors"]["captions"] = "; ".join(failed_details)
 
             caption_status = result["stage_status"]["captions"]

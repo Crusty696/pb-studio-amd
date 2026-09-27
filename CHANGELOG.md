@@ -957,4 +957,9 @@ pytest: 511 passed / 8 skipped / 0 failed. dotnet build Release: clean.
 - Video imports deduplicate canonical input paths; WPF import/progress publication is project- and sequence-bound.
 - Verification intentionally deferred by user instruction; no PASS/QC claim.
 
+## 2026-09-27 — Spec 00035 provider-outage truth
+
+- Video captioning now stops repeated LM Studio/Ollama failover probes after the wrapper reports no usable provider for a clip; remaining frames still use the existing Moondream DirectML fallback.
+- If neither provider is available, captions stage is persisted as `unavailable` with cooldown/provider cause instead of a generic empty-tag result. Focused video/provider/pipeline regressions: 55 passed; live provider recovery and caption semantic accuracy remain unverified.
+
 ---
