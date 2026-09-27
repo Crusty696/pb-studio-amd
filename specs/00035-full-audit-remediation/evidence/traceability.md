@@ -27,7 +27,7 @@
 | 21 | Scrubbing ignores timeline-to-source offset | T007 / FR-434 | FIXED + NATIVE REGRESSION: timeline delta maps to source offset and rendered-preview time; WPF GUI playback/scrub acceptance pending |
 | 22 | Render cancel SSE can be throttled/lost | T010 / FR-436 | FIXED + REGRESSION; live SSE pending |
 | 23 | Replay-gap message does not reconcile state | T010 / FR-436 | FIXED + NATIVE SSE→VIEWMODEL REGRESSION: lost-event marker fetches authoritative render status, applies completion/output evidence, and ignores late response after task switch; backend replay-gap tests pass |
-| 24 | SSE cursor can be stale after backend restart | T010 / FR-436 | OPEN |
+| 24 | SSE cursor can be stale after backend restart | T010 / FR-436 | VERIFIED EXISTING SEQUENCE BOOTSTRAP + FRESH-PROCESS ROUTER REGRESSION: new backend process emits and replays event with ID greater than previous process cursor |
 | 25 | Queue overflow drops event without gap signal | T010 / FR-436 | OPEN |
 | 26 | FPS normalization and frame validation differ | T008 / FR-435 | OPEN |
 | 27 | Render source/output identity collision possible | T008 / FR-435 | OPEN |

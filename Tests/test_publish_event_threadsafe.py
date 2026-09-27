@@ -1,11 +1,61 @@
 """Tests fuer publish_event_threadsafe (Review-Fix HIGH-1 2026-07-09)."""
 import asyncio
 import importlib
+import os
+import re
+import subprocess
+import sys
 import threading
+from pathlib import Path
 
 from backend import dependencies as deps
 
 events_router = importlib.import_module("backend.routers.events_router")
+
+
+def test_fresh_backend_process_replays_events_after_previous_process_cursor():
+    previous_process_cursor = deps._next_event_sequence()
+    repo_root = Path(__file__).resolve().parents[1]
+    child_code = """
+import asyncio
+from backend.dependencies import publish_event
+from backend.routers.events_router import _event_stream
+
+class Request:
+    headers = {"last-event-id": CURSOR}
+    async def is_disconnected(self):
+        return False
+
+async def main():
+    await publish_event("render_progress", {"status": "running", "message": "fresh-process-event"})
+    stream = _event_stream(Request(), client_id="restart-cursor-test", event_filter={"render_progress"})
+    try:
+        print(await anext(stream), end="")
+    finally:
+        await stream.aclose()
+
+asyncio.run(main())
+""".replace("CURSOR", str(previous_process_cursor))
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [str(repo_root / "src"), str(repo_root), environment.get("PYTHONPATH", "")]
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", child_code],
+        cwd=repo_root,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    event_id_match = re.search(r"^id: (\d+)$", result.stdout, re.MULTILINE)
+    assert event_id_match is not None, result.stdout
+    assert int(event_id_match.group(1)) > previous_process_cursor
+    assert "event: render_progress" in result.stdout
+    assert "fresh-process-event" in result.stdout
 
 
 def test_threadsafe_publish_from_worker_thread_wakes_main_loop():
