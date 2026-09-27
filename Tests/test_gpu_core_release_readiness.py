@@ -59,7 +59,7 @@ def test_gpu_deadline_returns_while_worker_keeps_lock() -> None:
     asyncio.run(scenario())
 
 
-def test_gpu_lock_wait_cancellation_releases_uncommitted_reservation(
+def test_gpu_lock_wait_cancellation_never_reserves_before_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend import dependencies
@@ -92,7 +92,8 @@ def test_gpu_lock_wait_cancellation_releases_uncommitted_reservation(
 
         assert not worker_started.is_set()
         assert lock.locked()
-        manager.cancel_reservation.assert_called_once_with("moondream_fp16")
+        manager.reserve.assert_not_called()
+        manager.cancel_reservation.assert_not_called()
         lock.release()
 
     asyncio.run(scenario())
