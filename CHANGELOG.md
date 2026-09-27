@@ -5,6 +5,7 @@
 
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
+- #47–49 Brain: per-stage failures no longer expose stale values to learned axes or context; fit prefilter shares projector validation and actual fit count gates publish/acknowledgement; source-media annotation time verified. Regression suite evidence is in Spec 00035 QC report.
 - #30 real-media verification: existing 30-second WAV analyzed through the audio router; spectral/key provenance reports original mix with complete coverage. Real separated-stem comparison remains pending (no stem fixture available).
 
 ### Fixed & Verified (partial scope only)

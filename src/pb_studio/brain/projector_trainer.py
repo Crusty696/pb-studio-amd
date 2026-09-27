@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import numpy as np
+from .cross_modal_projector import prepare_training_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -133,11 +134,10 @@ def _usable_embedding(value, *, expected_dim: Optional[int] = None) -> bool:
         embedding = np.asarray(value, dtype=np.float32).reshape(-1)
     except (TypeError, ValueError):
         return False
+    dimension = int(expected_dim) if expected_dim is not None else embedding.size
     return bool(
-        embedding.size
-        and (expected_dim is None or embedding.size == int(expected_dim))
-        and np.all(np.isfinite(embedding))
-        and float(np.linalg.norm(embedding)) > 1e-9
+        np.all(np.isfinite(embedding))
+        and prepare_training_embedding(embedding, dimension) is not None
     )
 
 
@@ -291,6 +291,20 @@ def run_v2_fit_step(
             lr=lr,
             steps=steps,
         )
+        if int(fit_result.get("n_pairs", 0)) != len(ready):
+            for project_uuid, event_uuid, *_ in ready:
+                pending[event_uuid] = {
+                    "project_uuid": project_uuid,
+                    "reason": "fit_rejected_pair",
+                }
+            return {
+                **fit_result,
+                "applied_events": len(active_applied),
+                "new_events": 0,
+                "pending_events": len(pending),
+                "generation_uuid": projector.generation_uuid,
+                "saved": False,
+            }
         candidate.parent_generation_uuid = projector.generation_uuid
         candidate.generation_uuid = str(uuid.uuid4())
         candidate.applied_event_uuids = tuple(sorted(

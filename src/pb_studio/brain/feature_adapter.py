@@ -29,9 +29,14 @@ class CanonicalFeatureAdapter:
             fallback_duration,
         )
         raw_energy_curve = self.audio.get("energy_curve")
-        self.energy_curve = _normalize_unit_curve(raw_energy_curve)
+        beats_stage_valid = _analysis_stage_valid(self.audio, "beats")
+        self.energy_curve = (
+            _normalize_unit_curve(raw_energy_curve) if beats_stage_valid else []
+        )
         self.energy_available = (
-            self.duration_seconds > 0.0 and _has_finite_sequence(raw_energy_curve)
+            self.duration_seconds > 0.0
+            and _has_finite_sequence(raw_energy_curve)
+            and beats_stage_valid
         )
         normalized_centroids = self.audio.get("centroid_curve")
         if normalized_centroids is not None:
@@ -42,8 +47,12 @@ class CanonicalFeatureAdapter:
             raw_centroids = spectral.get("centroids")
             self.centroid_curve = _normalize_percentile_curve(raw_centroids)
         self.centroid_available = (
-            self.duration_seconds > 0.0 and _has_finite_sequence(raw_centroids)
+            self.duration_seconds > 0.0
+            and _has_finite_sequence(raw_centroids)
+            and _analysis_stage_valid(self.audio, "spectral")
         )
+        if not self.centroid_available:
+            self.centroid_curve = []
         audio_tags = self.audio.get("mood_tags") or fallback_mood_tags or []
         self.audio_mood_tags = canonical_mood_tags(audio_tags)
         self.audio_confidence = _analysis_confidence(self.audio)
@@ -67,8 +76,13 @@ class CanonicalFeatureAdapter:
     ) -> CandidateFeatures:
         video = self.video_by_clip.get(str(clip_id), {})
         raw_motion, motion_source = _motion_measurement(video)
+        motion_stage_valid = _analysis_stage_valid(video, "motion")
+        if not motion_stage_valid:
+            raw_motion, motion_source = 0.0, None
         normalized_motion = _clip01(raw_motion / self.motion_scale)
         explicit_pace = _optional_float(video.get("pace_class_score"))
+        if not motion_stage_valid:
+            explicit_pace = None
         pace = (
             _clip01(explicit_pace)
             if explicit_pace is not None
@@ -82,10 +96,19 @@ class CanonicalFeatureAdapter:
         video_stage_valid = _analysis_stage_valid(video)
         confidence = min(self.audio_confidence, video_confidence)
         scenes = video.get("scenes") or video.get("scene_changes") or []
+        scenes_stage_valid = _analysis_stage_valid(video, "scenes")
+        if not scenes_stage_valid:
+            scenes = []
         brightness_value = _optional_float(video.get("avg_brightness"))
         saturation_value = _optional_float(video.get("avg_saturation"))
         color_temp_value = _optional_float(video.get("avg_color_temp"))
         video_mood_tags = canonical_mood_tags(video.get("mood_tags") or [])
+        colors_stage_valid = _analysis_stage_valid(video, "colors")
+        captions_stage_valid = _analysis_stage_valid(video, "captions")
+        if not colors_stage_valid:
+            brightness_value = saturation_value = color_temp_value = None
+        if not captions_stage_valid:
+            video_mood_tags = []
         resolved_semantic_status, resolved_semantic_reason = (
             _semantic_availability(audio_embedding, video_embedding)
         )
@@ -99,6 +122,10 @@ class CanonicalFeatureAdapter:
             trigger_type=str(trigger_type or ""),
             audio_stage_valid=audio_stage_valid,
             video_stage_valid=video_stage_valid,
+            beats_stage_valid=_analysis_stage_valid(self.audio, "beats"),
+            scenes_stage_valid=scenes_stage_valid,
+            colors_stage_valid=colors_stage_valid,
+            motion_stage_valid=motion_stage_valid,
             energy_available=self.energy_available and audio_stage_valid,
             centroid_available=self.centroid_available and audio_stage_valid,
             motion_available=motion_source is not None and video_stage_valid,
@@ -115,7 +142,8 @@ class CanonicalFeatureAdapter:
             video_mood_available=bool(video_mood_tags) and video_stage_valid,
             semantic_status=(
                 resolved_semantic_status
-                if audio_stage_valid and video_stage_valid else "unavailable"
+                if audio_stage_valid and _analysis_stage_valid(video, "embedding")
+                else "unavailable"
             ),
             semantic_reason=resolved_semantic_reason,
         )
@@ -200,6 +228,8 @@ class CanonicalFeatureAdapter:
 
     def normalized_motion_curve(self, clip_id: str) -> list[float]:
         video = self.video_by_clip.get(str(clip_id), {})
+        if not _analysis_stage_valid(video, "motion"):
+            return []
         nested = video.get("motion") or {}
         values = video.get("motion_curve")
         # Audit 2026-08-05 (H-7/T2.5): Der Fallback prueft auf "is None", der
@@ -221,6 +251,7 @@ class CanonicalFeatureAdapter:
         values = [
             _motion_value(video)
             for video in self.video_by_clip.values()
+            if _analysis_stage_valid(video, "motion")
         ]
         positive = np.asarray(
             [value for value in values if value > 0.0],
@@ -232,6 +263,8 @@ class CanonicalFeatureAdapter:
         return scale if scale > 1e-6 else 1.0
 
     def _segment_at(self, time_sec: float) -> str:
+        if not _analysis_stage_valid(self.audio, "structure"):
+            return "transition"
         segments = (
             self.audio.get("structure_segments")
             or self.audio.get("subtrack_segments")
@@ -269,13 +302,19 @@ def _analysis_confidence(data: dict) -> float:
     return 1.0 if data.get("is_analyzed") is True else 0.0
 
 
-def _analysis_stage_valid(data: dict) -> bool:
+def _analysis_stage_valid(data: dict, stage: Optional[str] = None) -> bool:
     status = str(
         data.get("_analysis_status") or data.get("analysis_status") or ""
     ).strip().lower()
-    if status:
-        return status in {"completed", "partial"}
-    return data.get("is_analyzed") is True
+    if status and status not in {"completed", "partial"}:
+        return False
+    if not status and data.get("is_analyzed") is not True:
+        return False
+    if stage is not None:
+        stage_status = data.get("_stage_status") or data.get("stage_status")
+        if isinstance(stage_status, dict) and stage_status:
+            return str(stage_status.get(stage) or "").strip().lower() == "completed"
+    return True
 
 
 def _motion_measurement(video: dict) -> tuple[float, Optional[str]]:
@@ -315,6 +354,10 @@ def _build_axis_status(
     trigger_type: str,
     audio_stage_valid: bool,
     video_stage_valid: bool,
+    beats_stage_valid: bool,
+    scenes_stage_valid: bool,
+    colors_stage_valid: bool,
+    motion_stage_valid: bool,
     energy_available: bool,
     centroid_available: bool,
     motion_available: bool,
@@ -347,7 +390,7 @@ def _build_axis_status(
     }
     result = {
         axis: status(
-            audio_stage_valid and supported_trigger
+            beats_stage_valid and supported_trigger
             and trigger_type == expected_trigger,
             f"analyzed_{expected_trigger}_trigger",
         )
@@ -369,19 +412,19 @@ def _build_axis_status(
             "analyzed_audio_energy_and_video_motion",
         ),
         "scene_cut_weight": status(
-            scene_available,
+            scene_available and scenes_stage_valid,
             "analyzed_scene_boundaries",
         ),
         "brightness_match_weight": status(
-            centroid_available and brightness_available,
+            centroid_available and brightness_available and colors_stage_valid,
             "analyzed_audio_centroid_and_video_brightness",
         ),
         "color_temp_match_weight": status(
-            audio_mood_available and color_temp_available,
+            audio_mood_available and color_temp_available and colors_stage_valid,
             "analyzed_audio_mood_and_video_color_temperature",
         ),
         "pace_match_weight": status(
-            pace_available,
+            pace_available and motion_stage_valid,
             "analyzed_video_pace",
         ),
         "semantic_match_weight": {
