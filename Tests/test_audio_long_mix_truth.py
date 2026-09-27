@@ -381,6 +381,115 @@ def test_long_mix_uses_full_duration_streaming_representations(
     assert result["feature_provenance"]["key_coverage"] == pytest.approx(1.0)
 
 
+def test_long_mix_keeps_beat_stem_separate_from_original_mix_features(
+    monkeypatch,
+    tmp_path,
+):
+    import librosa
+
+    from backend.routers.audio_router import _run_audio_analysis
+    from backend.schemas.audio_schemas import AudioAnalyzeRequest
+    from pb_studio.audio.beat_detector import BeatDetector
+    from pb_studio.audio.key_detector import KeyDetector
+    from pb_studio.audio.streaming_analyzer import (
+        StreamingAnalysisResult,
+        StreamingAudioAnalyzer,
+    )
+
+    audio = tmp_path / "mix.wav"
+    drums = tmp_path / "drums.wav"
+    audio.write_bytes(b"mix")
+    drums.write_bytes(b"drums")
+    beat_stream = StreamingAnalysisResult(
+        duration_seconds=1200.0,
+        bpm=120.0,
+        beats=[10.0, 20.0],
+        energy_curve=[0.9, 0.9],
+        chroma_mean=[0.0, 1.0] + [0.0] * 10,
+        spectral_times=[10.0, 20.0],
+        spectral_bands={"bass": [0.9, 0.9]},
+        spectral_centroids=[900.0, 900.0],
+        window_count=48,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
+    )
+    mix_stream = StreamingAnalysisResult(
+        duration_seconds=1200.0,
+        bpm=0.0,
+        beats=[],
+        energy_curve=[0.1, 0.2, 0.3],
+        chroma_mean=[1.0] + [0.0] * 11,
+        spectral_times=[0.0, 600.0, 1199.0],
+        spectral_bands={"bass": [0.1, 0.2, 0.3]},
+        spectral_centroids=[100.0, 200.0, 300.0],
+        window_count=48,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
+    )
+    calls: list[tuple[str, bool]] = []
+
+    def analyze(_analyzer, path, *, energy_only=False, **_kwargs):
+        calls.append((str(path), energy_only))
+        return mix_stream if energy_only else beat_stream
+
+    monkeypatch.setattr(librosa, "get_duration", lambda **_kwargs: 1200.0)
+    monkeypatch.setattr(
+        librosa,
+        "load",
+        lambda *_args, **_kwargs: (np.zeros(22050, dtype=np.float32), 22050),
+    )
+    monkeypatch.setattr(StreamingAudioAnalyzer, "analyze", analyze)
+    monkeypatch.setattr(
+        BeatDetector,
+        "compute_beat_strengths",
+        staticmethod(lambda _y, _sr, times: [0.5] * len(times)),
+    )
+    key_chroma: list[float] = []
+
+    def detect_mix_key(_detector: KeyDetector, chroma: list[float]) -> str:
+        key_chroma.extend(chroma)
+        return "C major"
+
+    monkeypatch.setattr(KeyDetector, "detect_key_from_chroma", detect_mix_key)
+    monkeypatch.setattr(
+        KeyDetector,
+        "detect_key",
+        lambda *_args, **_kwargs: pytest.fail(
+            "the 600-second snapshot must not replace full-run mix chroma"
+        ),
+    )
+
+    result = _run_audio_analysis(
+        str(audio),
+        5,
+        AudioAnalyzeRequest(
+            clip_id=5,
+            detect_beats=True,
+            detect_structure=False,
+            spectral_analysis=True,
+            detect_key=True,
+        ),
+        stems_paths={"drums": str(drums)},
+    )
+
+    assert calls == [(str(drums), False), (str(audio), True)]
+    assert [beat["time"] for beat in result["beats"]] == [10.0, 20.0]
+    assert result["energy_curve"] == mix_stream.energy_curve
+    assert result["spectral_data"]["times"] == mix_stream.spectral_times
+    assert result["key"] == "C major"
+    assert key_chroma == mix_stream.chroma_mean
+    provenance = result["feature_provenance"]
+    assert provenance["spectral_source_role"] == "original_mix"
+    assert provenance["key_source_role"] == "original_mix"
+    assert provenance["spectral_coverage"] == pytest.approx(1.0)
+    assert provenance["key_coverage"] == pytest.approx(1.0)
+    chunk_evidence = result["_chunk_evidence"]
+    assert chunk_evidence["primary"]["source_role"] == "beat_source"
+    assert chunk_evidence["mix_energy"]["source_role"] == (
+        "original_mix_features_and_energy"
+    )
+
+
 def test_stage_failure_marks_analysis_partial(monkeypatch, tmp_path):
     import librosa
 
