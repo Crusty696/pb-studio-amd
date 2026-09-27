@@ -10,7 +10,7 @@
 | 4 | Provider timeout/cooldown produces empty batch results | T005,T002 / FR-430,FR-431 | OPEN |
 | 5 | Mocked render tests are not full-workflow proof | QC,T014 / TR-392,TR-393 | OPEN |
 | 6 | Incomplete frame captions can report completed | T002 / FR-430 | OPEN |
-| 7 | Cooldown tag counts do not prove provider recovery or caption accuracy | T002,T005,T014 / FR-430,FR-431 | OPEN |
+| 7 | Cooldown tag counts do not prove provider recovery or caption accuracy | T002,T005,T014 / FR-430,FR-431 | MOCKED RECOVERY REGRESSION; live provider recovery and semantic accuracy pending |
 | 8 | Unavailable model stage can report completed and block retry | T002 / FR-430 | OPEN |
 | 9 | Probe failure conflated with missing audio track | T002 / FR-430 | OPEN |
 | 10 | Resume may skip vector-link/tombstone validation | T002 / FR-430 | OPEN |

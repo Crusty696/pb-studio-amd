@@ -587,6 +587,50 @@ def test_task_sperre_laeuft_ab():
     assert "video_captioning" not in w._TASK_UNAVAILABLE_UNTIL
 
 
+def test_task_cooldown_enters_unavailable_and_recovers_on_new_batch(monkeypatch):
+    """Cooldown suppresses retries, then a healthy provider can return tags."""
+    import pb_studio.ai.model_registry as registry_module
+    import pb_studio.video.lmstudio_vision_wrapper as wrapper
+
+    receipt = registry_module.ModelSelectionReceipt(
+        provider="ollama",
+        model_id="vision-test",
+        task="video_captioning",
+        mode="balance",
+        required_capabilities=("vision",),
+        verified_capabilities=("vision",),
+        source="test",
+        reason="test recovery",
+        selected_at="2026-09-27T00:00:00Z",
+    )
+    attempts = 0
+
+    async def fail_then_recover(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise registry_module.ModelFailoverExhaustedError(
+                "provider unavailable", receipts=[receipt]
+            )
+        return ["club", "dancing"], receipt, (receipt,)
+
+    monkeypatch.setattr(wrapper, "_UNAVAILABLE_COOLDOWN_SECONDS", 0.01)
+    monkeypatch.setattr(
+        registry_module, "execute_with_model_failover", fail_then_recover
+    )
+    frame = np.full((32, 32, 3), 47, dtype=np.uint8)
+
+    assert extract_tags_via_lmstudio(frame, mode="balance") == []
+    assert wrapper._TASK_UNAVAILABLE_UNTIL["video_captioning"] > time.monotonic()
+    assert extract_tags_via_lmstudio(frame, mode="balance") == []
+    assert attempts == 1, "cooldown must avoid another provider attempt"
+
+    time.sleep(0.02)
+    assert extract_tags_via_lmstudio(frame, mode="balance") == ["club", "dancing"]
+    assert attempts == 2
+    assert "video_captioning" not in wrapper._TASK_UNAVAILABLE_UNTIL
+
+
 def test_failed_candidate_lock_does_not_self_block_next_frame(monkeypatch):
     """A receipt lock must end with its attempt, not with the frame-batch task."""
     import pb_studio.ai.model_registry as registry_module
