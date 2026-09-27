@@ -11,7 +11,7 @@
 | 5 | Mocked render tests are not full-workflow proof | QC,T014 / TR-392,TR-393 | OPEN |
 | 6 | Incomplete frame captions can report completed | T002 / FR-430 | FIXED + SEEK/READ + STAGE-MERGE REGRESSIONS; semantic accuracy pending |
 | 7 | Cooldown tag counts do not prove provider recovery or caption accuracy | T002,T005,T014 / FR-430,FR-431 | MOCKED RECOVERY + OUTAGE/RECOVERY ROUTER REGRESSIONS; live provider recovery and semantic accuracy pending |
-| 8 | Unavailable model stage can report completed and block retry | T002 / FR-430 | OPEN |
+| 8 | Unavailable model stage can report completed and block retry | T002 / FR-430 | FIXED + PERSISTED-RESUME REGRESSION: unavailable remains non-success and ordinary requested retry runs; live model recovery pending |
 | 9 | Probe failure conflated with missing audio track | T002 / FR-430 | FIXED + NO-STREAM/PROBE-ERROR/SUCCESS STAGE REGRESSION; real encoded-media probe pending |
 | 10 | Resume may skip vector-link/tombstone validation | T002 / FR-430 | OPEN |
 | 11 | UI can hide successful scenes on aggregate failure | T002 / FR-430 | OPEN |

@@ -26,6 +26,27 @@ def test_unavailable_analysis_stage_is_failed_and_retryable():
     assert router._video_stage_should_run("motion", True, False, result)
 
 
+def test_persisted_unavailable_stage_is_retryable_after_resume():
+    router = _router()
+
+    class State:
+        def get_video_analysis(self, _clip_id):
+            return {
+                "analysis_status": "unavailable",
+                "stage_status": {"captions": "unavailable"},
+                "stage_errors": {"captions": "provider cooldown"},
+            }
+
+    resumed = router._video_analysis_resume_base(
+        State(), {"id": 18, "is_analyzed": False}, project_id=3
+    )
+
+    assert resumed["status"] == "failed"
+    assert resumed["stage_status"]["captions"] == "unavailable"
+    assert router._derive_video_analysis_status(resumed["stage_status"]) == "failed"
+    assert router._video_stage_should_run("captions", True, False, resumed)
+
+
 def test_partial_frame_caption_coverage_cannot_be_completed(monkeypatch):
     router = _router()
 
