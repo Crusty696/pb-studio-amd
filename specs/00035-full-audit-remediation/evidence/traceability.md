@@ -37,7 +37,7 @@
 | 31 | Key may use incomplete streaming chroma | T003 / FR-432 | FIXED + ROUTER REGRESSION; real-media key accuracy pending |
 | 32 | Beat-grid suspect status may be dropped | T003 / FR-432 | ROUTER + GENERATED DTO + ANALYSIS-COMMAND VIEWMODEL REGRESSIONS; live GUI presentation pending |
 | 33 | Long-file beat-grid may omit tail/capped coverage | T003 / FR-432 | FIXED + REGRESSIONS: full tail, sub-5-second tail and window cap; real long-media coverage pending |
-| 34 | Long-mix structure uses coarse fixed-minute heuristic | T003 / FR-432 | PARTIAL FIX + REGRESSION; full-run transition features not yet wired |
+| 34 | Long-mix structure uses coarse fixed-minute heuristic | T003 / FR-432 | FIXED + 35-TEST STREAMING/SUBTRACK REGRESSION SET: boundaries follow observed energy transitions rather than fixed minute marks; confidence derives from measured boundary evidence; no unsupported verse/drop semantics are claimed from energy-only stream. Full semantic sections remain intentionally limited to available evidence. |
 | 35 | Motion normalization discontinuity | T006 / FR-433 | FIXED + LINEAR/BOUNDED REGRESSION; real-media ranking pending |
 | 36 | BPM correction does not remap beat strengths | T006 / FR-433 | FIXED + FULL VECTOR MAPPING REGRESSION; real pacing acceptance pending |
 | 37 | Theme bonus can dominate music/motion ranking | T006 / FR-433 | STRONG-MATCH + NEAR-TIE REGRESSIONS; real-media ranking pending |

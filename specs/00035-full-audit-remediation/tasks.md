@@ -2,7 +2,7 @@
 
 - [X] T001 [OBJ-1] {(FR-429)} Verify spec, baseline dirty paths, and maintain traceability for all 54 audit entries in `specs/00035-full-audit-remediation/`.
 - [ ] T002 [P] [OBJ-1] {(FR-430)} {(FR-431)} Fix video stage truth, frame coverage, batch continuation, audio-probe distinction, vector-resume validation, UI partial results, stale batch errors, and unavailable-stage retry in `backend/routers/video_router.py`, `src/pb_studio/video/`, Video Library ViewModel, and unique tests.
-- [ ] T003 [P] [OBJ-1] {(FR-432)} Fix audio feature provenance, streaming key coverage, suspect beat-grid propagation, long-file tail/cap accounting, and structure confidence in `backend/routers/audio_router.py`, `src/pb_studio/audio/` except locked separator, and unique tests.
+- [X] T003 [P] [OBJ-1] {(FR-432)} Fix audio feature provenance, streaming key coverage, suspect beat-grid propagation, long-file tail/cap accounting, and structure confidence in `backend/routers/audio_router.py`, `src/pb_studio/audio/` except locked separator, and unique tests.
 - [X] T004 [P] [OBJ-1] {(FR-438)} Gate Brain features on stage validity; count only usable nonzero pairs; use source-media time for annotations in `src/pb_studio/brain/` and unique tests.
 - [ ] T005 [P] [OBJ-1] {(FR-431)} {(FR-437)} Fix model smoke/capability/tool claims, provider cooldown, `error:null`, video-only chat render, and stale clear-history response in model/chat code and unique tests.
 - [ ] T006 [OBJ-1] {(FR-433)} {(TR-391)} Fix motion normalization, BPM/strength mapping, theme dominance, short-render energy timebase, repeated-source trigger provenance, and ID normalization in `src/pb_studio/pacing/clip_selector.py` and related pacing code; preserve music-led timing with bounded narrative continuity.
