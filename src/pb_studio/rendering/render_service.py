@@ -918,6 +918,8 @@ class RenderService:
             cmd.extend([
                 "-frames:v",
                 str(_expected_frame_count(render_dur, render_rate)),
+                "-t",
+                f"{render_dur:.3f}",
             ])
 
         cmd.append(str(output_path))

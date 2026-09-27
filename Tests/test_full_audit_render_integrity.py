@@ -168,7 +168,7 @@ def test_render_command_and_validator_share_rational_frame_rate(
     )
     assert cmd[cmd.index("-r") + 1] == "30/1"
     assert cmd[cmd.index("-frames:v") + 1] == "98984"
-    assert "-t" not in cmd
+    assert cmd[cmd.index("-t") + 1] == "3299.457"
 
 
 @pytest.mark.parametrize("same_as", ["video", "audio"])
