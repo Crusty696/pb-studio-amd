@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PBStudio.UI.Helpers;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 using PBStudio.UI.ViewModels;
@@ -28,6 +29,36 @@ public sealed class TimelineViewModelTests
         Assert.IsTrue(fixture.ViewModel.ScrubTimelineBy(10));
         Assert.AreEqual(6.0, fixture.ViewModel.SelectedTimelinePosition);
         Assert.IsFalse(fixture.ViewModel.ScrubTimelineBy(1));
+    }
+
+    [TestMethod]
+    public void TimelineScrub_MapsTimelineOffsetOntoSourceAndRenderedPreview()
+    {
+        Assert.AreEqual(
+            32.0,
+            TimelineSeekCalculator.ToSourcePosition(
+                selectedTimelinePosition: 12.0,
+                clipTimelineStart: 10.0,
+                clipSourceStart: 30.0,
+                clipSourceDuration: 5.0));
+        Assert.AreEqual(
+            35.0,
+            TimelineSeekCalculator.ToSourcePosition(
+                selectedTimelinePosition: 20.0,
+                clipTimelineStart: 10.0,
+                clipSourceStart: 30.0,
+                clipSourceDuration: 5.0));
+        Assert.AreEqual(
+            2.0,
+            TimelineSeekCalculator.ToRenderedPreviewPosition(
+                selectedTimelinePosition: 12.0,
+                previewTimelineStart: 10.0,
+                previewDuration: 4.0));
+        Assert.IsNull(
+            TimelineSeekCalculator.ToRenderedPreviewPosition(
+                selectedTimelinePosition: 15.0,
+                previewTimelineStart: 10.0,
+                previewDuration: 4.0));
     }
 
     [TestMethod]

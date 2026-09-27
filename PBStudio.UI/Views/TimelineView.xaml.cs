@@ -857,13 +857,13 @@ public partial class TimelineView : UserControl
 
         try
         {
-            var timelineOffset = _viewModel?.SelectedEntry == null
-                ? 0.0
-                : _viewModel.SelectedTimelinePosition - _viewModel.SelectedEntry.StartTime;
-            var sourcePosition = _loadedClipStart + Math.Clamp(
-                timelineOffset,
-                0.0,
-                Math.Max(0.0, _loadedClipEnd - _loadedClipStart));
+            var clipTimelineStart = _viewModel?.SelectedEntry?.StartTime ?? 0.0;
+            var selectedTimelinePosition = _viewModel?.SelectedTimelinePosition ?? clipTimelineStart;
+            var sourcePosition = TimelineSeekCalculator.ToSourcePosition(
+                selectedTimelinePosition,
+                clipTimelineStart,
+                _loadedClipStart,
+                _loadedClipEnd - _loadedClipStart);
             var target = TimeSpan.FromSeconds(sourcePosition);
             var delta = (PreviewPlayer.Position - target).Duration();
             if (delta > TimeSpan.FromMilliseconds(200))
@@ -882,8 +882,11 @@ public partial class TimelineView : UserControl
     {
         if (!_isRenderedPreview || _viewModel == null)
             return;
-        var offset = _viewModel.SelectedTimelinePosition - _renderedPreviewTimelineStart;
-        if (offset < 0 || offset > _loadedClipEnd)
+        var previewPosition = TimelineSeekCalculator.ToRenderedPreviewPosition(
+            _viewModel.SelectedTimelinePosition,
+            _renderedPreviewTimelineStart,
+            _loadedClipEnd);
+        if (previewPosition is null)
             return;
         if (!_mediaOpened)
         {
@@ -892,7 +895,7 @@ public partial class TimelineView : UserControl
         }
         try
         {
-            PreviewPlayer.Position = TimeSpan.FromSeconds(Math.Clamp(offset, 0, _loadedClipEnd));
+            PreviewPlayer.Position = TimeSpan.FromSeconds(previewPosition.Value);
             _pendingSeek = false;
         }
         catch (NotSupportedException)
