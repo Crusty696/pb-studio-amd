@@ -53,8 +53,8 @@
 | 47 | Failed-stage defaults can be used by Brain learning | T004 / FR-438 | FIXED + STAGE-SPECIFIC RED/GREEN: failed beats/spectral/structure/motion/scenes/colors/captions gate features, curves, segments, and motion-pool scaling; completed stages stay eligible under aggregate `partial` |
 | 48 | Invalid training pair can be acknowledged as applied | T004 / FR-438 | FIXED + ZERO/TINY-NORM AND FIT-REJECTION REGRESSIONS: trainer shares fit input validation and refuses publish when actual `n_pairs` differs from accepted events |
 | 49 | Brain annotation uses timeline time instead of source time | T004 / FR-438 | VERIFIED + SOURCE-MEDIA-TIME REGRESSION: scene scoring and persisted provenance use `clip_start` (12 s) rather than timeline position (2 s) |
-| 50 | GPU-lock wait may exceed job deadline | T010 / FR-436 | OPEN |
-| 51 | VRAM reserve can evict before safe lock acquisition | T010 / FR-436 | OPEN |
+| 50 | GPU-lock wait may exceed job deadline | T010 / FR-436 | VERIFIED + DEADLINE REGRESSION: lock wait and worker execution share one deadline; timeout returns promptly while lock remains owned until physical worker completion; cancellation while queued starts no worker |
+| 51 | VRAM reserve can evict before safe lock acquisition | T010 / FR-436 | VERIFIED + ORDERING/ACCOUNTING REGRESSIONS: reservation only follows GPU-lock acquisition; failed eviction preserves resident committed accounting; successful unload callback is accounted only after callback completion |
 | 52 | Empty timeline may leave old file; productive UI path uncertain | T009 / FR-437 | VERIFIED SAFE DISPOSITION: close preserves prior timeline on uncertain empty RAM; explicit WPF Save command reaches `/project/save`, whose live API test deletes stale `timeline.json` and writes `has_timeline=false`; interactive click pending GUI handover |
 | 53 | Pacing preflight string/integer ID inconsistency | T006 / FR-433 | FIXED + INTEGER REQUEST / STRING CACHE-KEY PREFLIGHT REGRESSION; worker-path acceptance pending |
 | 54 | Semantic-bypass report was withdrawn | No product fix; retain disposition/test evidence | WITHDRAWN |
