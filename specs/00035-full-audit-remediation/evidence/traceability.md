@@ -4,7 +4,7 @@
 
 | # | Finding | Task / requirement | Status |
 |---:|---|---|---|
-| 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | FIXED + REGRESSION + LIVE SHORT EXPORT; original long-media incident pending |
+| 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | FIXED + REGRESSION + LIVE SHORT/60-s EXPORTS + LIVE RATIONAL-FPS AMF EXPORT (180/180); original 54:59 media unavailable |
 | 2 | 437.861-second evidence-record gap | T008 / FR-435 | OPEN |
 | 3 | Preview path/audio contract failure | T007 / FR-434 | OPEN |
 | 4 | Provider timeout/cooldown produces empty batch results | T005,T002 / FR-430,FR-431 | FIXED + RED/GREEN ROUTER REGRESSION: stop repeated provider probes after exhausted receipt, mark captions unavailable when no fallback exists; live recovery/batch acceptance pending |
@@ -29,7 +29,7 @@
 | 23 | Replay-gap message does not reconcile state | T010 / FR-436 | FIXED + NATIVE SSE→VIEWMODEL REGRESSION: lost-event marker fetches authoritative render status, applies completion/output evidence, and ignores late response after task switch; backend replay-gap tests pass |
 | 24 | SSE cursor can be stale after backend restart | T010 / FR-436 | VERIFIED EXISTING SEQUENCE BOOTSTRAP + FRESH-PROCESS ROUTER REGRESSION: new backend process emits and replays event with ID greater than previous process cursor |
 | 25 | Queue overflow drops event without gap signal | T010 / FR-436 | VERIFIED EXISTING IMPLEMENTATION + LIVE-QUEUE REGRESSION: bounded queue records dropped sequence range and emits `replay_gap` before next accepted progress event |
-| 26 | FPS normalization and frame validation differ | T008 / FR-435 | VERIFIED RATIONAL COMMAND+VALIDATOR REGRESSION: 30000/1001 cadence at 60,000 s yields identical 1,798,202 frames; live fractional-FPS AMF export remains pending |
+| 26 | FPS normalization and frame validation differ | T008 / FR-435 | VERIFIED REGRESSION + LIVE 30000/1001 AMF EXPORT: 6-s clip produced/decoded 180/180 frames; ffprobe r_frame_rate=avg_frame_rate=30000/1001 |
 | 27 | Render source/output identity collision possible | T008 / FR-435 | FIXED + ROUTER REGRESSION: exact source path and distinct hardlink alias rejected before queue enqueue; canonical path plus inode identity checked |
 | 28 | Validation progress is not visible | T008 / FR-435 | FIXED + SERVICE→SSE→VIEWMODEL REGRESSION: named validation phases emitted and bypass 100-ms progress throttle; visible `ValidationText` receives phase/percent; interactive GUI observation pending |
 | 29 | Render-status poll has no UI caller | T010 / FR-436 | VERIFIED + NATIVE UI-RECOVERY REGRESSION: ProductionViewModel calls render-status API after replay-gap and applies authoritative progress/completion |
