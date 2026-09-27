@@ -248,9 +248,9 @@ def _video_stage_should_run(
     status = (result.get("stage_status") or {}).get(stage)
     if status == "completed":
         return not _video_stage_data_is_valid(stage, result)
-    # "unavailable" is a truthful terminal capability result. Explicit force
-    # remains available when the environment changes later.
-    return status != "unavailable"
+    # Unavailable is truthful for this attempt, but environment availability
+    # can change between ordinary retries.
+    return True
 
 
 def _video_analysis_resume_base(
@@ -317,7 +317,7 @@ def _merge_video_stage_outcome(
 
 def _derive_video_analysis_status(stage_status: dict[str, str]) -> str:
     failed = any(
-        status in {"partial", "failed", "interrupted"}
+        status in {"partial", "failed", "interrupted", "unavailable"}
         for status in stage_status.values()
     )
     if not failed:
@@ -2467,6 +2467,7 @@ async def _run_color_and_caption_analysis(
             all_tags = []
             seen_tags = set()
             tag_sources = []
+            caption_frames_with_tags = 0
 
             from pb_studio.config_manager import ConfigManager
             current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
@@ -2498,6 +2499,7 @@ async def _run_color_and_caption_analysis(
                 return max(0.0, caption_deadline - caption_loop.time())
 
             async def run_lm_studio_frames() -> None:
+                nonlocal caption_frames_with_tags
                 for frame_number, f_rgb in enumerate(frames_rgb, start=1):
                     caption_progress["phase_active_frame"] = frame_number
                     tags, used_model = (
@@ -2508,6 +2510,7 @@ async def _run_color_and_caption_analysis(
                     )
                     caption_progress["phase_completed_frames"] = frame_number
                     if tags:
+                        caption_frames_with_tags += 1
                         for tag in tags:
                             if tag not in seen_tags:
                                 all_tags.append(tag)
@@ -2647,6 +2650,7 @@ async def _run_color_and_caption_analysis(
 
                     for tags in moondream_tags_list:
                         if tags:
+                            caption_frames_with_tags += 1
                             for tag in tags:
                                 if tag not in seen_tags:
                                     all_tags.append(tag)
@@ -2709,12 +2713,19 @@ async def _run_color_and_caption_analysis(
 
             result["tags"] = all_tags[:10]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
-            if result["tags"] and caption_timeout_error is None:
+            if (
+                result["tags"]
+                and caption_timeout_error is None
+                and caption_frames_with_tags == len(frames_rgb)
+            ):
                 result["stage_status"]["captions"] = "completed"
                 result["stage_errors"].pop("captions", None)
             elif result["tags"]:
                 result["stage_status"]["captions"] = "partial"
-                result["stage_errors"]["captions"] = caption_timeout_error
+                result["stage_errors"]["captions"] = (
+                    caption_timeout_error
+                    or f"Caption-Abdeckung unvollstaendig: {caption_frames_with_tags}/{len(frames_rgb)} Frames"
+                )
             else:
                 result["stage_errors"]["captions"] = (
                     caption_timeout_error

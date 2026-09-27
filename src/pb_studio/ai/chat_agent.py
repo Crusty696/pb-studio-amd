@@ -1051,7 +1051,7 @@ class ChatAgent:
                         # ChatEvent("error",...) emittieren — sonst sieht UI im Frontend
                         # nur ein normales tool_result und der User merkt nicht, dass
                         # das Tool versagt hat.
-                        if isinstance(result, dict) and "error" in result:
+                        if isinstance(result, dict) and result.get("error") is not None:
                             yield ChatEvent("error", {
                                 "message": str(result.get("error", "Tool failure")),
                                 "stage": "tool_dispatch",

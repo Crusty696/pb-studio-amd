@@ -135,7 +135,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _sceneLoadSequence);
         IsLoadingScenes = false;
         SelectedClipScenes.Clear();
-        if (value != null && value.IsAnalyzed)
+        if (value?.StageStatus is { } stages
+            && stages.TryGetValue("scenes", out var sceneStatus)
+            && string.Equals(sceneStatus, "completed", StringComparison.OrdinalIgnoreCase))
         {
             _ = LoadScenesAsync(value.Id);
         }
@@ -495,6 +497,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     private static bool IsCompleted(VideoAnalysisResult result)
         => string.Equals(result.Status, "completed", StringComparison.OrdinalIgnoreCase);
 
+    private static bool HasCompletedScenes(VideoAnalysisResult result)
+        => result.StageStatus != null
+            && result.StageStatus.TryGetValue("scenes", out var status)
+            && string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase);
+
     private static string AnalysisFailure(VideoAnalysisResult result)
     {
         if (result.StageErrors is { Count: > 0 })
@@ -687,6 +694,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                     else
                     {
                         latestResults[target.Id] = result;
+                        requestFailures.Remove(target.Id);
                     }
                 }
                 catch (OperationCanceledException) when (scope.Cancellation.IsCancellationRequested)
@@ -728,7 +736,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
         if (SelectedClip is { } selected
             && latestResults.TryGetValue(selected.Id, out var selectedResult)
-            && IsCompleted(selectedResult))
+            && HasCompletedScenes(selectedResult))
         {
             try
             {
@@ -1129,6 +1137,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                     // L-M6: Auto-Reload scenes nach Analyse - OnSelectedClipChanged triggert
                     // nur bei Selection-Wechsel, nicht bei IsAnalyzed-Update der aktuellen Selection.
                     if (SelectedClip?.Id == target.Id
+                        && HasCompletedScenes(result)
                         && ReferenceEquals(SelectedClip, appliedClip))
                     {
                         await LoadScenesAsync(target.Id);
@@ -1136,6 +1145,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 }
                 else if (result != null)
                 {
+                    if (ApplyAnalysisResult(scope, target, result, out var partialClip)
+                        && HasCompletedScenes(result)
+                        && SelectedClip?.Id == target.Id
+                        && ReferenceEquals(SelectedClip, partialClip))
+                    {
+                        await LoadScenesAsync(target.Id);
+                    }
                     if (result.ClipId != target.Id)
                         StatusText = "Analyse verworfen: Antwort passt nicht zu Zielclip/Projekt.";
                     else

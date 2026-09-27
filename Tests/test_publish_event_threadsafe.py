@@ -85,6 +85,36 @@ def test_filtered_event_never_consumes_queue_capacity_or_drop_budget():
         assert deps.unregister_event_queue(client_id) == 0
 
 
+def test_live_queue_overflow_delivers_gap_marker_before_new_progress():
+    async def scenario():
+        client_id = "test_live_gap"
+        queue = deps.get_event_queue(client_id, {"render_progress"})
+        original_maxsize = deps.EVENT_QUEUE_MAXSIZE
+        deps.EVENT_QUEUE_MAXSIZE = 2
+        queue._maxsize = 2
+        deps._event_queue_gap_pending.pop(client_id, None)
+        try:
+            deps.reset_event_journal()
+            await deps.publish_event("render_progress", {"status": "running", "n": 1})
+            await deps.publish_event("render_progress", {"status": "running", "n": 2})
+            await deps.publish_event("render_progress", {"status": "running", "n": 3})
+            # Consumer catches up; next publication must surface the lost-ID range.
+            queue.get_nowait()
+            queue.get_nowait()
+            await deps.publish_event("render_progress", {"status": "completed", "n": 4})
+            events = [queue.get_nowait(), queue.get_nowait()]
+            assert events[0]["event"] == "replay_gap"
+            assert events[0]["data"]["reason"] == "client_queue_overflow"
+            assert events[0]["data"]["first_missing_id"] <= events[0]["data"]["last_missing_id"]
+            assert events[1]["data"]["status"] == "completed"
+        finally:
+            deps.EVENT_QUEUE_MAXSIZE = original_maxsize
+            deps.unregister_event_queue(client_id)
+            deps.reset_event_journal()
+
+    asyncio.run(scenario())
+
+
 def test_log_reconnect_emits_marker_when_journal_has_a_gap():
     class Request:
         headers = {"last-event-id": "1"}
@@ -94,12 +124,23 @@ def test_log_reconnect_emits_marker_when_journal_has_a_gap():
 
     async def scenario() -> None:
         deps.reset_event_journal()
+        cursor = deps._event_sequence
         for index in range(deps.EVENT_JOURNAL_MAXLEN + 2):
             await deps.publish_event("log", {"message": f"log-{index}"})
 
-        assert deps.get_event_journal_gap(1) == (2, 2)
+        assert deps.get_event_journal_gap(cursor, {"log"}) == (
+            cursor + 1,
+            cursor + 2,
+        )
+
+        class CursorRequest:
+            headers = {"last-event-id": str(cursor)}
+
+            async def is_disconnected(self):
+                return False
+
         stream = events_router._event_stream(
-            Request(),
+            CursorRequest(),
             client_id="gap-test",
             event_filter={"log"},
         )
@@ -110,7 +151,7 @@ def test_log_reconnect_emits_marker_when_journal_has_a_gap():
             deps.reset_event_journal()
 
         assert "event: log" in marker
-        assert "Events 2–2" in marker
+        assert f"Events {cursor + 1}–{cursor + 2}" in marker
         assert "nicht mehr verfügbar" in marker
 
     asyncio.run(scenario())
@@ -125,13 +166,21 @@ def test_log_reconnect_ignores_progress_only_evictions():
 
     async def scenario() -> None:
         deps.reset_event_journal()
+        cursor = deps._event_sequence
         for index in range(deps.EVENT_JOURNAL_MAXLEN + 1):
             await deps.publish_event("analysis_progress", {"percent": index})
         await deps.publish_event("log", {"message": "retained"})
 
-        assert deps.get_event_journal_gap(1, {"log"}) is None
+        assert deps.get_event_journal_gap(cursor, {"log"}) is None
+
+        class CursorRequest:
+            headers = {"last-event-id": str(cursor)}
+
+            async def is_disconnected(self):
+                return False
+
         stream = events_router._event_stream(
-            Request(),
+            CursorRequest(),
             client_id="filtered-gap-test",
             event_filter={"log"},
         )

@@ -800,8 +800,7 @@ class ClipSelector:
             return 0.5
         if not math.isfinite(score):
             return 0.5
-        if score > 1.0:
-            score /= 30.0
+        score /= 30.0
         return max(0.0, min(1.0, score))
 
     def _embedding_from_vector_store(self, target_absolute: str):
@@ -997,8 +996,9 @@ class ClipSelector:
             # Stufe 3: Style-Persistenz / Narrative Kapitel-Themen
             theme_bonus = 0.0
             if self.active_theme and belongs_to_theme(clip, self.active_theme):
-                total_score += 1000.0
-                theme_bonus = 1000.0
+                # Theme continuity may break near ties, not override music fit.
+                theme_bonus = 0.05
+                total_score += theme_bonus
 
             # Stufe 4: Bridge-Übergänge für manuelle Storyboard-Anker
             anchor_in_bonus = 0.0

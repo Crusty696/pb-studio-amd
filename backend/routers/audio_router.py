@@ -13,6 +13,7 @@ Endpoints:
 
 import asyncio
 import logging
+import os
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -55,6 +56,16 @@ from pb_studio.audio.band_params import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio"])
+
+
+def _same_audio_source(left: str | Path, right: str | Path) -> bool:
+    """Compare canonical local audio identities with Windows case semantics."""
+    try:
+        return os.path.normcase(str(Path(left).resolve())) == os.path.normcase(
+            str(Path(right).resolve())
+        )
+    except (OSError, ValueError):
+        return False
 
 # Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
 _beat_detector: "Any | None" = None
@@ -2303,6 +2314,12 @@ def _run_audio_analysis(
     _stream_features = None
     _stream_stage_errors: dict[str, list[str]] = {}
     _stream_chunk_evidence: dict = {}
+    feature_source_path = audio_path
+    feature_source_role = "original_mix"
+    feature_coverage = 1.0 if not _use_streaming else 0.0
+    feature_covered_seconds = _probe_dur if not _use_streaming else 0.0
+    key_source_role: str | None = None
+    key_coverage = 0.0
     _stage_status: dict[str, str] = {}
     _stage_errors: dict[str, str] = {}
 
@@ -2430,6 +2447,10 @@ def _run_audio_analysis(
                 "hihat_times": list(_stream_res.hihat_times),
             }
             _stream_features = _stream_res
+            feature_source_path = analysis_path
+            feature_source_role = primary_source_role
+            feature_coverage = _stream_res.feature_coverage
+            feature_covered_seconds = _stream_res.feature_covered_seconds
             _stream_stage_errors = dict(_stream_res.stage_errors)
             _stream_chunk_evidence = {
                 "schema_version": 2,
@@ -2448,26 +2469,40 @@ def _run_audio_analysis(
             if analysis_path != audio_path:
                 try:
                     _emit_analysis_progress(_loop, "energy_mix", 45.0, "Energy-Kurve vom Original-Mix…")
-                    _energy_res = StreamingAudioAnalyzer().analyze(
+                    _mix_features = StreamingAudioAnalyzer().analyze(
                         audio_path,
                         energy_only=True,
                         resume_checkpoint=(stream_resume or {}).get("mix_energy"),
                         on_chunk_checkpoint=lambda checkpoint: _stream_checkpoint(
                             "mix_energy",
-                            "original_mix_energy",
+                            "original_mix_features_and_energy",
                             checkpoint,
                         ),
                         checkpoint_guard=_stream_guard,
                     )
-                    _stream_energy = list(_energy_res.energy_curve)
+                    _stream_energy = list(_mix_features.energy_curve)
                     _stream_chunk_evidence["mix_energy"] = {
-                        "source_role": "original_mix_energy",
-                        "window_count": _energy_res.window_count,
-                        "chunks": list(_energy_res.chunk_evidence),
-                        "checkpoint": dict(_energy_res.resume_checkpoint),
+                        "source_role": "original_mix_features_and_energy",
+                        "window_count": _mix_features.window_count,
+                        "chunks": list(_mix_features.chunk_evidence),
+                        "checkpoint": dict(_mix_features.resume_checkpoint),
                     }
-                    for stage_name, errors in _energy_res.stage_errors.items():
+                    for stage_name, errors in _mix_features.stage_errors.items():
                         _stream_stage_errors.setdefault(stage_name, []).extend(errors)
+                    _stream_features = _mix_features
+                    feature_source_path = audio_path
+                    feature_source_role = "original_mix"
+                    feature_coverage = _mix_features.feature_coverage
+                    feature_covered_seconds = _mix_features.feature_covered_seconds
+                    logger.info(
+                        "Streaming spectral/key features use original mix: %s",
+                        feature_source_path,
+                    )
+                    if _mix_features.feature_coverage < 0.999:
+                        _stream_stage_errors.setdefault("features", []).append(
+                            "original mix feature coverage is incomplete: "
+                            f"{_mix_features.feature_coverage:.3f}"
+                        )
                 except (
                     _AudioAnalysisInterrupted,
                     ProjectContextChangedError,
@@ -2476,10 +2511,13 @@ def _run_audio_analysis(
                     raise
                 except Exception as energy_e:
                     logger.warning(
-                        f"Mix-Energy-Pass fehlgeschlagen ({energy_e}) — verwende Stem-Energy als Fallback"
+                        f"Mix-Feature/Energy-Pass fehlgeschlagen ({energy_e})"
                     )
                     _stream_stage_errors.setdefault("energy", []).append(
                         f"mix_energy: {energy_e}"
+                    )
+                    _stream_stage_errors.setdefault("features", []).append(
+                        f"mix_features: {energy_e}"
                     )
 
             # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
@@ -2508,6 +2546,8 @@ def _run_audio_analysis(
             logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
             raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")
         duration = float(len(y)) / sr if sr > 0 else 0.0
+        feature_coverage = min(1.0, duration / _probe_dur) if _probe_dur > 0 else 0.0
+        feature_covered_seconds = duration
 
     _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
     _stage_status["load"] = "completed"
@@ -3004,8 +3044,14 @@ def _run_audio_analysis(
                 add_aggregate_bands,
             )
             if _use_streaming:
+                if not _same_audio_source(feature_source_path, audio_path):
+                    raise RuntimeError(
+                        "Mix-Spektralfeatures fehlen; Beat-Stem darf nicht als Mix-Featurequelle dienen"
+                    )
                 if _stream_features is None or not _stream_features.spectral_times:
                     raise RuntimeError("Streaming-Spektralrepräsentation ist leer")
+                if _stream_features.feature_coverage < 0.999:
+                    raise RuntimeError("Streaming-Spektralrepräsentation ist unvollständig")
                 band_arrays = {
                     name: np.asarray(values, dtype=np.float64)
                     for name, values in _stream_features.spectral_bands.items()
@@ -3070,12 +3116,27 @@ def _run_audio_analysis(
             key_detector = KeyDetector()
 
             def _detect_original_mix_key() -> str:
+                nonlocal key_source_role, key_coverage
                 if _use_streaming:
+                    if not _same_audio_source(feature_source_path, audio_path):
+                        raise RuntimeError(
+                            "Mix-Key-Chroma fehlen; Beat-Stem darf nicht als Mix-Keyquelle dienen"
+                        )
                     if _stream_features is None or not _stream_features.chroma_mean:
                         raise RuntimeError("Streaming-Chromarepräsentation ist leer")
+                    if _stream_features.feature_coverage < 0.999:
+                        raise RuntimeError(
+                            "Streaming-Key-Chroma ist unvollständig: "
+                            f"{_stream_features.feature_covered_seconds:.1f}/"
+                            f"{_stream_features.duration_seconds:.1f} s"
+                        )
+                    key_coverage = _stream_features.feature_coverage
+                    key_source_role = "original_mix"
                     return key_detector.detect_key_from_chroma(
                         _stream_features.chroma_mean
                     )
+                key_source_role = "original_mix"
+                key_coverage = feature_coverage
                 return key_detector.detect_key(y, sr)
 
             instrumental_is_valid = bool(
@@ -3099,6 +3160,9 @@ def _run_audio_analysis(
                             "verwende Original-Mix"
                         )
                         key = _detect_original_mix_key()
+                    else:
+                        key_source_role = "instrumental_stem"
+                        key_coverage = min(1.0, 600.0 / duration) if duration > 0 else 1.0
                 except Exception as instrumental_error:
                     logger.warning(
                         "Instrumental-Key-Quelle unbrauchbar (%s); "
@@ -3164,6 +3228,16 @@ def _run_audio_analysis(
         "energy_curve": energy_curve,
         "structure_segments": structure_segments,
         "spectral_data": spectral_data,
+        "feature_provenance": {
+            "spectral_source_role": feature_source_role,
+            "spectral_coverage": feature_coverage,
+            "spectral_covered_seconds": feature_covered_seconds,
+            "spectral_source": "original_mix" if _same_audio_source(
+                feature_source_path, audio_path
+            ) else "beat_source",
+            "key_source_role": key_source_role,
+            "key_coverage": key_coverage,
+        },
         "onset_times": onset_times,
         "kick_times": kick_times,
         "snare_times": snare_times,

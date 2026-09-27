@@ -62,6 +62,8 @@ class CanonicalFeatureAdapter:
         video_embedding: Any = None,
         semantic_status: Optional[str] = None,
         semantic_reason: Optional[str] = None,
+        media_time_sec: Optional[float] = None,
+        media_time_source: Optional[str] = None,
     ) -> CandidateFeatures:
         video = self.video_by_clip.get(str(clip_id), {})
         raw_motion, motion_source = _motion_measurement(video)
@@ -76,6 +78,8 @@ class CanonicalFeatureAdapter:
             segment_type or self._segment_at(cut_time_sec)
         )
         video_confidence = _analysis_confidence(video)
+        audio_stage_valid = _analysis_stage_valid(self.audio)
+        video_stage_valid = _analysis_stage_valid(video)
         confidence = min(self.audio_confidence, video_confidence)
         scenes = video.get("scenes") or video.get("scene_changes") or []
         brightness_value = _optional_float(video.get("avg_brightness"))
@@ -93,16 +97,26 @@ class CanonicalFeatureAdapter:
             resolved_semantic_reason = str(semantic_reason)
         axis_status = _build_axis_status(
             trigger_type=str(trigger_type or ""),
-            energy_available=self.energy_available,
-            centroid_available=self.centroid_available,
-            motion_available=motion_source is not None,
-            scene_available=_has_scene_boundary(scenes),
-            brightness_available=brightness_value is not None,
-            color_temp_available=color_temp_value is not None,
-            pace_available=(explicit_pace is not None or motion_source is not None),
-            audio_mood_available=bool(self.audio_mood_tags),
-            video_mood_available=bool(video_mood_tags),
-            semantic_status=resolved_semantic_status,
+            audio_stage_valid=audio_stage_valid,
+            video_stage_valid=video_stage_valid,
+            energy_available=self.energy_available and audio_stage_valid,
+            centroid_available=self.centroid_available and audio_stage_valid,
+            motion_available=motion_source is not None and video_stage_valid,
+            scene_available=(
+                _has_scene_boundary(scenes)
+                and video_stage_valid
+                and media_time_sec is not None
+            ),
+            brightness_available=brightness_value is not None and video_stage_valid,
+            color_temp_available=color_temp_value is not None and video_stage_valid,
+            pace_available=(explicit_pace is not None or motion_source is not None)
+            and video_stage_valid,
+            audio_mood_available=bool(self.audio_mood_tags) and audio_stage_valid,
+            video_mood_available=bool(video_mood_tags) and video_stage_valid,
+            semantic_status=(
+                resolved_semantic_status
+                if audio_stage_valid and video_stage_valid else "unavailable"
+            ),
             semantic_reason=resolved_semantic_reason,
         )
         return CandidateFeatures(
@@ -121,7 +135,7 @@ class CanonicalFeatureAdapter:
             audio_embedding=audio_embedding,
             motion_score=normalized_motion,
             scene_distance_sec=_nearest_scene_distance(
-                cut_time_sec,
+                cut_time_sec if media_time_sec is None else media_time_sec,
                 scenes,
             ),
             brightness=_clip01(
@@ -167,6 +181,14 @@ class CanonicalFeatureAdapter:
                     "source": "analysis_status",
                     "audio": self.audio_confidence,
                     "video": video_confidence,
+                },
+                "source_media_time": {
+                    "seconds": (
+                        float(media_time_sec)
+                        if media_time_sec is not None else None
+                    ),
+                    "source": media_time_source if media_time_sec is not None
+                    else "unavailable",
                 },
                 "semantic": {
                     "status": resolved_semantic_status,
@@ -226,6 +248,8 @@ class CanonicalFeatureAdapter:
 
 
 def _analysis_confidence(data: dict) -> float:
+    if not _analysis_stage_valid(data):
+        return 0.0
     explicit = _optional_float(
         data.get("analysis_confidence", data.get("confidence"))
     )
@@ -243,6 +267,15 @@ def _analysis_confidence(data: dict) -> float:
     if status in {"failed", "unavailable"}:
         return 0.0
     return 1.0 if data.get("is_analyzed") is True else 0.0
+
+
+def _analysis_stage_valid(data: dict) -> bool:
+    status = str(
+        data.get("_analysis_status") or data.get("analysis_status") or ""
+    ).strip().lower()
+    if status:
+        return status in {"completed", "partial"}
+    return data.get("is_analyzed") is True
 
 
 def _motion_measurement(video: dict) -> tuple[float, Optional[str]]:
@@ -280,6 +313,8 @@ def _has_scene_boundary(scenes: list) -> bool:
 def _build_axis_status(
     *,
     trigger_type: str,
+    audio_stage_valid: bool,
+    video_stage_valid: bool,
     energy_available: bool,
     centroid_available: bool,
     motion_available: bool,
@@ -312,7 +347,8 @@ def _build_axis_status(
     }
     result = {
         axis: status(
-            supported_trigger and trigger_type == expected_trigger,
+            audio_stage_valid and supported_trigger
+            and trigger_type == expected_trigger,
             f"analyzed_{expected_trigger}_trigger",
         )
         for axis, expected_trigger in trigger_axes.items()
@@ -326,8 +362,8 @@ def _build_axis_status(
             centroid_available,
             "analyzed_centroid_curve",
         ),
-        "min_clip_length": status(True, "cut_duration"),
-        "max_clip_length": status(True, "cut_duration"),
+        "min_clip_length": status(audio_stage_valid, "cut_duration"),
+        "max_clip_length": status(audio_stage_valid, "cut_duration"),
         "motion_match_weight": status(
             energy_available and motion_available,
             "analyzed_audio_energy_and_video_motion",

@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import math
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -406,6 +407,19 @@ def _missing_pacing_stages(
     return missing, waived
 
 
+def _normalize_video_analysis_ids(
+    analyses: dict[Any, Any],
+) -> dict[int, Any]:
+    """Use integer media IDs consistently across persisted and request maps."""
+    normalized: dict[int, Any] = {}
+    for raw_id, analysis in analyses.items():
+        try:
+            normalized[int(raw_id)] = analysis
+        except (TypeError, ValueError):
+            continue
+    return normalized
+
+
 def _validate_pacing_analysis_preflight(
     config: PacingConfigSchema,
     audio_analysis: dict[str, Any],
@@ -438,10 +452,9 @@ def _validate_pacing_analysis_preflight(
     missing_video = []
     key_unscored_clips: list[int] = []
     key_scored_clips = 0
+    normalized_video_analysis = _normalize_video_analysis_ids(video_analysis_by_clip)
     for clip_id in config.video_clip_ids:
-        payload = video_analysis_by_clip.get(clip_id)
-        if payload is None:
-            payload = video_analysis_by_clip.get(str(clip_id), {})
+        payload = normalized_video_analysis.get(int(clip_id), {})
         stages, waived = _missing_pacing_stages(
             "video",
             payload if isinstance(payload, dict) else {},
@@ -1024,6 +1037,16 @@ async def _generate_preview_for_project(
         )
 
     actual_duration = min(request.duration, timeline_end - request.start_sec)
+    audio_path = getattr(state, "current_audio_path", None)
+    if audio_path:
+        try:
+            audio_path = validate_registered_media_path(
+                audio_path,
+                (clip.get("path", "") for clip in state.get_audio_clips_snapshot().values()),
+                label="Preview audio_path",
+            )
+        except MediaPathPolicyError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     state.require_project_context_current(context)
 
     try:
@@ -1034,6 +1057,7 @@ async def _generate_preview_for_project(
                     timeline_snapshot,
                     request.start_sec,
                     actual_duration,
+                    audio_path,
                 )
             )
             try:
@@ -1046,11 +1070,22 @@ async def _generate_preview_for_project(
                 raise
         if not preview_path:
             raise RuntimeError("Preview-Rendering lieferte keine Ausgabedatei")
+        if isinstance(preview_path, dict):
+            artifact_path = str(preview_path["preview_path"])
+            artifact_duration = float(preview_path["duration"])
+            audio_included = bool(preview_path.get("audio_included", False))
+        else:
+            # Compatibility for injected test/adaptor renderers; production helper
+            # returns a measured artifact receipt.
+            artifact_path = str(preview_path)
+            artifact_duration = actual_duration
+            audio_included = bool(audio_path)
         state.require_project_context_current(context)
         return PreviewResponse(
-            preview_path=preview_path,
-            duration=actual_duration,
+            preview_path=str(Path(artifact_path).resolve()),
+            duration=artifact_duration,
             resolution="640x360",
+            audio_included=audio_included,
         )
     except asyncio.CancelledError:
         raise
@@ -1205,6 +1240,7 @@ def _run_pacing_generation(
     if not audio_path:
         raise ValueError(f"Audio-Clip {config.audio_clip_id} nicht gefunden")
 
+    video_analysis_cache = _normalize_video_analysis_ids(video_analysis_cache or {})
     clips = []
     for vid in config.video_clip_ids:
         if vid in video_clips:
@@ -1310,7 +1346,12 @@ def _run_pacing_generation(
     ]
 
 
-def _render_preview(timeline: list[dict[str, Any]], start_sec: float, duration: float) -> str:
+def _render_preview(
+    timeline: list[dict[str, Any]],
+    start_sec: float,
+    duration: float,
+    audio_path: str | None = None,
+) -> dict[str, Any]:
     """Rendert ein Preview-Video (blockierend)."""
     try:
         from pb_studio.rendering.preview_renderer import PreviewGenerator, TimelineEntry
@@ -1328,9 +1369,15 @@ def _render_preview(timeline: list[dict[str, Any]], start_sec: float, duration: 
                 timeline_end=cut.get("end_time", 0.0),
             ))
         generator = PreviewGenerator()
-        result = generator.generate_preview(entries, start_sec, duration)
+        result = generator.generate_preview(
+            entries, start_sec, duration, audio_path=audio_path
+        )
         if result is None:
             raise RuntimeError("Preview-Rendering fehlgeschlagen")
-        return str(result)
+        return {
+            "preview_path": str(result.resolve()),
+            "duration": generator.last_duration_sec,
+            "audio_included": generator.audio_included,
+        }
     except ImportError:
         raise RuntimeError("PreviewGenerator nicht verfügbar")

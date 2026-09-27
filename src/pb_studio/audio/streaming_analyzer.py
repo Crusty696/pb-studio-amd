@@ -61,6 +61,8 @@ class StreamingAnalysisResult:
     chunk_evidence: list[dict] = field(default_factory=list)
     resume_checkpoint: dict = field(default_factory=dict)
     window_count: int = 0
+    feature_coverage: float = 0.0
+    feature_covered_seconds: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -720,6 +722,7 @@ class StreamingAudioAnalyzer:
         energy_agg = _EnergyAggregator()
         chroma_sum = np.zeros(12, dtype=np.float64)
         chroma_weight = 0
+        feature_covered_seconds = 0.0
         spectral_times: list[float] = []
         spectral_bands: dict[str, list[float]] = {}
         spectral_centroids: list[float] = []
@@ -815,6 +818,9 @@ class StreamingAudioAnalyzer:
                         * feature_weight
                     )
                     chroma_weight += feature_weight
+                    feature_covered_seconds += max(
+                        0.0, float(chunk_dur) - (self.overlap_sec if i else 0.0)
+                    )
                     spectral_times.extend(representative["times"])
                     spectral_centroids.extend(representative["centroids"])
                     for band_name, values in representative["bands"].items():
@@ -940,6 +946,9 @@ class StreamingAudioAnalyzer:
                     * feature_weight
                 )
                 chroma_weight += feature_weight
+                feature_covered_seconds += max(
+                    0.0, float(chunk_dur) - (self.overlap_sec if i else 0.0)
+                )
                 spectral_times.extend(representative["times"])
                 spectral_centroids.extend(representative["centroids"])
                 for band_name, values in representative["bands"].items():
@@ -1062,6 +1071,10 @@ class StreamingAudioAnalyzer:
                 chunks=checkpoint_records,
             ),
             window_count=n_windows,
+            feature_covered_seconds=min(feature_covered_seconds, duration),
+            feature_coverage=(
+                min(1.0, feature_covered_seconds / duration) if duration > 0 else 0.0
+            ),
         )
 
     def _extract_representative_features(

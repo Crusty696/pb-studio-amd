@@ -609,8 +609,11 @@ async def _h_brain_explain(args: dict[str, Any], *, http_client: httpx.AsyncClie
 async def _h_render_start(args: dict[str, Any], *, http_client: httpx.AsyncClient) -> dict[str, Any]:
     output_path = _coerce_str(args.get("output_path")) or ""
     audio_path = _coerce_str(args.get("audio_path")) or ""
-    if not output_path or not audio_path:
-        return {"error": "output_path und audio_path sind erforderlich"}
+    include_audio = _coerce_bool(args.get("include_audio"), default=True)
+    if not output_path:
+        return {"error": "output_path ist erforderlich"}
+    if include_audio and not audio_path:
+        return {"error": "audio_path ist erforderlich, wenn Audio inkludiert wird"}
     body: dict[str, Any] = {
         "output_path": output_path,
         "audio_path": audio_path,
@@ -619,7 +622,7 @@ async def _h_render_start(args: dict[str, Any], *, http_client: httpx.AsyncClien
         "resolution_height": _coerce_int(args.get("resolution_height"), default=1080),
         "fps": _coerce_float(args.get("fps"), default=30.0),
         "bitrate_mbps": _coerce_float(args.get("bitrate_mbps"), default=12.0),
-        "include_audio": _coerce_bool(args.get("include_audio"), default=True),
+        "include_audio": include_audio,
     }
     encoder = _coerce_str(args.get("encoder"))
     if encoder:
@@ -982,7 +985,7 @@ def build_default_registry() -> ToolRegistry:
             "fps": {"type": "number", "default": 30.0},
             "bitrate_mbps": {"type": "number", "default": 12.0},
             "include_audio": {"type": "boolean", "default": True},
-        }, required=["output_path", "audio_path"]),
+        }, required=["output_path"]),
         handler=_h_render_start,
         category="render",
         destructive=True,

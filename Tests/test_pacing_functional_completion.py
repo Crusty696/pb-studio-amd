@@ -106,7 +106,7 @@ def test_preview_uses_project_context_and_reports_actual_interval(monkeypatch) -
     _prepare_preview(monkeypatch, lock)
     captured: dict[str, float] = {}
 
-    async def fake_to_thread(_func, _timeline, start: float, duration: float):
+    async def fake_to_thread(_func, _timeline, start: float, duration: float, *_args):
         captured["start"] = start
         captured["duration"] = duration
         return "preview.mp4"

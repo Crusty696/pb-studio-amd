@@ -445,6 +445,8 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     {
         if (_disposed || _isClearing) return;
 
+        var expectedProjectPath = _projectPath;
+        var expectedGeneration = Volatile.Read(ref _streamGeneration);
         _isClearing = true;
         SendCommand.NotifyCanExecuteChanged();
         ClearCommand.NotifyCanExecuteChanged();
@@ -455,7 +457,15 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         try
         {
             var cleared = await _api.ClearChatHistoryAsync().ConfigureAwait(true);
-            if (_disposed) return;
+            if (_disposed
+                || expectedGeneration != Volatile.Read(ref _streamGeneration)
+                || !string.Equals(
+                    _projectPath,
+                    expectedProjectPath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
 
             if (!cleared)
             {

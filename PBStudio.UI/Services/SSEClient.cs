@@ -481,6 +481,8 @@ public class SSEClient : IDisposable
                                 EvidencePath = TryGetString(root, "evidence_path"),
                                 ValidationPath = TryGetString(root, "validation_path"),
                                 ValidationStatus = TryGetString(root, "validation_status"),
+                                ValidationPhase = TryGetString(root, "validation_phase"),
+                                ValidationProgress = TryGetDouble(root, "validation_progress"),
                                 ProgressEnd = TryGetBool(root, "progress_end"),
                                 Step = TryGetString(root, "step"),
                                 StepIndex = TryGetInt(root, "step_index"),
@@ -638,6 +640,8 @@ public class ProgressEventArgs : EventArgs
     public string EvidencePath { get; init; } = "";
     public string ValidationPath { get; init; } = "";
     public string ValidationStatus { get; init; } = "";
+    public string ValidationPhase { get; init; } = "";
+    public double ValidationProgress { get; init; } = -1.0;
     public bool ProgressEnd { get; init; }
     public string Step { get; init; } = "";       // Feature-3: phase-Identifier
     public int StepIndex { get; init; }            // 1-based current step

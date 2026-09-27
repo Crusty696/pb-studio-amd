@@ -309,6 +309,7 @@ class StructureAnalyzer:
 
         segment_count = max(1, int(np.ceil(total_duration / segment_seconds)))
         global_mean = float(np.mean(energy))
+        global_std = float(np.std(energy))
         segments = []
         previous_mean = global_mean
         for index in range(segment_count):
@@ -320,6 +321,13 @@ class StructureAnalyzer:
                 int(end_time / total_duration * energy.size),
             )
             local_mean = float(np.mean(energy[start_index:end_index]))
+            local_values = energy[start_index:end_index]
+            local_std = float(np.std(local_values)) if local_values.size else 0.0
+            evidence = min(
+                1.0,
+                (abs(local_mean - global_mean) + local_std)
+                / max(2.0 * global_std, 1e-8),
+            )
             if index == 0:
                 label = "intro"
             elif index == segment_count - 1:
@@ -342,7 +350,7 @@ class StructureAnalyzer:
                     "duration": float(end_time - start_time),
                     "label": label,
                     "cluster": 0,
-                    "confidence": 0.6,
+                    "confidence": float(evidence),
                     "energy_score": local_mean,
                 }
             )

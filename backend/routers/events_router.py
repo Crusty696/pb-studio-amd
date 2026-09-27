@@ -135,7 +135,7 @@ async def _event_stream(
                 continue
 
             event_type = event.get("event", "message")
-            if event_filter and event_type not in event_filter:
+            if event_filter and event_type not in event_filter and event_type != "replay_gap":
                 continue
 
             data = json.dumps(event.get("data", {}), ensure_ascii=False)

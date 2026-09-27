@@ -41,10 +41,15 @@ def has_video_audio_stream(video_path: str | Path) -> bool:
             str(video_path_obj.resolve()),
         ]
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        return res.returncode == 0 and "audio" in res.stdout.strip().lower()
+        if res.returncode != 0:
+            raise RuntimeError(
+                f"ffprobe konnte Audio-Streams nicht pruefen (exit {res.returncode}): "
+                f"{res.stderr.strip()[:300]}"
+            )
+        return "audio" in res.stdout.strip().lower()
     except Exception as e:
         logger.debug(f"has_video_audio_stream Check fehlgeschlagen: {e}")
-        return False
+        raise RuntimeError(f"ffprobe Audio-Stream-Pruefung fehlgeschlagen: {e}") from e
 
 
 def detect_video_audio_key(video_path: str | Path) -> Optional[str]:

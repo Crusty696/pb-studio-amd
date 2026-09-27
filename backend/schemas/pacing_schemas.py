@@ -177,3 +177,4 @@ class PreviewResponse(BaseModel):
     preview_path: str
     duration: float = Field(allow_inf_nan=False)
     resolution: str = "640x360"
+    audio_included: bool = False

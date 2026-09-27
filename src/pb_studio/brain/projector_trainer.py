@@ -121,9 +121,24 @@ def collect_training_pairs(
         v_emb = video_load_fn(vh)
         if a_emb is None or v_emb is None:
             continue
+        if not _usable_embedding(a_emb) or not _usable_embedding(v_emb):
+            continue
         pairs.append((a_emb, v_emb, label))
 
     return pairs
+
+
+def _usable_embedding(value, *, expected_dim: Optional[int] = None) -> bool:
+    try:
+        embedding = np.asarray(value, dtype=np.float32).reshape(-1)
+    except (TypeError, ValueError):
+        return False
+    return bool(
+        embedding.size
+        and (expected_dim is None or embedding.size == int(expected_dim))
+        and np.all(np.isfinite(embedding))
+        and float(np.linalg.norm(embedding)) > 1e-9
+    )
 
 
 @recovery_write_operation("brain-projector")
@@ -235,6 +250,14 @@ def run_v2_fit_step(
                     reason = "missing_audio_embedding"
                 if reason is None and video_embedding is None:
                     reason = "missing_video_embedding"
+                if reason is None and not _usable_embedding(
+                    audio_embedding, expected_dim=projector.audio_dim
+                ):
+                    reason = "invalid_audio_embedding"
+                if reason is None and not _usable_embedding(
+                    video_embedding, expected_dim=projector.video_dim
+                ):
+                    reason = "invalid_video_embedding"
                 if reason is not None:
                     pending[event_uuid] = {
                         "project_uuid": project_uuid,

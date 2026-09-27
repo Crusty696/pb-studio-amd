@@ -23,6 +23,7 @@ import threading
 import time
 import queue
 import uuid
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, List, Dict, Optional, Callable
 from pb_studio.storage.recovery_barrier import recovery_write_operation
@@ -43,6 +44,25 @@ from pb_studio.video.encoder_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _fps_fraction(fps: float | str | Fraction) -> Fraction:
+    """Return the exact cadence used by FFmpeg and render frame accounting."""
+    if isinstance(fps, Fraction):
+        value = fps
+    elif isinstance(fps, str) and "/" in fps:
+        numerator, denominator = fps.split("/", 1)
+        value = Fraction(int(numerator), int(denominator))
+    else:
+        value = Fraction(str(fps)).limit_denominator(1_000_000)
+    if value <= 0:
+        raise ValueError("Render-FPS muss positiv sein")
+    return value
+
+
+def _expected_frame_count(duration: float, fps: float | str | Fraction) -> int:
+    rate = _fps_fraction(fps)
+    return max(int(round(Fraction(str(max(duration, 0.0))) * rate)), 0)
 
 
 def _get_clip_path_str(clip: dict) -> Optional[str]:
@@ -109,6 +129,7 @@ class RenderService:
         self.run_id = ""
         self.temp_dir = self.temp_root / self.job_token
         self._encoder_override = encoder_override
+        self._render_rate = Fraction(30, 1)
 
     @classmethod
     def _register_process(cls, process: subprocess.Popen) -> None:
@@ -304,7 +325,9 @@ class RenderService:
             if include_audio
             else None
         )
-        total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
+        target_rate = _fps_fraction(target_fps)
+        self._render_rate = target_rate
+        total_frames = _expected_frame_count(total_duration, target_rate)
         render_start = time.monotonic()
 
         self.run_id = uuid.uuid4().hex
@@ -363,9 +386,30 @@ class RenderService:
                 bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start,
                 audio_dur=audio_dur,
                 include_audio=include_audio,
+                target_rate=target_rate,
             )
             if not staging_output.exists() or staging_output.stat().st_size == 0:
                 raise RuntimeError("FFmpeg hat keine vollständige Render-Ausgabe erzeugt")
+            self._emit_progress(
+                progress_callback,
+                "Pruefe Render-Ausgabe...",
+                98,
+                total_frames=total_frames,
+                current_frame=last_telemetry.get("current_frame", 0)
+                if last_telemetry else 0,
+                fps=last_telemetry.get("fps", 0.0) if last_telemetry else 0.0,
+                elapsed_seconds=max(time.monotonic() - render_start, 0.0),
+                eta_seconds=0.0,
+                validation_status="running",
+            )
+            self._persist_validation_evidence(
+                status="running",
+                metrics={
+                    "phase": "probe_and_full_decode",
+                    "expected_frames": total_frames,
+                    "fps": f"{target_rate.numerator}/{target_rate.denominator}",
+                },
+            )
             try:
                 artifact_metrics = self._validate_render_artifact(
                     staging_output,
@@ -376,6 +420,7 @@ class RenderService:
                     include_audio=include_audio,
                     expected_end_silence=expected_end_silence,
                     cancel_callback=cancel_callback,
+                    progress_callback=progress_callback,
                 )
             except Exception as exc:
                 self._persist_validation_evidence(error=exc)
@@ -688,7 +733,11 @@ class RenderService:
         cancel_callback: Optional[Callable[[], bool]] = None,
     ):
         # BUG-026 Fix: fps als float formatiert (z.B. 23.976 → "23.976")
-        vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
+        rate = _fps_fraction(fps)
+        vf_filter = (
+            f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={rate.numerator}/{rate.denominator}"
+        )
         primary = self._active_encoder()
 
         chain = [primary]
@@ -800,8 +849,10 @@ class RenderService:
         total_duration: float, encoder: str,
         audio_dur: Optional[float] = None,
         include_audio: bool = True,
+        target_rate: Optional[Fraction] = None,
     ) -> tuple[list[str], float]:
         """Baut FFmpeg-Kommando fuer einen bestimmten Encoder. Gibt (cmd, effective_duration) zurueck."""
+        render_rate = target_rate or getattr(self, "_render_rate", _fps_fraction(30.0))
         cmd = [
             _get_ffmpeg_path(), "-y",
             *get_amf_device_args(),
@@ -820,7 +871,18 @@ class RenderService:
             cmd.extend(["-map", "0:v", "-map", "1:a"])
         else:
             cmd.extend(["-map", "0:v"])
-        cmd.extend(["-vf", "select=concatdec_select,setpts=N/FR/TB"])
+        cmd.extend([
+            "-vf",
+            (
+                "select=concatdec_select,"
+                "settb=AVTB,setpts=N*TB*"
+                f"{render_rate.denominator}/{render_rate.numerator}"
+            ),
+        ])
+        # Concat inputs may retain source cadence (or VFR timestamps). Set the
+        # requested rational cadence after concat selection so encoder output,
+        # progress frame budgets, and artifact validation share one timebase.
+        cmd.extend(["-r", f"{render_rate.numerator}/{render_rate.denominator}"])
 
         if encoder == "hevc_amf":
             cmd.extend(["-c:v", "hevc_amf", "-rc", "cbr", "-quality", preset, "-b:v", bitrate])
@@ -852,8 +914,11 @@ class RenderService:
         if audio_dur and audio_dur > 0:
             render_dur = min(audio_dur, total_duration) if total_duration > 0 else audio_dur
         if render_dur and render_dur > 0:
-            cmd.extend(["-t", f"{render_dur:.3f}"])
             total_duration = render_dur
+            cmd.extend([
+                "-frames:v",
+                str(_expected_frame_count(render_dur, render_rate)),
+            ])
 
         cmd.append(str(output_path))
         return cmd, total_duration
@@ -869,6 +934,7 @@ class RenderService:
         include_audio: bool,
         expected_end_silence: Optional[float] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        progress_callback: Optional[Callable[..., None]] = None,
     ) -> dict[str, Any]:
         """Validiert Streams und dekodiert das vollstaendige Staging-Artefakt."""
         probe_cmd = [
@@ -880,6 +946,11 @@ class RenderService:
             str(artifact_path),
         ]
         try:
+            if progress_callback:
+                progress_callback(
+                    "Validiere Container und Streams...", 98,
+                    {"validation_status": "running", "validation_phase": "container_probe"},
+                )
             probe = self._run_capture_process(
                 probe_cmd,
                 timeout=self._ARTIFACT_PROBE_TIMEOUT_SECONDS,
@@ -963,7 +1034,13 @@ class RenderService:
             expected_duration=expected_duration,
             cancel_callback=cancel_callback,
         )
-        expected_frames = int(round(expected_duration * target_fps))
+        if progress_callback:
+            progress_callback(
+                "Dekodiere Video zur Vollvalidierung...", 98,
+                {"validation_status": "running", "validation_phase": "video_decode"},
+            )
+        render_rate = getattr(self, "_render_rate", _fps_fraction(target_fps))
+        expected_frames = _expected_frame_count(expected_duration, render_rate)
         decoded_frames = int(video_decode.get("frame", "0") or 0)
         if abs(decoded_frames - expected_frames) > self._ARTIFACT_FRAME_TOLERANCE:
             raise RuntimeError(
@@ -981,6 +1058,11 @@ class RenderService:
         true_peak_dbtp: Optional[float] = None
         end_silence: Optional[float] = None
         if include_audio:
+            if progress_callback:
+                progress_callback(
+                    "Dekodiere Audio zur Vollvalidierung...", 98,
+                    {"validation_status": "running", "validation_phase": "audio_decode"},
+                )
             audio_decode = self._decode_artifact_stream(
                 artifact_path,
                 stream_selector="0:a:0",
@@ -1228,6 +1310,7 @@ class RenderService:
         render_start_time: Optional[float] = None,
         audio_dur: Optional[float] = None,
         include_audio: bool = True,
+        target_rate: Optional[Fraction] = None,
     ) -> dict[str, Any]:
         """Finaler Render mit Echtzeit-Progress über AMD AMF."""
         # BUG-070 FIX: Guard gegen Path(None)
@@ -1250,6 +1333,7 @@ class RenderService:
                 bitrate, preset, audio_offset, total_duration, encoder,
                 audio_dur=audio_dur,
                 include_audio=include_audio,
+                target_rate=target_rate,
             )
 
             startupinfo = subprocess.STARTUPINFO()
@@ -1270,6 +1354,7 @@ class RenderService:
                     progress_callback,
                     cancel_callback,
                     render_start_time=render_start_time,
+                    target_rate=target_rate,
                 )
                 return result
             except RenderCancelledError:
@@ -1318,6 +1403,7 @@ class RenderService:
         progress_callback: Optional[Callable[..., None]],
         cancel_callback: Optional[Callable[[], bool]] = None,
         render_start_time: Optional[float] = None,
+        target_rate: Optional[Fraction] = None,
     ) -> dict[str, Any]:
         """Liest FFmpegs `-progress`-Protokoll und persistiert Rohbelege."""
         progress_queue: queue.Queue[str] = queue.Queue()
@@ -1352,7 +1438,8 @@ class RenderService:
         stdout_thread.start()
         stderr_thread.start()
 
-        total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
+        render_rate = target_rate or _fps_fraction(target_fps)
+        total_frames = _expected_frame_count(total_duration, render_rate)
         last_progress = 60
         last_publish_at = 0.0
         last_frame = 0
@@ -1567,6 +1654,7 @@ class RenderService:
     def _persist_validation_evidence(
         self,
         *,
+        status: Optional[str] = None,
         metrics: Optional[dict[str, Any]] = None,
         error: Optional[Exception] = None,
     ) -> Path:
@@ -1583,12 +1671,27 @@ class RenderService:
             if error_text is not None
             else None
         )
-        if error is None:
+        if status is not None:
+            validation_status = status
+        elif error is None:
             validation_status = "passed"
         elif isinstance(error, RenderCancelledError):
             validation_status = "cancelled"
         else:
             validation_status = "failed"
+        path = evidence_dir / "validation.json"
+        previous: dict[str, Any] = {}
+        if path.is_file():
+            try:
+                previous = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                previous = {}
+        history = list(previous.get("history") or [])
+        history.append({
+            "status": validation_status,
+            "phase": (metrics or {}).get("phase"),
+            "recorded_at_epoch": time.time(),
+        })
         record = {
             "schema_version": 1,
             "job_id": self.job_token,
@@ -1598,8 +1701,8 @@ class RenderService:
             "error": error_text,
             "failure_fingerprint": fingerprint,
             "recorded_at_epoch": time.time(),
+            "history": history,
         }
-        path = evidence_dir / "validation.json"
         self._atomic_write_text(
             path,
             json.dumps(record, indent=2, sort_keys=True) + "\n",

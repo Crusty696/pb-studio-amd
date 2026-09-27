@@ -103,9 +103,10 @@ def test_project_info_refresh_uses_single_dispatched_switch_lifecycle():
         main_view_model.index("private void OnBackendStatusChanged")
     ]
 
-    assert "if (project == null)" in refresh
-    assert "SwitchToProject(project);" in refresh
-    assert "CurrentProject = project;" not in refresh
+    assert "project == null" in refresh
+    assert "TryCommit(context" in refresh
+    assert "SwitchToProject(project);" not in refresh
+    assert "CurrentProject = project;" in refresh
     assert "new ProjectOpenedMessage()" not in refresh
     assert "new ProjectOpenedMessage()" not in initialize
 
@@ -119,5 +120,18 @@ def test_project_save_publishes_state_on_ui_thread():
 
     assert "var refreshedProject = await _api.GetProjectInfoAsync()" in save
     ui_update = save[save.index("RunOnUiThread(() =>"):]
-    assert "CurrentProject = refreshedProject ?? CurrentProject;" in ui_update
+    assert "TryCommit(context" in save
+    assert "CurrentProject = refreshedProject;" in ui_update
     assert "ProjectChanged?.Invoke(this, CurrentProject);" in ui_update
+
+
+def test_project_info_refresh_rejects_response_after_project_switch():
+    source = _source("PBStudio.UI/Services/ProjectService.cs")
+    refresh = source[
+        source.index("public async Task<bool> RefreshProjectInfoAsync()"):
+        source.index("public async Task<bool> CloseProjectAsync()")
+    ]
+
+    assert "context = CaptureOperationContext();" in refresh
+    assert "TryCommit(context" in refresh
+    assert "SwitchToProject(project);" not in refresh

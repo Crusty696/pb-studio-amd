@@ -397,6 +397,10 @@ class PacingService:
 
                 metadata = deepcopy(base_metadata)
                 metadata["clip_start"] = segment_clip_start
+                if cursor > interval_start + 1e-9:
+                    metadata["trigger_type"] = "source_repeat"
+                    metadata["trigger_strength"] = 0.0
+                    metadata.pop("trigger_provenance", None)
                 if index == len(originals) - 1 and abs(original_end - target_duration) > 0.001:
                     metadata["boundary_original_end"] = original_end
                     metadata["boundary_normalized_end"] = target_duration
@@ -684,6 +688,7 @@ class PacingService:
         
         # Finde durchschnittliche Energie für jedes Kapitel
         energy_data = energy_curve if energy_curve is not None and len(energy_curve) > 0 else None
+        energy_duration = float(getattr(self, "_chapter_energy_duration", 0.0) or duration)
         
         for i in range(0, num_beats, beats_per_chapter):
             start_beat_idx = i
@@ -706,8 +711,8 @@ class PacingService:
             avg_energy = 0.5
             if energy_data is not None:
                 curve_len = len(energy_data)
-                start_idx = int((start_time / duration) * curve_len) if duration > 0 else 0
-                end_idx = int((end_time / duration) * curve_len) if duration > 0 else curve_len
+                start_idx = int((start_time / energy_duration) * curve_len) if energy_duration > 0 else 0
+                end_idx = int((end_time / energy_duration) * curve_len) if energy_duration > 0 else curve_len
                 start_idx = max(0, min(curve_len - 1, start_idx))
                 end_idx = max(start_idx + 1, min(curve_len, end_idx))
                 avg_energy = float(np.mean(energy_data[start_idx:end_idx]))
@@ -1063,6 +1068,9 @@ class PacingService:
                     else:
                         pre_cached_beats_stems.append(float(b))
 
+            self._chapter_energy_duration = float(
+                getattr(pacing_engine, "_pre_cached_duration", 0.0) or total_duration
+            )
             chapters = self.segment_timeline_into_chapters(
                 pacing_engine._pre_cached_energy if hasattr(pacing_engine, "_pre_cached_energy") else None,
                 pre_cached_beats_stems,
@@ -1428,6 +1436,9 @@ class PacingService:
                         else:
                             pre_cached_beats_adv.append(float(b))
 
+                self._chapter_energy_duration = float(
+                    getattr(pacing_engine, "_pre_cached_duration", 0.0) or total_duration
+                )
                 chapters = self.segment_timeline_into_chapters(
                     pacing_engine._pre_cached_energy if hasattr(pacing_engine, "_pre_cached_energy") else None,
                     pre_cached_beats_adv,

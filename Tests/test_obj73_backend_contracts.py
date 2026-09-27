@@ -26,11 +26,12 @@ def test_sse_event_is_journaled_without_connected_clients():
         deps._event_queues.clear()
         deps._event_queue_filters.clear()
         deps.reset_event_journal()
+        cursor = deps._event_sequence
 
         await deps.publish_event("render_progress", {"job_id": "job-73"})
         await deps.publish_event("render_completed", {"job_id": "job-73"})
 
-        replay = deps.get_journaled_events_since(1)
+        replay = deps.get_journaled_events_since(cursor + 1)
         assert len(replay) == 1
         assert replay[0][1]["event"] == "render_completed"
         assert replay[0][1]["data"] == {"job_id": "job-73"}

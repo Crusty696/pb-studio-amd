@@ -802,7 +802,24 @@ class AppState:
         project_id = self.require_current_project_db_id()
         in_memory = self._find_audio_clip_by_path(clip_data["path"])
         if in_memory:
-            return in_memory
+            clip = {**in_memory, **clip_data, "id": in_memory["id"]}
+            if in_memory.get("audio_hash") != clip_data.get("audio_hash"):
+                for key in (
+                    "bpm", "key", "beat_count", "beats", "energy_curve",
+                    "structure_segments", "spectral_data", "subtrack_segments",
+                    "tempo_curve", "onset_times", "kick_times", "snare_times",
+                    "hihat_times", "chunk_evidence", "downbeats", "beat_grid",
+                    "downbeat_provenance", "beat_grid_provenance",
+                ):
+                    clip.pop(key, None)
+                clip["is_analyzed"] = False
+                clip["has_audio_embedding"] = False
+            self.persist_audio_clip(clip, project_id=project_id)
+            if in_memory.get("audio_hash") != clip_data.get("audio_hash"):
+                with self._state_lock:
+                    self.audio_analysis_cache.pop(clip["id"], None)
+            self.set_audio_clip(clip["id"], clip)
+            return clip
 
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
@@ -859,7 +876,22 @@ class AppState:
         project_id = self.require_current_project_db_id()
         in_memory = self._find_video_clip_by_path(clip_data["path"])
         if in_memory:
-            return in_memory
+            clip = {**in_memory, **clip_data, "id": in_memory["id"]}
+            if in_memory.get("video_hash") != clip_data.get("video_hash"):
+                for key in (
+                    "is_analyzed", "avg_motion", "peak_motion", "motion_category",
+                    "embedding_dim", "embedding_samples", "has_embedding", "tag_source",
+                    "analysis_status", "stage_status", "stage_errors",
+                ):
+                    clip.pop(key, None)
+                clip["tags"] = []
+                clip["thumbnail_available"] = False
+            self.persist_video_clip(clip, project_id=project_id)
+            if in_memory.get("video_hash") != clip_data.get("video_hash"):
+                with self._state_lock:
+                    self.video_analysis_cache.pop(clip["id"], None)
+            self.set_video_clip(clip["id"], clip)
+            return clip
 
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository

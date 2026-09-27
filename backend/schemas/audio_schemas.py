@@ -100,6 +100,7 @@ class AudioAnalysisResult(BaseModel):
     # Felder: bpm, anchor_s, contrast, method, status, kick_recall,
     # kick_precision, octave_checked. `status`: plausible | suspect | unavailable.
     beat_grid: dict[str, Any] = Field(default_factory=dict)
+    feature_provenance: dict[str, Any] = Field(default_factory=dict)
 
 
 class WaveformRequest(BaseModel):

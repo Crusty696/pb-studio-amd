@@ -1554,7 +1554,11 @@ public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5,
 
 public record BrainSuggestion(int? CutId, string ClipId, double StartTime, double EndTime, double FinalScore, Dictionary<string, double> BrainScores);
 public record BrainSuggestResponse(List<BrainSuggestion> Suggestions);
-public record PacingPreviewResponse(string PreviewPath, double Duration, string Resolution);
+public record PacingPreviewResponse(
+    string PreviewPath,
+    double Duration,
+    string Resolution,
+    bool AudioIncluded = false);
 public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int TotalClicks, string? Message = null);
 public record BrainLearningSessionResponse(List<BrainSuggestion> Cuts);
 public record BrainStatsBucket(
@@ -1607,4 +1611,6 @@ public record RenderProgress(
     string? ValidationPath = null,
     bool ProgressEnd = false,
     string? ValidationStatus = null,
-    double ProgressPercent = 0.0);
+    double ProgressPercent = 0.0,
+    string? ValidationPhase = null,
+    double? ValidationProgress = null);

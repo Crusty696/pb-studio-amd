@@ -262,10 +262,12 @@ class MediaRepository:
                     cursor.execute(
                         """
                         UPDATE media
-                        SET file_hash = ?, duration_sec = ?, metadata_json = ?, status = COALESCE(status, 'pending')
+                        SET ai_data_json = CASE WHEN file_hash != ? THEN NULL ELSE ai_data_json END,
+                            status = CASE WHEN file_hash != ? THEN 'pending' ELSE COALESCE(status, 'pending') END,
+                            file_hash = ?, duration_sec = ?, metadata_json = ?
                         WHERE id = ?
                         """,
-                        (file_hash, duration, json_meta, existing[0]),
+                        (file_hash, file_hash, file_hash, duration, json_meta, existing[0]),
                     )
                     logger.info(f"Reused existing media {existing[0]}: {normalized_path}")
                     return existing[0]

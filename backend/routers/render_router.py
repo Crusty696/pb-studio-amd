@@ -430,6 +430,38 @@ def _validate_render_media_contract(
     return request.model_copy(update={"audio_path": validated_audio}), validated_timeline
 
 
+def _reject_render_output_identity(
+    request: RenderRequest,
+    timeline: list[dict[str, Any]],
+) -> None:
+    """Refuse to replace any source media with the render output."""
+    output_path = Path(request.output_path).resolve()
+    output_key = os.path.normcase(str(output_path))
+    inputs: list[tuple[str, str]] = []
+    if request.include_audio and request.audio_path:
+        inputs.append(("master audio", request.audio_path))
+    for entry in timeline:
+        metadata = entry.get("metadata") or {}
+        for key in ("file_path", "clip_path", "path", "video_path"):
+            candidate = metadata.get(key) or entry.get(key)
+            if candidate:
+                inputs.append(("timeline video", str(candidate)))
+                break
+    for label, raw_path in inputs:
+        try:
+            input_path = Path(raw_path).resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Render-{label}-Pfad kann nicht kanonisiert werden",
+            ) from exc
+        if os.path.normcase(str(input_path)) == output_key:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Render-Ausgabe darf nicht dieselbe Datei wie {label} sein",
+            )
+
+
 def _load_resume_media_state(
     project_root_raw: str,
     project_db_id_raw: Any,
@@ -747,6 +779,8 @@ async def _start_render_for_project(
         )
     except MediaPathPolicyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    _reject_render_output_identity(request, timeline_snapshot)
 
     # SEC-002: Path-Traversal-Schutz für output_path
     output_p_check = Path(request.output_path).resolve()
@@ -1294,6 +1328,8 @@ async def _run_render_task(
             "validation_path": validation_path,
             "progress_end": False,
             "validation_status": "failed",
+            "validation_phase": getattr(e, "validation_phase", None),
+            "validation_progress": 100.0 if validation_path else None,
             "finished_at": time.time(),  # UTC epoch seconds for retention
         })
         _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
@@ -1312,6 +1348,8 @@ async def _run_render_task(
             "validation_path": validation_path,
             "progress_end": False,
             "validation_status": "failed",
+            "validation_phase": getattr(e, "validation_phase", None),
+            "validation_progress": 100.0 if validation_path else None,
         })
         await publish_log(
             f"Render fehlgeschlagen: {task_id}",
@@ -1409,6 +1447,9 @@ def _execute_render(
             "fps": task_snapshot.get("fps", 0.0),
             "elapsed_seconds": task_snapshot.get("elapsed_seconds", 0.0),
             "eta_seconds": task_snapshot.get("eta_seconds", 0.0),
+            "validation_status": task_snapshot.get("validation_status"),
+            "validation_phase": task_snapshot.get("validation_phase"),
+            "validation_progress": task_snapshot.get("validation_progress"),
         }
         future = asyncio.run_coroutine_threadsafe(
             publish_event("render_progress", payload),
@@ -1445,6 +1486,10 @@ def _execute_render(
             "eta_seconds": round(float(telemetry.get("eta_seconds", 0.0) or 0.0), 1),
             "output_path": str(output_p),
         }
+        if "validation_status" in telemetry:
+            updates["validation_status"] = telemetry["validation_status"]
+            updates["validation_phase"] = telemetry.get("validation_phase")
+            updates["validation_progress"] = telemetry.get("validation_progress")
         state.update_render_task(task_id, updates)
 
         now = time.monotonic()

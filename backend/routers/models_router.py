@@ -515,6 +515,16 @@ def _require_idle_vision_runtime(action: str) -> None:
     )
 
 
+def _model_smoke_response_text(result: dict, *, capability: str) -> Optional[str]:
+    """Return observed smoke output; never invent an OK reply for an empty result."""
+    if capability == "vision":
+        value = (result.get("message") or {}).get("content") or result.get("response")
+    else:
+        value = result.get("response")
+    text = str(value or "").strip()
+    return text or None
+
+
 @router.post("/provider")
 async def select_provider(
     request: ProviderRequest,
@@ -1148,7 +1158,7 @@ async def activate_model(
             "image_captioning": "vision",
             "chat": "chat",
             "chat_general": "chat",
-            "chat_tool_use": "chat",
+            "chat_tool_use": "tool_calls",
             "brain_explanation": "chat",
         }
         requested_task = str(request.task or "").strip()
@@ -1382,24 +1392,29 @@ async def test_model(
                     images=[frame],
                     options={"max_tokens": 2, "temperature": 0.0},
                 )
-                response_text = (
-                    (result.get("message") or {}).get("content")
-                    or result.get("response")
-                    or ""
-                )
             else:
                 result = await c.generate(
                     model=selected.name,
                     prompt="Say 'ok'",
                     options={"max_tokens": 1, "temperature": 0.0},
                 )
-                response_text = result.get("response") or ""
+            response_text = _model_smoke_response_text(
+                result,
+                capability=test_capability,
+            )
 
         latency = (time.perf_counter() - start_time) * 1000.0
+        if response_text is None:
+            return ModelTestResponse(
+                success=False,
+                latency_ms=round(latency, 1),
+                error="Modell-Smoke-Test lieferte eine leere Antwort.",
+                selection_receipt=receipt_schema,
+            )
         return ModelTestResponse(
             success=True,
             latency_ms=round(latency, 1),
-            response=response_text.strip() or "OK",
+            response=response_text,
             selection_receipt=receipt_schema,
         )
     except Exception as exc:

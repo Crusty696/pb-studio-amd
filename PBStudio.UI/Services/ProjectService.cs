@@ -97,28 +97,61 @@ public class ProjectService : IDisposable
 
     public async Task<bool> SaveProjectAsync()
     {
+        ProjectOperationContext context;
+        try
+        {
+            context = CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
         var result = await _api.SaveProjectAsync().ConfigureAwait(false);
-        if (result?.Success != true)
+        if (result?.Success != true || !IsCurrent(context))
             return false;
 
         var refreshedProject = await _api.GetProjectInfoAsync().ConfigureAwait(false);
-        RunOnUiThread(() =>
+        if (refreshedProject == null
+            || !string.Equals(refreshedProject.Path, context.ProjectPath, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return TryCommit(context, () =>
         {
-            CurrentProject = refreshedProject ?? CurrentProject;
-            ProjectChanged?.Invoke(this, CurrentProject);
+            RunOnUiThread(() =>
+            {
+                CurrentProject = refreshedProject;
+                ProjectChanged?.Invoke(this, CurrentProject);
+            });
+            _logger.LogInformation("Projekt gespeichert: {Path}", context.ProjectPath);
         });
-        _logger.LogInformation("Projekt gespeichert: {Path}", CurrentProject?.Path);
-        return true;
     }
 
     public async Task<bool> RefreshProjectInfoAsync()
     {
+        ProjectOperationContext context;
+        try
+        {
+            context = CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
         var project = await _api.GetProjectInfoAsync().ConfigureAwait(false);
-        if (project == null)
+        if (project == null
+            || !string.Equals(project.Path, context.ProjectPath, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        SwitchToProject(project);
-        return true;
+        return TryCommit(context, () =>
+        {
+            RunOnUiThread(() =>
+            {
+                CurrentProject = project;
+                ProjectChanged?.Invoke(this, CurrentProject);
+            });
+        });
     }
 
     public async Task<bool> CloseProjectAsync()

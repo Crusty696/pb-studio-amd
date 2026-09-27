@@ -55,37 +55,13 @@ async def with_gpu_task(
     ``worker_started_event`` wird erst gesetzt, wenn der geschützte Worker-Task
     existiert und bei Cancellation durch den Cleanup-Pfad übernommen werden kann.
     """
-    manager = None
-    vram_reserved = False
-
-    # VRAM-Reservierung (vor dem Lock-Erwerb)
-    if model_id and manage_vram:
-        try:
-            from pb_studio.core.vram_budget_manager import get_vram_manager, VRAMAllocationError
-            manager = get_vram_manager()
-            
-            # C1/FIX: Retry-Loop mit Timeout für VRAM-Allokation
-            # Versuche bis zu 10 Sekunden lang (10 Ticks à 1 Sekunde), den VRAM zu reservieren.
-            # Falls andere Tasks ihren VRAM freigeben (z.B. durch automatische Eviction), wird er frei.
-            vram_timeout = 10
-            start_alloc = time.time()
-            while time.time() - start_alloc < vram_timeout:
-                if manager.reserve(model_id, force=True):
-                    vram_reserved = True
-                    logger.debug(f"VRAM-Budget reserviert fuer: {model_id}")
-                    break
-                logger.warning(f"VRAM knapp für '{model_id}' — warte auf Freigabe (evict)...")
-                await asyncio.sleep(1.0)
-                
-            if not vram_reserved:
-                raise VRAMAllocationError(f"VRAM-Ressourcen erschöpft: Reservierung für Modell '{model_id}' fehlgeschlagen.")
-        except Exception as e:
-            logger.error(f"VRAM-Reservierung fehlgeschlagen: {e}")
-            raise
-
-    # Timeout bestimmen
     if timeout_seconds is None:
         timeout_seconds = config.gpu_timeout_seconds
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(float(timeout_seconds), 0.0)
+
+    manager = None
+    vram_reserved = False
 
     # Telemetrie auch ohne erfolgreiche VRAM-Reservierung erfassen
     if manager is None:
@@ -98,11 +74,46 @@ async def with_gpu_task(
     lock_acquired = False
     lock_handed_to_cleanup = False
     try:
-        await gpu_lock.acquire()
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise TimeoutError(f"GPU-Task '{func.__name__}' Timeout vor Lock-Erwerb")
+        try:
+            await asyncio.wait_for(gpu_lock.acquire(), timeout=remaining)
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(
+                f"GPU-Task '{func.__name__}' Timeout beim Warten auf GPU-Lock"
+            ) from exc
         lock_acquired = True
+
+        # Serialize before VRAM eviction/reservation. A timed-out waiter must
+        # never evict a model while another protected worker is still running.
+        if model_id and manage_vram:
+            try:
+                from pb_studio.core.vram_budget_manager import (
+                    VRAMAllocationError,
+                    get_vram_manager,
+                )
+                manager = get_vram_manager()
+                while deadline > loop.time():
+                    if manager.reserve(model_id, force=True):
+                        vram_reserved = True
+                        logger.debug("VRAM-Budget reserviert fuer: %s", model_id)
+                        break
+                    logger.warning(
+                        "VRAM knapp fuer '%s' — warte bis Job-Deadline", model_id
+                    )
+                    await asyncio.sleep(min(0.25, max(deadline - loop.time(), 0.0)))
+                if not vram_reserved:
+                    raise VRAMAllocationError(
+                        f"GPU-Task '{func.__name__}' Deadline bei VRAM-Reservierung"
+                    )
+            except Exception as e:
+                logger.error("VRAM-Reservierung fehlgeschlagen: %s", e)
+                raise
 
         if vram_reserved and manager and not manager.commit(model_id):
             manager.cancel_reservation(model_id)
+            vram_reserved = False
             raise RuntimeError(f"VRAM-Commit fehlgeschlagen: {model_id}")
 
         logger.debug(f"GPU-Lock erworben fuer: {func.__name__}")
@@ -170,7 +181,10 @@ async def with_gpu_task(
                 logger.debug(f"GPU-Lock freigegeben fuer: {func.__name__}")
 
         try:
-            result = await asyncio.wait_for(asyncio.shield(task), timeout=timeout_seconds)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise asyncio.TimeoutError
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=remaining)
         except asyncio.TimeoutError:
             error_payload = {
                 "type": "TimeoutError",
@@ -238,6 +252,7 @@ _event_queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
 _event_queue_filters: dict[str, frozenset[str] | None] = {}
 _event_queue_drop_count = 0
 _event_queue_drop_counts: dict[str, int] = {}
+_event_queue_gap_pending: dict[str, tuple[int, int]] = {}
 
 # Review-Fix HIGH-1 (2026-07-09): Referenz auf den uvicorn-Main-Loop, damit
 # Worker-Threads (asyncio.to_thread + eigener Loop) Events thread-safe via
@@ -275,6 +290,7 @@ def unregister_event_queue(client_id: str) -> int:
     """Deregistriert einen SSE-Client und gibt dessen Drop-Anzahl zurück."""
     _event_queues.pop(client_id, None)
     _event_queue_filters.pop(client_id, None)
+    _event_queue_gap_pending.pop(client_id, None)
     return _event_queue_drop_counts.pop(client_id, 0)
 
 
@@ -307,6 +323,31 @@ def _enqueue_event(
     event: dict[str, Any],
 ) -> None:
     """Fügt ein Event bounded ein; bei Full wird deterministisch das älteste entfernt."""
+    pending_gap = _event_queue_gap_pending.get(client_id)
+    if pending_gap is not None and event.get("event") != "replay_gap":
+        gap_event = {
+            "event": "replay_gap",
+            "data": {
+                "first_missing_id": pending_gap[0],
+                "last_missing_id": pending_gap[1],
+                "reason": "client_queue_overflow",
+            },
+            "_seq": pending_gap[1],
+        }
+        try:
+            queue.put_nowait(gap_event)
+            _event_queue_gap_pending.pop(client_id, None)
+        except asyncio.QueueFull:
+            try:
+                dropped_event = queue.get_nowait()
+                _record_event_drop(client_id, dropped_event)
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                queue.put_nowait(gap_event)
+                _event_queue_gap_pending.pop(client_id, None)
+            except asyncio.QueueFull:
+                pass
     try:
         queue.put_nowait(event)
         return
@@ -321,6 +362,14 @@ def _enqueue_event(
         return
 
     _record_event_drop(client_id, dropped_event)
+    dropped_sequence = int(dropped_event.get("_seq", 0) or 0)
+    incoming_sequence = int(event.get("_seq", 0) or 0)
+    if dropped_sequence > 0 and incoming_sequence > dropped_sequence:
+        previous = _event_queue_gap_pending.get(client_id)
+        _event_queue_gap_pending[client_id] = (
+            min(previous[0], dropped_sequence) if previous else dropped_sequence,
+            max(previous[1], dropped_sequence) if previous else dropped_sequence,
+        )
     try:
         queue.put_nowait(event)
     except asyncio.QueueFull:
@@ -345,7 +394,10 @@ def _enqueue_event(
 EVENT_JOURNAL_MAXLEN = 500
 
 _event_journal: deque[tuple[int, dict[str, Any]]] = deque(maxlen=EVENT_JOURNAL_MAXLEN)
-_event_sequence = 0
+# SSEClient persists Last-Event-ID only for its live process, but that cursor may
+# be sent after uvicorn restarts. Seed IDs in the signed-64-bit Unix-ns range so
+# a fresh backend's IDs sort after the previous instance's cursor.
+_event_sequence = time.time_ns()
 _event_evicted_through_by_type: dict[str, int] = {}
 
 
@@ -400,7 +452,7 @@ def reset_event_journal() -> None:
     global _event_sequence
     _event_journal.clear()
     _event_evicted_through_by_type.clear()
-    _event_sequence = 0
+    _event_sequence = max(_event_sequence + 1, time.time_ns())
 
 
 def _fanout_event(event: dict[str, Any]) -> None:

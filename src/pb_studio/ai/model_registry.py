@@ -321,11 +321,16 @@ class ModelRegistry:
         )
         if installed_name is None:
             return False
+        if capability not in {"vision", "chat", "tool_calls", "embedding"}:
+            raise ModelRegistryError(f"Unbekannte Modell-Capability: {capability!r}")
+        verified = self._capabilities_for_model(installed_name)
+        if verified is not None:
+            return capability in verified
         if capability == "vision":
             return self._is_vision_capable(installed_name)
         if capability == "chat":
             return self._is_chat_capable(installed_name)
-        raise ModelRegistryError(f"Unbekannte Modell-Capability: {capability!r}")
+        return False
 
     def get_preference_list(self, task: str, mode: str) -> list[str]:
         if mode not in VALID_MODES:
@@ -354,11 +359,11 @@ class ModelRegistry:
 
     @staticmethod
     def _required_capability(task: str) -> str:
-        return (
-            "vision"
-            if task in {"video_captioning", "image_captioning"}
-            else "chat"
-        )
+        if task in {"video_captioning", "image_captioning"}:
+            return "vision"
+        if task == "chat_tool_use":
+            return "tool_calls"
+        return "chat"
 
     def selection_receipts_for_task(
         self,
@@ -601,11 +606,7 @@ class ModelRegistry:
                 f"Installiert: {[m.name for m in self._installed]}"
             )
 
-        required_capability = (
-            "vision"
-            if task in ("video_captioning", "image_captioning")
-            else "chat"
-        )
+        required_capability = self._required_capability(task)
         eligible_names = [
             name
             for name in installed_names

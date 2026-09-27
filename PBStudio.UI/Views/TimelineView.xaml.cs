@@ -218,6 +218,8 @@ public partial class TimelineView : UserControl
                 _renderedPreviewTimelineStart = timelineStart;
                 _mediaOpened = false;
                 _wasPlayingBeforeReload = true;
+                if (_viewModel != null)
+                    _viewModel.SelectedTimelinePosition = timelineStart;
                 PreviewEmptyText.Visibility = Visibility.Collapsed;
                 PreviewPlayer.Play();
             }
@@ -230,9 +232,16 @@ public partial class TimelineView : UserControl
 
     private void ViewModel_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (_isRenderedPreview
-            && e.PropertyName == nameof(TimelineViewModel.SelectedTimelinePosition))
-            return;
+        if (_isRenderedPreview)
+        {
+            if (e.PropertyName == nameof(TimelineViewModel.SelectedTimelinePosition))
+            {
+                Dispatcher.Invoke(SeekRenderedPreviewToTimelinePosition);
+                return;
+            }
+            if (e.PropertyName == nameof(TimelineViewModel.SelectedEntry))
+                return;
+        }
 
         if (e.PropertyName is nameof(TimelineViewModel.SelectedEntry)
             or nameof(TimelineViewModel.SelectedTimelinePosition)
@@ -848,7 +857,14 @@ public partial class TimelineView : UserControl
 
         try
         {
-            var target = TimeSpan.FromSeconds(_loadedClipStart);
+            var timelineOffset = _viewModel?.SelectedEntry == null
+                ? 0.0
+                : _viewModel.SelectedTimelinePosition - _viewModel.SelectedEntry.StartTime;
+            var sourcePosition = _loadedClipStart + Math.Clamp(
+                timelineOffset,
+                0.0,
+                Math.Max(0.0, _loadedClipEnd - _loadedClipStart));
+            var target = TimeSpan.FromSeconds(sourcePosition);
             var delta = (PreviewPlayer.Position - target).Duration();
             if (delta > TimeSpan.FromMilliseconds(200))
                 PreviewPlayer.Position = target;
@@ -859,6 +875,29 @@ public partial class TimelineView : UserControl
         {
             _pendingSeek = false;
             PreviewStatusText.Text = "Medienquelle unterstützt kein Seeking";
+        }
+    }
+
+    private void SeekRenderedPreviewToTimelinePosition()
+    {
+        if (!_isRenderedPreview || _viewModel == null)
+            return;
+        var offset = _viewModel.SelectedTimelinePosition - _renderedPreviewTimelineStart;
+        if (offset < 0 || offset > _loadedClipEnd)
+            return;
+        if (!_mediaOpened)
+        {
+            _pendingSeek = true;
+            return;
+        }
+        try
+        {
+            PreviewPlayer.Position = TimeSpan.FromSeconds(Math.Clamp(offset, 0, _loadedClipEnd));
+            _pendingSeek = false;
+        }
+        catch (NotSupportedException)
+        {
+            PreviewStatusText.Text = "Gerenderte Vorschau unterstützt kein Seeking";
         }
     }
 
@@ -937,7 +976,12 @@ public partial class TimelineView : UserControl
         PreviewEmptyText.Visibility = Visibility.Collapsed;
         PreviewStatusText.Text = $"Ready @ {TimeSpan.FromSeconds(_loadedClipStart):mm\\:ss}";
         if (_pendingSeek)
-            SeekToClipStart();
+        {
+            if (_isRenderedPreview)
+                SeekRenderedPreviewToTimelinePosition();
+            else
+                SeekToClipStart();
+        }
 
         if (_wasPlayingBeforeReload)
         {

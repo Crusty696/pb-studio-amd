@@ -493,6 +493,79 @@ public sealed class ProjectSwitchUiPublicationTests
         Assert.AreEqual(0, viewModel.TotalClicks);
     }
 
+    [TestMethod]
+    public async Task ProjectInfoRefresh_ProjectSwitchRejectsLateResponse()
+    {
+        var refreshStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var delayedInfo = new TaskCompletionSource<ProjectInfo?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectA = new ProjectInfo("A", @"C:\Projects\A", 1, 0, false);
+        var projectB = new ProjectInfo("B", @"C:\Projects\B", 2, 0, false);
+        var nextProject = projectA;
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(nextProject))
+            .Handle(nameof(IApiClient.GetProjectInfoAsync), _ =>
+            {
+                refreshStarted.TrySetResult(true);
+                return delayedInfo.Task;
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(projectA.Path));
+
+        var refresh = projects.RefreshProjectInfoAsync();
+        await refreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        nextProject = projectB;
+        Assert.IsTrue(await projects.OpenProjectAsync(projectB.Path));
+        delayedInfo.SetResult(new ProjectInfo("A stale", projectA.Path, 99, 0, false));
+
+        Assert.IsFalse(await refresh.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.AreEqual(projectB.Path, projects.CurrentProject?.Path);
+        Assert.AreEqual("B", projects.CurrentProject?.Name);
+    }
+
+    [TestMethod]
+    public async Task ProjectSave_ProjectSwitchRejectsLateInfoResponse()
+    {
+        var infoStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var delayedInfo = new TaskCompletionSource<ProjectInfo?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectA = new ProjectInfo("A", @"C:\Projects\A", 1, 0, false);
+        var projectB = new ProjectInfo("B", @"C:\Projects\B", 2, 0, false);
+        var nextProject = projectA;
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(nextProject))
+            .Handle(
+                nameof(IApiClient.SaveProjectAsync),
+                _ => Task.FromResult<StatusResponse?>(new StatusResponse(true, "ok")))
+            .Handle(nameof(IApiClient.GetProjectInfoAsync), _ =>
+            {
+                infoStarted.TrySetResult(true);
+                return delayedInfo.Task;
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(projectA.Path));
+
+        var save = projects.SaveProjectAsync();
+        await infoStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        nextProject = projectB;
+        Assert.IsTrue(await projects.OpenProjectAsync(projectB.Path));
+        delayedInfo.SetResult(new ProjectInfo("A stale", projectA.Path, 99, 0, false));
+
+        Assert.IsFalse(await save.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.AreEqual(projectB.Path, projects.CurrentProject?.Path);
+        Assert.AreEqual("B", projects.CurrentProject?.Name);
+    }
+
     private static async Task SwitchProjectAsync(
         ProjectService projects,
         ProjectInfo projectB)

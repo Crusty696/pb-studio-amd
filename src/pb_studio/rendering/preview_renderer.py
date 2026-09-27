@@ -8,6 +8,8 @@ mit h264_amf; fehlendes AMF ist ein expliziter Fehler.
 """
 
 import logging
+import json
+import math
 import shutil
 import subprocess
 import tempfile
@@ -16,6 +18,7 @@ from pathlib import Path
 
 from pb_studio.video.encoder_utils import (
     _get_ffmpeg_path,
+    _get_ffprobe_path,
     get_amf_device_args,
     get_preview_encoder,
 )
@@ -58,12 +61,15 @@ class PreviewGenerator:
     def __init__(self, output_dir: str | Path | None = None) -> None:
         self.output_dir = Path(output_dir) if output_dir else Path("data/temp")
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.last_duration_sec = 0.0
+        self.audio_included = False
 
     def generate_preview(
         self,
         timeline: list[TimelineEntry],
         start_time_sec: float = 0.0,
         duration: float = DEFAULT_DURATION,
+        audio_path: str | Path | None = None,
     ) -> Path | None:
         """Generiert eine Preview ab einem bestimmten Zeitpunkt."""
         if not timeline:
@@ -84,8 +90,38 @@ class PreviewGenerator:
         )
 
         output_path = self.output_dir / "preview.mp4"
-        success = self._render_clips(filtered_clips, start_time_sec, duration, output_path)
-        return output_path if success else None
+        success = self._render_clips(
+            filtered_clips, start_time_sec, duration, output_path,
+            audio_path=Path(audio_path) if audio_path else None,
+        )
+        if not success:
+            return None
+        measured_duration = self._probe_duration(output_path)
+        if measured_duration is None or measured_duration <= 0:
+            logger.error("Preview-Artefakt hat keine gueltige ffprobe-Dauer")
+            return None
+        self.last_duration_sec = measured_duration
+        self.audio_included = audio_path is not None
+        return output_path.resolve()
+
+    @staticmethod
+    def _probe_duration(path: Path) -> float | None:
+        cmd = [
+            _get_ffprobe_path(), "-v", "error", "-show_entries", "format=duration",
+            "-of", "json", str(path.resolve()),
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=15,
+            )
+            if result.returncode != 0:
+                return None
+            duration = float(json.loads(result.stdout).get("format", {}).get("duration"))
+            return duration if math.isfinite(duration) and duration > 0 else None
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError, json.JSONDecodeError):
+            logger.exception("Preview-Dauer konnte nicht gemessen werden: %s", path)
+            return None
 
     def _filter_clips_for_interval(
         self, timeline: list[TimelineEntry], start: float, end: float
@@ -98,6 +134,8 @@ class PreviewGenerator:
         self, clips: list[TimelineEntry],
         preview_start: float, preview_duration: float,
         output_path: Path,
+        *,
+        audio_path: Path | None = None,
     ) -> bool:
         """Rendert gefilterte Clips zu einer Preview via mpegts concat."""
         temp_dir = None
@@ -170,10 +208,18 @@ class PreviewGenerator:
                 _get_ffmpeg_path(), "-y",
                 *get_amf_device_args(),
                 "-i", f"concat:{concat_input}",
-                *_preview_encoder_args(),
-                "-pix_fmt", "yuv420p", "-an",
-                str(output_path.absolute())
             ]
+            if audio_path is not None:
+                if not audio_path.is_file():
+                    raise FileNotFoundError(f"Preview-Musikdatei fehlt: {audio_path}")
+                cmd.extend(["-ss", f"{preview_start:.6f}", "-i", str(audio_path.resolve())])
+                cmd.extend(["-map", "0:v:0", "-map", "1:a:0"])
+            cmd.extend([*_preview_encoder_args(), "-pix_fmt", "yuv420p"])
+            if audio_path is not None:
+                cmd.extend(["-c:a", "aac", "-b:a", "192k", "-shortest"])
+            else:
+                cmd.append("-an")
+            cmd.extend(["-t", f"{preview_duration:.6f}", str(output_path.resolve())])
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
                 encoding="utf-8", errors="replace", timeout=120,

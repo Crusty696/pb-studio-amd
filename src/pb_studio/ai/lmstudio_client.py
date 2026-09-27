@@ -48,10 +48,12 @@ DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
 MODEL_CAPABILITY_CHAT = "chat"
 MODEL_CAPABILITY_VISION = "vision"
 MODEL_CAPABILITY_EMBEDDING = "embedding"
+MODEL_CAPABILITY_TOOL_CALLS = "tool_calls"
 VALID_MODEL_CAPABILITIES = frozenset({
     MODEL_CAPABILITY_CHAT,
     MODEL_CAPABILITY_VISION,
     MODEL_CAPABILITY_EMBEDDING,
+    MODEL_CAPABILITY_TOOL_CALLS,
 })
 
 # Audit 2026-08-05 (C-2): LM Studio meldet audio.cpp-basierte GGUFs mit
@@ -690,6 +692,8 @@ class LMStudioClient:
                     capabilities.add(MODEL_CAPABILITY_VISION)
                 if "embedding" in native or "embeddings" in native:
                     capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+                if {"tools", "tool_use", "function_calling"} & native:
+                    capabilities.add(MODEL_CAPABILITY_TOOL_CALLS)
             else:
                 model_type = str(raw.get("type") or "").strip().lower()
                 arch = str(raw.get("arch") or "").strip().lower()

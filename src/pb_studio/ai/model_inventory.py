@@ -337,6 +337,7 @@ class ModelInventoryService:
                 verified_at=verified_at,
                 provider_status=status,
                 capability_error=capability_error,
+                loaded_error=loaded_probe.error,
             )
             for model in installed
         ]
@@ -369,6 +370,7 @@ class ModelInventoryService:
         verified_at: str,
         provider_status: str,
         capability_error: Optional[str],
+        loaded_error: Optional[str] = None,
     ) -> ModelInventoryEntry:
         capability_name = _unique_matching_name(
             model.name,
@@ -383,6 +385,8 @@ class ModelInventoryService:
         usable = provider_status in {"ready", "degraded"} and bool(capabilities)
         if capability_error:
             reason = f"Installiert; Capability-Prüfung fehlgeschlagen: {capability_error}"
+        elif loaded_error:
+            reason = f"Installiert; Capability verifiziert; Loaded-State unbekannt: {loaded_error}"
         elif not capabilities:
             reason = "Installiert, aber keine verifizierte Capability gemeldet."
         elif loaded:

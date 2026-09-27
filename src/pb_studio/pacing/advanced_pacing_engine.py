@@ -1975,9 +1975,17 @@ class AdvancedPacingEngine:
         interval = 60.0 / float(expected_bpm)
         anchor = float(downbeats[0] if downbeats else (beats[0] if beats else 0.0))
         measured = sorted(float(value) for value in beats if 0.0 <= float(value) <= duration)
+        original_strengths = getattr(self, "_pre_cached_beat_strengths", None)
+        measured_pairs = sorted(
+            (float(value), float(original_strengths[index]))
+            for index, value in enumerate(beats)
+            if original_strengths is not None and index < len(original_strengths)
+            and 0.0 <= float(value) <= duration
+        )
         measured_downbeats = set(float(value) for value in downbeats)
         snap_window = interval * EXPECTED_BPM_SNAP_FRACTION
         corrected: List[float] = []
+        corrected_strengths: List[float] = []
         corrected_downbeats: List[float] = []
 
         def _nearest_measured(value: float) -> Optional[float]:
@@ -2000,6 +2008,13 @@ class AdvancedPacingEngine:
             chosen = max(0.0, min(duration, float(chosen)))
             if not corrected or chosen - corrected[-1] > 1e-6:
                 corrected.append(chosen)
+                if measured_pairs:
+                    strength_time, strength = min(
+                        measured_pairs, key=lambda pair: abs(pair[0] - chosen)
+                    )
+                    corrected_strengths.append(
+                        strength if abs(strength_time - chosen) <= snap_window else 1.0
+                    )
                 if chosen in measured_downbeats:
                     corrected_downbeats.append(chosen)
                 nearest_to_chosen = _nearest_measured(chosen)
@@ -2013,6 +2028,8 @@ class AdvancedPacingEngine:
             expected_bpm,
             len(corrected),
         )
+        if measured_pairs:
+            self._pre_cached_beat_strengths = corrected_strengths
         return corrected, corrected_downbeats
 
     def _extract_drum_triggers_from_stem(self, stem_path: str) -> List["PacingCut"]:

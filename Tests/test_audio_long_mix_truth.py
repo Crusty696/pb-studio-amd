@@ -327,6 +327,8 @@ def test_long_mix_uses_full_duration_streaming_representations(
         spectral_bands={"bass": [0.1, 0.5, 0.9]},
         spectral_centroids=[100.0, 500.0, 900.0],
         window_count=48,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
     )
 
     monkeypatch.setattr(librosa, "get_duration", lambda **_kwargs: 1200.0)

@@ -188,6 +188,17 @@ def _annotate_and_maybe_persist_cut(
 
     sub_start, sub_end = _enclosing_subtrack(start, subtrack_segments)
     cut_meta = dict(cut.get("metadata") or {})
+    raw_media_time = cut.get("clip_start", cut_meta.get("clip_start"))
+    try:
+        media_time = float(raw_media_time)
+    except (TypeError, ValueError):
+        media_time = None
+    if media_time is not None and not np.isfinite(media_time):
+        media_time = None
+    media_time_source = (
+        "cut.clip_start" if cut.get("clip_start") is not None
+        else "cut.metadata.clip_start"
+    )
     semantic_status: Optional[str] = None
     semantic_reason: Optional[str] = None
     video_raw_available = clip_id in video_embedding_raw_available
@@ -209,6 +220,8 @@ def _annotate_and_maybe_persist_cut(
         trigger_strength=float(cut_meta.get("trigger_strength") or 0.0),
         cut_time_sec=start,
         cut_duration_sec=max(end - start, 0.01),
+        media_time_sec=media_time,
+        media_time_source=media_time_source,
         segment_type=cut_meta.get("segment_type"),
         audio_embedding=audio_embedding,
         video_embedding=video_embedding_by_clip.get(clip_id),
@@ -252,6 +265,7 @@ def _annotate_and_maybe_persist_cut(
     meta["semantic_reason"] = feats.semantic_reason
     meta["brain_axis_status"] = dict(feats.axis_status)
     meta["brain_axis_status_version"] = 1
+    meta["source_media_time_sec"] = media_time
     new_cut["metadata"] = meta
 
     if conn is not None and timeline_id is not None:
