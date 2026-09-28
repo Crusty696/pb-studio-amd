@@ -64,19 +64,24 @@ def test_incident_frame_deficit_reproduces_through_router_and_service(
         rendered_frames = expected_frames
         staging = Path(args[2])
         staging.write_bytes(b"completed FFmpeg artifact")
-        evidence_dir = (
-            self.output_dir / ".render_evidence" / self.job_token / self.run_id
+        progress_log = (
+            f"frame={rendered_frames}\n"
+            "out_time_us=3299456508\n"
+            "progress=end\n"
         )
-        evidence_dir.mkdir(parents=True, exist_ok=True)
-        (evidence_dir / "result.json").write_text(
-            json.dumps({
-                "status": "completed",
-                "frame": rendered_frames,
-                "expected_frames": 98984,
-                "exit_code": 0,
-                "progress_end": True,
-            }),
-            encoding="utf-8",
+        self._persist_render_evidence(
+            status="completed",
+            exit_code=0,
+            progress_end=True,
+            machine_progress={
+                "frame": str(rendered_frames),
+                "out_time_us": "3299456508",
+                "fps": "250.67",
+            },
+            progress_log=progress_log,
+            stderr_log="",
+            total_duration=duration,
+            total_frames=expected_frames,
         )
         return {
             "fps": 250.67,
@@ -169,7 +174,7 @@ def test_render_command_and_validator_share_rational_frame_rate(
         target_rate=__import__("fractions").Fraction(30, 1),
     )
     assert cmd[cmd.index("-r") + 1] == "30/1"
-    assert "settb=AVTB,setpts=N*1/30/TB" in cmd[cmd.index("-vf") + 1]
+    assert "settb=AVTB,setpts=PTS-STARTPTS,fps=fps=30/1" in cmd[cmd.index("-vf") + 1]
     assert cmd[cmd.index("-frames:v") + 1] == "98984"
     assert cmd[cmd.index("-t") + 1] == "3299.457"
 
@@ -235,6 +240,191 @@ def test_rational_non_integer_fps_frame_count_matches_artifact_validator(
     )
     assert validation["decoded_frames"] == expected_frames
     assert validation["expected_frames"] == expected_frames
+
+
+@pytest.mark.skipif(
+    os.environ.get("PBSTUDIO_LIVE_AMF_RENDER_TEST") != "1",
+    reason="requires explicit opt-in to real-media AMD AMF integration test",
+)
+def test_live_music_selected_cutlist_renders_all_fractional_rate_frames(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exercise real cached music/video analysis through pacing and AMF export.
+
+    This catches segment-boundary frames discarded by concat selection. The
+    prior live run produced 897 frames where a 30 s 30000/1001 export requires
+    899, so RenderService rejected the otherwise encoded output.
+    """
+    import random
+    import sqlite3
+
+    from pb_studio.data import vector_store
+    from pb_studio.rendering.preview_renderer import PreviewGenerator, TimelineEntry
+    from pb_studio.services.pacing_service import PacingService
+    from pb_studio.video.encoder_utils import _get_ffprobe_path
+
+    # Semantic matching is disabled in this test, so FAISS is irrelevant. Avoid
+    # loading its persistent index or triggering VectorStore's exit snapshot save.
+    monkeypatch.setattr(vector_store, "VectorStore", lambda **_kwargs: None)
+
+    repository = Path(__file__).resolve().parents[1]
+    database = repository / "data" / "pb_studio.db"
+    if not database.is_file():
+        pytest.skip("local approved QA catalog is unavailable")
+
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA query_only=ON")
+        records = connection.execute(
+            "SELECT id, file_path, duration_sec, ai_data_json FROM media"
+        ).fetchall()
+    finally:
+        connection.close()
+
+    by_name = {Path(row["file_path"]).name.casefold(): row for row in records}
+    audio = by_name.get("test_30s.wav")
+    video_rows = [by_name.get(name) for name in ("test_20s.mp4", "test_12s.mp4")]
+    if (
+        audio is None
+        or any(row is None for row in video_rows)
+        or not Path(audio["file_path"]).is_file()
+        or any(not Path(row["file_path"]).is_file() for row in video_rows)
+    ):
+        pytest.skip("approved real-media fixtures are unavailable")
+
+    audio_analysis = json.loads(audio["ai_data_json"] or "{}")
+    audio_analysis["beats"] = audio_analysis.get("beats_json", [])
+    audio_analysis["duration_seconds"] = float(audio["duration_sec"])
+    clips = []
+    for row in video_rows:
+        analysis = json.loads(row["ai_data_json"] or "{}")
+        motion = analysis.get("motion") or {}
+        if (
+            analysis.get("stage_status", {}).get("motion") != "completed"
+            or not motion.get("motion_curve")
+        ):
+            pytest.skip("real-media motion-analysis cache is incomplete")
+        clips.append({
+            "id": row["id"],
+            "file_path": row["file_path"],
+            "duration": row["duration_sec"],
+            "name": Path(row["file_path"]).stem,
+            "motion_score": motion.get("avg_motion", 0.0),
+            "motion_curve": motion["motion_curve"],
+            "scene_changes": analysis.get("scenes", []),
+            "ai_data": analysis,
+        })
+
+    random_state = random.getstate()
+    random.seed(35035)
+    pacing = PacingService()
+    try:
+        cuts = pacing.generate_cut_list(
+            audio["file_path"],
+            clips,
+            {
+                "use_semantic_matching": False,
+                "use_motion_matching": True,
+                "use_key_matching": False,
+                "use_brain": False,
+                "use_structure_awareness": True,
+                "expected_bpm": audio_analysis.get("bpm") or 120,
+                "min_cut_interval": 0.5,
+                "max_cut_interval": 6.0,
+                "min_clip_length": 2.0,
+                "max_clip_length": 8.0,
+            },
+            float(audio["duration_sec"]),
+            cached_analysis=audio_analysis,
+        )
+    finally:
+        random.setstate(random_state)
+    assert cuts
+    assert abs(sum(cut.end_time - cut.start_time for cut in cuts) - 30.0) < 0.01
+    selected_clip_ids = {
+        str(cut.clip_id).removeprefix("clip_")
+        for cut in cuts
+    }
+    assert selected_clip_ids == {str(clip["id"]) for clip in clips}
+    assert any(
+        cut.metadata.get("trigger_type") in {
+            "beat", "kick", "snare", "hihat", "onset", "energy", "downbeat"
+        }
+        for cut in cuts
+    )
+
+    timeline = []
+    for cut in cuts:
+        source = float(cut.metadata.get("clip_start", 0.0))
+        timeline.append({
+            "file_path": cut.metadata["file_path"],
+            "in_point": source,
+            "out_point": source + cut.end_time - cut.start_time,
+        })
+
+    preview_timeline = [
+        TimelineEntry(
+            video_path=entry["file_path"],
+            start_time=entry["in_point"],
+            end_time=entry["out_point"],
+            timeline_start=cut.start_time,
+            timeline_end=cut.end_time,
+        )
+        for cut, entry in zip(cuts, timeline, strict=True)
+    ]
+    preview_generator = PreviewGenerator(output_dir=tmp_path / "preview")
+    preview_path = preview_generator.generate_preview(
+        preview_timeline,
+        start_time_sec=0.0,
+        duration=10.0,
+        audio_path=audio["file_path"],
+    )
+    assert preview_path is not None and preview_path.is_file()
+    assert preview_generator.last_duration_sec == pytest.approx(10.0, abs=0.05)
+    assert preview_generator.audio_included
+    preview_probe = subprocess.run(
+        [
+            _get_ffprobe_path(),
+            "-v", "error",
+            "-show_entries", "stream=codec_type,duration",
+            "-of", "json",
+            str(preview_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    preview_streams = json.loads(preview_probe.stdout)["streams"]
+    assert {stream["codec_type"] for stream in preview_streams} == {"video", "audio"}
+    audio_stream = next(stream for stream in preview_streams if stream["codec_type"] == "audio")
+    assert float(audio_stream["duration"]) == pytest.approx(10.0, abs=0.05)
+
+    renderer = RenderService(output_dir=str(tmp_path))
+    rendered_path = renderer.render_timeline(
+        timeline,
+        audio["file_path"],
+        "music_selected_fractional_rate.mp4",
+        target_width=1280,
+        target_height=720,
+        target_fps=30_000 / 1_001,
+        bitrate="5M",
+    )
+    assert Path(rendered_path).is_file()
+    assert Path(rendered_path).stat().st_size > 0
+    validation_path = (
+        tmp_path
+        / ".render_evidence"
+        / renderer.job_token
+        / renderer.run_id
+        / "validation.json"
+    )
+    validation = json.loads(validation_path.read_text(encoding="utf-8"))
+    assert validation["status"] == "passed"
+    assert validation["metrics"]["expected_frames"] == 899
+    assert validation["metrics"]["decoded_frames"] == 899
 
 
 def test_artifact_validation_emits_named_phase_progress(

@@ -147,51 +147,51 @@
                     </Style>
                 </controls:CachedTabControl.Resources>
 
-                <TabItem Header="PROJEKT">
+                <TabItem Header="PROJEKT" AutomationProperties.Name="PROJEKT">
                     <views:ProjectOverviewView/>
                 </TabItem>
-                <TabItem Header="AUDIO">
+                <TabItem Header="AUDIO" AutomationProperties.Name="AUDIO">
                     <views:AudioLibraryView/>
                 </TabItem>
-                <TabItem Header="VIDEO">
+                <TabItem Header="VIDEO" AutomationProperties.Name="VIDEO">
                     <views:VideoLibraryView/>
                 </TabItem>
-                <TabItem Header="KI-REGIE">
+                <TabItem Header="KI-REGIE" AutomationProperties.Name="KI-REGIE">
                     <views:DirectorView/>
                 </TabItem>
-                <TabItem Header="TIMELINE">
+                <TabItem Header="TIMELINE" AutomationProperties.Name="TIMELINE">
                     <views:TimelineView/>
                 </TabItem>
-                <TabItem Header="EXPORT">
+                <TabItem Header="EXPORT" AutomationProperties.Name="EXPORT">
                     <views:ProductionView/>
                 </TabItem>
-                <TabItem Header="HIRN">
+                <TabItem Header="HIRN" AutomationProperties.Name="HIRN">
                     <views:BrainView/>
                 </TabItem>
-                <TabItem Header="SETTINGS">
+                <TabItem Header="SETTINGS" AutomationProperties.Name="SETTINGS">
                     <views:SettingsView/>
                 </TabItem>
-                <TabItem Header="PERFORMANCE">
+                <TabItem Header="PERFORMANCE" AutomationProperties.Name="PERFORMANCE">
                     <views:VramTelemetryView/>
                 </TabItem>
                 <!-- Index 9: MODELLE (Ollama-Pilot Phase 4) — bewusst AM ENDE angehaengt,
                      damit SelectedTabIndex=3 (KI-REGIE) als Default-Tab unangetastet bleibt
                      (siehe MainViewModel.cs Zeile 76 + NavigateDirectorMessage-Handler). -->
-                <TabItem Header="MODELLE">
+                <TabItem Header="MODELLE" AutomationProperties.Name="MODELLE">
                     <views:ModelManagerView/>
                 </TabItem>
                 <!-- Index 10: KI-CHAT (Ollama Tool-Use Track 2026-05-16) — auch am ENDE,
                      damit SelectedTabIndex=3 (KI-REGIE) unverletzt bleibt. -->
-                <TabItem Header="CHAT">
+                <TabItem Header="CHAT" AutomationProperties.Name="CHAT">
                     <views:ChatView/>
                 </TabItem>
-                <TabItem Header="TERMINAL">
+                <TabItem Header="TERMINAL" AutomationProperties.Name="TERMINAL">
                     <views:TerminalView/>
                 </TabItem>
-                <TabItem Header="INGEST">
+                <TabItem Header="INGEST" AutomationProperties.Name="INGEST">
                     <views:MediaIngestView/>
                 </TabItem>
-                <TabItem Header="ANCHOR">
+                <TabItem Header="ANCHOR" AutomationProperties.Name="ANCHOR">
                     <views:AnchorView/>
                 </TabItem>
             </controls:CachedTabControl>

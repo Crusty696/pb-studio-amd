@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -27,6 +28,7 @@ JOURNAL_STATES = {
 }
 DELETE_IF_PRESENT = "delete_if_present"
 RUNTIME_DIRTY_NAME = "RUNTIME_DIRTY"
+logger = logging.getLogger(__name__)
 
 
 class RecoveryBootstrapError(RuntimeError):
@@ -616,7 +618,12 @@ def _runtime_dirty(control_root: Path) -> dict[str, Any] | None:
     )
     expected_inventory = _runtime_variable_inventory(manifest)
     if marker.get("variable_inventory") != expected_inventory:
-        raise RecoveryBootstrapError("Runtime dirty inventory does not match its base")
+        # Marker schema is intentionally stable, but the inventory derivation
+        # can gain new owner scopes between releases.  Keep the marker
+        # inspectable and let ensure_recovery_ready decide whether it is still
+        # recoverable from the current/journal generations.  Raising here
+        # permanently bricks startup after an otherwise committed recovery.
+        marker["_inventory_mismatch"] = True
     return marker
 
 
@@ -743,6 +750,26 @@ def ensure_recovery_ready(
     journal = _read_json(journal_path) if journal_path.is_file() else None
     current = _validated_current(root, _current_pointer(root))
     dirty = _runtime_dirty(root)
+
+    if dirty is not None and dirty.get("_inventory_mismatch"):
+        current_pair = current[:2] if current is not None else None
+        journal_previous = (
+            str(journal.get("previous_generation", "")),
+            str(journal.get("previous_manifest_sha256", "")),
+        ) if journal is not None else None
+        dirty_pair = (
+            str(dirty.get("base_generation", "")),
+            str(dirty.get("base_manifest_sha256", "")),
+        )
+        recoverable = dirty_pair == current_pair or dirty_pair == journal_previous
+        if not recoverable:
+            logger.warning(
+                "Stale runtime dirty marker verworfen: Basisgeneration %s "
+                "ist weder CURRENT noch Journal-Vorgänger.",
+                dirty_pair[0],
+            )
+            _clear_runtime_dirty_file(root)
+            dirty = None
 
     if journal is None:
         if current is None:

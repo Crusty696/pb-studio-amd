@@ -299,23 +299,50 @@ class StructureAnalyzer:
         energy_curve: list[float],
         total_duration: float,
         segment_seconds: float = 60.0,
+        *,
+        feature_times: list[float] | None = None,
+        chroma_features: list[list[float]] | None = None,
+        feature_coverage: float | None = None,
+        feature_source_role: str | None = None,
     ) -> dict:
-        """Infer energy-change sections without inventing minute or song labels.
+        """Infer long-mix boundaries from time-aligned energy/chroma evidence.
 
-        The streaming payload has energy only, not the chroma/MFCC/transition
-        evidence needed to claim verse/chorus semantics. ``segment_seconds`` is
-        retained for API compatibility and bounds the local comparison window;
-        it is not used as a fixed section grid.
+        Chroma changes strengthen boundaries but never imply named song
+        semantics. ``segment_seconds`` bounds local context, not a fixed grid.
         """
         if not np.isfinite(total_duration) or total_duration <= 0:
             raise ValueError("total_duration must be positive")
         if not np.isfinite(segment_seconds) or segment_seconds <= 0:
             raise ValueError("segment_seconds must be positive")
+        if feature_coverage is None:
+            feature_coverage = 1.0 if chroma_features is not None else 0.0
+        if not np.isfinite(feature_coverage) or not 0.0 <= feature_coverage <= 1.0:
+            raise ValueError("feature_coverage must be between 0 and 1")
         energy = np.asarray(energy_curve, dtype=np.float64)
         if energy.ndim != 1 or energy.size == 0:
             raise ValueError("streaming energy curve must be a non-empty vector")
         if not np.all(np.isfinite(energy)):
             raise ValueError("streaming energy curve contains non-finite values")
+
+        feature_time_values = None
+        chroma = None
+        if (feature_times is None) != (chroma_features is None):
+            raise ValueError("feature_times and chroma_features must be supplied together")
+        if feature_times is not None and chroma_features is not None:
+            feature_time_values = np.asarray(feature_times, dtype=np.float64)
+            chroma = np.asarray(chroma_features, dtype=np.float64)
+            if (
+                feature_time_values.ndim != 1
+                or chroma.ndim != 2
+                or chroma.shape != (feature_time_values.size, 12)
+                or feature_time_values.size < 2
+                or not np.all(np.isfinite(feature_time_values))
+                or not np.all(np.isfinite(chroma))
+                or np.any(np.diff(feature_time_values) <= 0)
+                or feature_time_values[0] < 0.0
+                or feature_time_values[-1] > total_duration
+            ):
+                raise ValueError("streaming chroma evidence is invalid or unaligned")
 
         seconds_per_sample = total_duration / energy.size
         smooth_samples = max(1, int(round(2.0 / seconds_per_sample)))
@@ -325,6 +352,7 @@ class StructureAnalyzer:
         minimum_gap = max(1, int(round(15.0 / seconds_per_sample)))
         energy_range = float(np.ptp(smoothed))
         threshold = max(energy_range * 0.15, float(np.std(smoothed)) * 0.35, 1e-8)
+        energy_scale = max(energy_range, 1e-8)
 
         candidate_indices = np.arange(context_samples, energy.size - context_samples)
         if candidate_indices.size:
@@ -352,7 +380,7 @@ class StructureAnalyzer:
                 candidate_positions = candidate_positions[strongest]
             candidates = [
                 (
-                    float(magnitudes[position]),
+                    float(magnitudes[position] / energy_scale),
                     int(candidate_indices[position]),
                     float(left_means[position]),
                     float(right_means[position]),
@@ -361,6 +389,59 @@ class StructureAnalyzer:
             ]
         else:
             candidates = []
+
+        if chroma is not None and feature_time_values is not None:
+            feature_step = float(np.median(np.diff(feature_time_values)))
+            feature_context = max(1, int(round(context_seconds / feature_step)))
+            if chroma.shape[0] > feature_context * 2:
+                chroma_prefix = np.vstack(
+                    (np.zeros((1, 12), dtype=np.float64), np.cumsum(chroma, axis=0))
+                )
+                feature_centers = np.arange(
+                    feature_context, chroma.shape[0] - feature_context
+                )
+                left_vectors = (
+                    chroma_prefix[feature_centers]
+                    - chroma_prefix[feature_centers - feature_context]
+                ) / feature_context
+                right_vectors = (
+                    chroma_prefix[feature_centers + feature_context]
+                    - chroma_prefix[feature_centers]
+                ) / feature_context
+                denominator = np.linalg.norm(left_vectors, axis=1) * np.linalg.norm(
+                    right_vectors, axis=1
+                )
+                similarity = np.ones(denominator.shape, dtype=np.float64)
+                np.divide(
+                    np.sum(left_vectors * right_vectors, axis=1),
+                    denominator,
+                    out=similarity,
+                    where=denominator > 1e-8,
+                )
+                novelty = np.clip(1.0 - similarity, 0.0, 2.0)
+                local_maximum = np.ones(novelty.size, dtype=bool)
+                if novelty.size > 1:
+                    local_maximum[1:] &= novelty[1:] >= novelty[:-1]
+                    local_maximum[:-1] &= novelty[:-1] >= novelty[1:]
+                peak_positions = np.flatnonzero(local_maximum & (novelty >= 0.12))
+                if peak_positions.size > 512:
+                    strongest = np.argpartition(novelty[peak_positions], -512)[-512:]
+                    peak_positions = peak_positions[strongest]
+                for position in peak_positions:
+                    feature_index = int(feature_centers[position])
+                    timestamp = float(feature_time_values[feature_index])
+                    energy_index = int(round(timestamp / seconds_per_sample))
+                    energy_index = min(max(energy_index, 0), energy.size - 1)
+                    left_start = max(0, energy_index - context_samples)
+                    right_end = min(energy.size, energy_index + context_samples + 1)
+                    candidates.append(
+                        (
+                            float(novelty[position]),
+                            energy_index,
+                            float(np.mean(smoothed[left_start:energy_index + 1])),
+                            float(np.mean(smoothed[energy_index:right_end])),
+                        )
+                    )
 
         # Strongest change wins within each minimum-spacing neighborhood.
         selected: list[tuple[float, int, float, float]] = []
@@ -371,7 +452,7 @@ class StructureAnalyzer:
         boundaries = [item[1] for item in selected]
         edge_means = {item[1]: (item[2], item[3]) for item in selected}
         change_confidence = {
-            item[1]: min(1.0, item[0] / max(energy_range, 1e-8))
+            item[1]: min(1.0, item[0])
             for item in selected
         }
 
@@ -408,6 +489,11 @@ class StructureAnalyzer:
                     "cluster": 0,
                     "confidence": float(max(adjacent_confidence, default=0.0)),
                     "energy_score": local_mean,
+                    "evidence_sources": ["energy"] + (["chroma"] if chroma is not None else []),
+                    "feature_coverage": float(feature_coverage),
+                    "feature_source_role": (
+                        feature_source_role if chroma is not None else None
+                    ),
                 }
             )
         return {"total_segments": len(segments), "segments": segments}

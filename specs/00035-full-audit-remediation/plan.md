@@ -11,12 +11,15 @@
 
 1. Verify clean feature-spec structure, capture baseline dirty paths, validate all 54 traceability rows, and record shared interfaces/ownership before dispatch.
 2. In parallel, implement disjoint Audio, Video/vision, Brain, and Model/Chat tasks. Each task writes failing regression first, observes the intended failure, makes minimal correction, and runs its focused tests.
+2a. Audio structure residual: carry bounded per-second normalized mix chroma alongside representative spectral points, preserve alignment through checkpoints/resume, and feed aligned evidence to long-stream structure analysis. Keep semantic labels neutral unless evidence supports them; test incomplete coverage and malformed/mismatched feature series.
 3. Implement music-first Pacing after the domain contracts stabilize. Preserve beat timestamps; bound narrative-theme scoring; repair timebase, source-repeat provenance, motion scale, BPM strength alignment, and ID normalization.
 4. Implement Preview and Export on separate files after Pacing. Preview covers safe path/audio/duration/player seeking. Export covers exact failure reproduction, rational FPS, collision rejection, evidence retention, and validation progress.
+4a. Harden forward evidence capture: flush FFmpeg progress blocks to the run-scoped evidence file during execution; prove callback observes persisted evidence before process completion and that finalization preserves it.
 5. Implement SSE/GPU recovery after render terminal semantics are fixed. Reconcile event gaps/restarts/overflow/cancel through existing status APIs; bound lock wait without unlocking a live worker; correct reservation order.
 6. Handle project persistence and project-switch races sequentially in shared-state files. Preserve existing recovery changes; distinguish absent/unavailable roots without deleting catalog entries or media. Prove duplicate path/name behavior and counter consistency.
 7. Integrate with focused cross-domain regressions, full Python suite, native C# tests, WPF Release build, DirectML/AMF checks, then one reusable real-media API workflow.
 8. After user hands over PB Studio, run the controlled GUI acceptance pass on the same QA project. Keep release/QC markers absent until every applicable gate passes; record unresolved gates rather than claim success.
+9. Close final acceptance tasks T013–T014 only with the existing/restored QA project, PB Studio handover, policy-compliant live vision provider, and human-reviewed caption labels. Do not substitute cached status, mocks, a newly created project, or inferred labels.
 
 ## Parallel Code-Zone Ownership
 
@@ -42,6 +45,7 @@ Tests are owned by unique test files per task; no concurrent edits to the same f
 - Integration: `PYTHONPATH=src .venv/Scripts/python.exe -m pytest Tests/ -x -q`; relevant native C# test projects; `dotnet build PBStudio.UI/PBStudio.UI.csproj -c Release`; DirectML provider/session-flag and FFmpeg AMF checks.
 - API/E2E uses approved existing fixtures and one existing QA project; verify output path, streams, rational FPS, complete decode, source identities, project reload, and musical/narrative receipts.
 - No GUI action before handover. No `.completed` until implementation is done; no `.qc-passed` until all automated and live acceptance gates pass.
+- T013/T014 require external test conditions: an existing/restored QA project and GUI handover, plus an approved loaded vision model and human-reviewed caption labels. Until available, report those gates open and do not manufacture acceptance evidence.
 
 ## Rollback and Evidence
 

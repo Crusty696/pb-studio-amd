@@ -148,6 +148,57 @@ class TestAiDataDecompression:
         )
         assert unkomprimiert["energy_curve"] == curve
 
+    def test_restored_compressed_audio_payload_passes_pacing_preflight(
+        self, tmp_path, monkeypatch
+    ):
+        """Persistenz-Decode muss vor der Pacing-Stagevalidierung stattfinden."""
+        from backend.routers.pacing_router import (
+            _validate_pacing_analysis_preflight,
+        )
+        from backend.schemas.pacing_schemas import PacingConfigSchema
+
+        analysis_data = {
+            "is_analyzed": True,
+            "bpm": 120.0,
+            "beat_count": 2,
+            "beats_json": json.dumps(
+                [{"time": 0.5, "strength": 1.0}, {"time": 1.0, "strength": 0.8}]
+            ),
+            "energy_curve": _compress([0.2, 0.8]),
+            "downbeats": [0.5],
+            "downbeat_provenance": {"status": "measured"},
+            "onset_times": [],
+            "kick_times": [],
+            "snare_times": [],
+            "hihat_times": [],
+            "structure_segments": [
+                {"start_time": 0.0, "end_time": 2.0, "label": "section"}
+            ],
+            "key": "C major",
+            "stage_status": {
+                "beats": "completed",
+                "structure": "completed",
+                "key": "completed",
+            },
+        }
+
+        analysis = _load(monkeypatch, tmp_path, analysis_data)
+        report = _validate_pacing_analysis_preflight(
+            PacingConfigSchema(
+                audio_clip_id=7,
+                video_clip_ids=[],
+                use_motion_matching=False,
+                use_semantic_matching=False,
+                use_structure_awareness=True,
+                use_key_matching=True,
+            ),
+            analysis,
+            {},
+        )
+
+        assert analysis["energy_curve"] == [0.2, 0.8]
+        assert report == {"key_scored_clips": 0, "key_unscored_clips": []}
+
     def test_fehlende_listenfelder_bleiben_listen(self, tmp_path, monkeypatch):
         """Ein fehlendes Listenfeld liefert [], nicht None."""
         analysis = _load(monkeypatch, tmp_path, {"is_analyzed": True})

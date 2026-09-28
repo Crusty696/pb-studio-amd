@@ -322,11 +322,15 @@ def test_long_mix_uses_full_duration_streaming_representations(
         duration_seconds=1200.0,
         bpm=120.0,
         beats=[1.0, 1190.0],
-        energy_curve=[0.1, 0.2, 0.8],
+        energy_curve=[0.5] * 1200,
         chroma_mean=[1.0] + [0.0] * 11,
-        spectral_times=[0.0, 600.0, 1199.0],
-        spectral_bands={"bass": [0.1, 0.5, 0.9]},
-        spectral_centroids=[100.0, 500.0, 900.0],
+        chroma_features=(
+            [[1.0] + [0.0] * 11 for _ in range(600)]
+            + [[0.0] * 4 + [1.0] + [0.0] * 7 for _ in range(600)]
+        ),
+        spectral_times=[float(index) for index in range(1200)],
+        spectral_bands={"bass": [0.5] * 1200},
+        spectral_centroids=[500.0] * 1200,
         window_count=48,
         feature_coverage=1.0,
         feature_covered_seconds=1200.0,
@@ -374,6 +378,15 @@ def test_long_mix_uses_full_duration_streaming_representations(
     )
 
     assert result["structure_segments"][-1]["end_time"] == pytest.approx(1200.0)
+    assert any(
+        segment["start_time"] == pytest.approx(600.0, abs=2.0)
+        for segment in result["structure_segments"][1:]
+    )
+    assert all("chroma" in segment["evidence_sources"] for segment in result["structure_segments"])
+    assert all(
+        segment["feature_source_role"] == "original_mix"
+        for segment in result["structure_segments"]
+    )
     assert result["spectral_data"]["times"][-1] == pytest.approx(1199.0)
     assert result["key"] == "D major"
     assert seen_chroma == streamed.chroma_mean

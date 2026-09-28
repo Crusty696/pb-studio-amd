@@ -130,6 +130,9 @@ class RenderService:
         self.temp_dir = self.temp_root / self.job_token
         self._encoder_override = encoder_override
         self._render_rate = Fraction(30, 1)
+        self._evidence_run_id: Optional[str] = None
+        self._progress_evidence_run_id: Optional[str] = None
+        self._final_evidence_run_id: Optional[str] = None
 
     @classmethod
     def _register_process(cls, process: subprocess.Popen) -> None:
@@ -875,13 +878,14 @@ class RenderService:
             "-vf",
             (
                 "select=concatdec_select,"
-                "settb=AVTB,setpts=N*"
-                f"{render_rate.denominator}/{render_rate.numerator}/TB"
+                "settb=AVTB,setpts=PTS-STARTPTS,"
+                f"fps=fps={render_rate.numerator}/{render_rate.denominator}"
             ),
         ])
-        # Concat inputs may retain source cadence (or VFR timestamps). Set the
-        # requested rational cadence after concat selection so encoder output,
-        # progress frame budgets, and artifact validation share one timebase.
+        # Preserve concat presentation-time gaps through selection, then create
+        # the requested rational cadence. Rebuilding PTS from N after selection
+        # compressed dropped boundary frames out of the timeline; real segmented
+        # exports then ended short despite -frames:v requesting the full budget.
         cmd.extend(["-r", f"{render_rate.numerator}/{render_rate.denominator}"])
 
         if encoder == "hevc_amf":
@@ -1411,7 +1415,7 @@ class RenderService:
         progress_queue: queue.Queue[str] = queue.Queue()
         progress_lines: list[str] = []
         stderr_lines: list[str] = []
-
+        pending_progress_lines: list[str] = []
         def read_pipe(
             pipe: Any,
             lines: list[str],
@@ -1471,12 +1475,18 @@ class RenderService:
                     break
                 continue
 
+            pending_progress_lines.append(line)
             key, separator, value = line.strip().partition("=")
             if not separator:
                 continue
             progress_block[key] = value
             if key != "progress":
                 continue
+
+            self._append_render_progress_evidence(
+                "".join(pending_progress_lines)
+            )
+            pending_progress_lines.clear()
 
             last_machine_progress = dict(progress_block)
             progress_end = value == "end"
@@ -1598,17 +1608,29 @@ class RenderService:
         total_duration: float,
         total_frames: int,
     ) -> Path:
-        evidence_dir = (
-            self.output_dir
-            / ".render_evidence"
-            / self.job_token
-            / self.run_id
-        )
-        evidence_dir.mkdir(parents=True, exist_ok=False)
+        evidence_dir = self._ensure_render_evidence_dir()
+        record_path = evidence_dir / "result.json"
+        if self._final_evidence_run_id == self.run_id or record_path.exists():
+            raise FileExistsError(record_path)
+
         progress_path = evidence_dir / "ffmpeg.progress.log"
         stderr_path = evidence_dir / "ffmpeg.stderr.log"
-        self._atomic_write_text(progress_path, progress_log)
-        self._atomic_write_text(stderr_path, stderr_log)
+        if self._progress_evidence_run_id == self.run_id:
+            if not progress_path.is_file():
+                raise FileNotFoundError(progress_path)
+            persisted_progress = progress_path.read_text(encoding="utf-8")
+            if not progress_log.startswith(persisted_progress):
+                raise RuntimeError(
+                    "Final FFmpeg progress differs from durable run evidence"
+                )
+            remaining_progress = progress_log[len(persisted_progress) :]
+            if remaining_progress:
+                with progress_path.open("a", encoding="utf-8", newline="") as stream:
+                    stream.write(remaining_progress)
+                    stream.flush()
+        else:
+            self._create_evidence_file(progress_path, progress_log)
+        self._create_evidence_file(stderr_path, stderr_log)
 
         normalized_tail = re.sub(
             r"0x[0-9a-fA-F]+",
@@ -1646,12 +1668,55 @@ class RenderService:
             ).hexdigest(),
             "recorded_at_epoch": time.time(),
         }
-        record_path = evidence_dir / "result.json"
-        self._atomic_write_text(
+        self._create_evidence_file(
             record_path,
             json.dumps(record, indent=2, sort_keys=True) + "\n",
         )
+        self._final_evidence_run_id = self.run_id
         return record_path
+
+    def _append_render_progress_evidence(self, progress_block: str) -> None:
+        """Flush complete progress blocks to this run's exclusive evidence path."""
+        if not progress_block:
+            return
+        evidence_dir = self._ensure_render_evidence_dir()
+        path = evidence_dir / "ffmpeg.progress.log"
+        if self._progress_evidence_run_id == self.run_id:
+            if not path.is_file():
+                raise FileNotFoundError(path)
+            mode = "a"
+        else:
+            mode = "x"
+        with path.open(mode, encoding="utf-8", newline="") as evidence_file:
+            evidence_file.write(progress_block)
+            evidence_file.flush()
+        self._progress_evidence_run_id = self.run_id
+
+    def _ensure_render_evidence_dir(self) -> Path:
+        """Claim a run directory once; never attach to another run's evidence."""
+        if not self.run_id:
+            raise RuntimeError("Render evidence requires an active run_id")
+        evidence_dir = (
+            self.output_dir
+            / ".render_evidence"
+            / self.job_token
+            / self.run_id
+        )
+        if self._evidence_run_id == self.run_id:
+            if not evidence_dir.is_dir():
+                raise FileNotFoundError(evidence_dir)
+            return evidence_dir
+        evidence_dir.mkdir(parents=True, exist_ok=False)
+        self._evidence_run_id = self.run_id
+        return evidence_dir
+
+    @staticmethod
+    def _create_evidence_file(path: Path, content: str) -> None:
+        """Create a small run artifact without replacing prior evidence."""
+        with path.open("x", encoding="utf-8", newline="") as evidence_file:
+            evidence_file.write(content)
+            evidence_file.flush()
+            os.fsync(evidence_file.fileno())
 
     def _persist_validation_evidence(
         self,
@@ -1660,13 +1725,7 @@ class RenderService:
         metrics: Optional[dict[str, Any]] = None,
         error: Optional[Exception] = None,
     ) -> Path:
-        evidence_dir = (
-            self.output_dir
-            / ".render_evidence"
-            / self.job_token
-            / self.run_id
-        )
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_dir = self._ensure_render_evidence_dir()
         error_text = f"{type(error).__name__}: {error}" if error is not None else None
         fingerprint = (
             hashlib.sha256(error_text.encode("utf-8", errors="replace")).hexdigest()

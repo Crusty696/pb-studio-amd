@@ -199,6 +199,42 @@ def test_clean_committed_restore_preserves_newer_live_work(tmp_path: Path) -> No
     assert target.read_bytes() == b"newer-live-work"
 
 
+def test_committed_recovery_clears_stale_dirty_inventory_marker(tmp_path: Path) -> None:
+    """A marker written by an older manifest schema must not brick startup."""
+    root = tmp_path / "control"
+    target = tmp_path / "live.bin"
+    target.write_bytes(b"current")
+    previous_hash = _generation(root, "g0", target, b"previous")
+    current_hash = _generation(root, "g1", target, b"current")
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g1",
+        "manifest_sha256": current_hash,
+    })
+    _write_json(root / "journal.json", {
+        "schema_version": 1,
+        "operation": "restore",
+        "state": "COMMITTED",
+        "previous_generation": "g0",
+        "previous_manifest_sha256": previous_hash,
+        "next_generation": "g1",
+        "next_manifest_sha256": current_hash,
+        "committed_generation": "g1",
+        "committed_manifest_sha256": current_hash,
+    })
+    _write_json(root / "RUNTIME_DIRTY", {
+        "schema_version": 1,
+        "base_generation": "g0",
+        "base_manifest_sha256": previous_hash,
+        "variable_inventory": [{"owner": "old", "owner_scope": "old", "baseline_targets": []}],
+    })
+
+    result = ensure_recovery_ready(root)
+
+    assert result.status == "ready"
+    assert not (root / "RUNTIME_DIRTY").exists()
+
+
 def test_absence_tombstone_removes_only_its_owned_file(tmp_path: Path) -> None:
     root = tmp_path / "control"
     owned = tmp_path / "project" / "timeline.json"

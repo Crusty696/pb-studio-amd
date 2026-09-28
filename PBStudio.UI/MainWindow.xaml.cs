@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PBStudio.UI.Services;
@@ -41,12 +42,32 @@ public partial class MainWindow : Window
             return accessibleName;
         if (!string.IsNullOrWhiteSpace(element.Name))
             return element.Name;
+        if (element is TabItem tabItem && tabItem.Header is string header && !string.IsNullOrWhiteSpace(header))
+            return header;
         return "(ohne Namen)";
+    }
+
+    private static T? FindActionElement<T>(object? source) where T : DependencyObject
+    {
+        var current = source as DependencyObject;
+        while (current is not null)
+        {
+            if (current is T match)
+                return match;
+
+            current = current is Visual visual
+                ? VisualTreeHelper.GetParent(visual)
+                : current is FrameworkContentElement content
+                    ? content.Parent
+                    : null;
+        }
+
+        return null;
     }
 
     private void OnUiButtonClicked(object sender, RoutedEventArgs e)
     {
-        if (e.Source is FrameworkElement element)
+        if (FindActionElement<ButtonBase>(e.OriginalSource) is FrameworkElement element)
             _logger.LogInformation(
                 "UI-Aktion: Klick; Control={Control}; Name={Name}",
                 element.GetType().Name,
@@ -55,7 +76,7 @@ public partial class MainWindow : Window
 
     private void OnUiSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.Source is Selector selector)
+        if (FindActionElement<Selector>(e.OriginalSource) is Selector selector)
             _logger.LogInformation(
                 "UI-Aktion: Auswahl; Control={Control}; Name={Name}; Hinzu={Added}; Entfernt={Removed}",
                 selector.GetType().Name,

@@ -25,10 +25,10 @@ As an editor, I need project/chat/recovery/GPU/events scoped and recoverable acr
 - **FR-429:** Map findings 1–54 to fix, test, or explicit conditional/withdrawn disposition; do not omit duplicates.
 - **FR-430:** `completed` requires valid evidence/coverage; preserve partials, expose failures/unavailable, retry after recovery.
 - **FR-431:** Empty replies, probe failures, tool support, selection/errors stay explicit; no fabricated success/capability.
-- **FR-432:** Identify feature sources and valid timebase; expose long-file tails and capped/skipped windows.
+- **FR-432:** Identify feature sources and valid timebase; expose long-file tails and capped/skipped windows. Long-stream structure shall consume time-aligned mix features (energy plus normalized chroma/spectral change where available), report feature coverage, and use neutral labels when evidence cannot justify musical semantics.
 - **FR-433:** Cut times follow validated triggers. Rank: eligibility, music, visual/semantic/motion, bounded theme, diversity. Source-repeat boundaries are not musical triggers.
 - **FR-434:** WPF-safe path, synced master audio, measured duration; selection/seeking preserve render state and map timeline offset to source time.
-- **FR-435:** Consistent rational-FPS accounting; reject source/output collision; retain evidence; report validation progress/status; fix 2-frame defect without weakening validation.
+- **FR-435:** Consistent rational-FPS accounting; reject source/output collision; retain render and validation evidence incrementally while work runs; report validation progress/status; fix 2-frame defect without weakening validation.
 - **FR-436:** Reconcile SSE gaps/restarts/overflow/cancel/reconnect; wire render-status path. Never release GPU lock while worker runs.
 - **FR-437:** Guard UI by project generation; refresh changed-media hash/metadata; align counters; inaccessible roots are not deleted.
 - **FR-438:** Failed-stage defaults are not evidence; count valid nonzero pairs; annotations use media time, not timeline time.
@@ -37,6 +37,8 @@ As an editor, I need project/chat/recovery/GPU/events scoped and recoverable acr
 ## Technical Requirements
 
 - **TR-391:** Every active finding gets a focused RED→GREEN regression; conditional findings get both paths.
+- **TR-395:** Time-aligned streaming-structure evidence survives chunk aggregation and checkpoint resume with matched timestamps, bounded memory, source provenance, and explicit incomplete-feature behavior.
+- **TR-396:** FFmpeg machine-progress evidence is flushed to the run-scoped evidence file as blocks arrive, so interruption does not erase already-received progress; final evidence remains complete and compatible.
 - **TR-392:** Run Python, C#, WPF Release, DirectML/AMF gates; record exact results.
 - **TR-393:** Reuse existing QA project/media; verify progress, music-timed cuts, narrative, audible preview, full decode, and reopen in one real run.
 - **TR-394:** GUI acceptance waits for PB Studio handover. Never delete existing project/media/log/test artifacts.
@@ -56,7 +58,7 @@ As an editor, I need project/chat/recovery/GPU/events scoped and recoverable acr
 - **SC-119:** Real-media API passes; GUI passes after handover. Otherwise release acceptance stays pending.
 - **SC-120:** No release-ready claim before automated and applicable live acceptance pass.
 
-**Task range:** T001–T012.
+**Task range:** T001–T015 (T012 is final implementation marker gate).
 
 ## Out of Scope
 

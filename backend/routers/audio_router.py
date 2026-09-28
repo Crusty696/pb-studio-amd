@@ -1154,6 +1154,8 @@ def _audio_plan_has_work(request: AudioAnalyzeRequest) -> bool:
 
 def _audio_stream_resume_checkpoints(analysis: dict[str, Any]) -> dict[str, dict]:
     """Extract only structurally eligible per-pass checkpoints from cache."""
+    from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
+
     evidence = analysis.get("_chunk_evidence")
     if not isinstance(evidence, dict):
         evidence = analysis.get("chunk_evidence")
@@ -1168,7 +1170,8 @@ def _audio_stream_resume_checkpoints(analysis: dict[str, Any]) -> dict[str, dict
         checkpoint = pass_evidence.get("checkpoint")
         if (
             isinstance(checkpoint, dict)
-            and checkpoint.get("schema_version") == 2
+            and checkpoint.get("schema_version")
+            == StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION
             and isinstance(checkpoint.get("chunks"), list)
         ):
             checkpoints[pass_name] = checkpoint
@@ -1185,11 +1188,14 @@ def _merge_audio_chunk_checkpoint_evidence(
     """Merge one durable pass snapshot without deleting sibling evidence."""
     import copy
 
+    from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
+
     if (
         pass_name not in {"primary", "mix_energy"}
         or not isinstance(source_role, str)
         or not isinstance(checkpoint, dict)
-        or checkpoint.get("schema_version") != 2
+        or checkpoint.get("schema_version")
+        != StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION
         or not isinstance(checkpoint.get("window_count"), int)
         or not isinstance(checkpoint.get("chunks"), list)
     ):
@@ -3010,9 +3016,38 @@ def _run_audio_analysis(
             # (600.0 > 600 = False) nie erreichbar war.
             structure_analyzer = StructureAnalyzer()
             if _use_streaming:
+                structure_feature_source_matches = bool(
+                    _stream_features is not None
+                    and _same_audio_source(feature_source_path, audio_path)
+                )
+                structure_features_available = bool(
+                    structure_feature_source_matches
+                    and _stream_features.feature_coverage >= 0.999
+                    and len(_stream_features.spectral_times)
+                    == len(_stream_features.chroma_features)
+                    and len(_stream_features.chroma_features) >= 2
+                )
                 struct_result = structure_analyzer.analyze_streaming_energy(
                     list(_stream_energy or []),
                     duration,
+                    feature_times=(
+                        list(_stream_features.spectral_times)
+                        if structure_features_available
+                        else None
+                    ),
+                    chroma_features=(
+                        list(_stream_features.chroma_features)
+                        if structure_features_available
+                        else None
+                    ),
+                    feature_coverage=(
+                        float(_stream_features.feature_coverage)
+                        if structure_feature_source_matches
+                        else 0.0
+                    ),
+                    feature_source_role=(
+                        feature_source_role if structure_feature_source_matches else None
+                    ),
                 )
             else:
                 struct_result = structure_analyzer.analyze_song_structure(

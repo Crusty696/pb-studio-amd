@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -184,6 +185,57 @@ public sealed class AnalysisResumeContractTests
         Assert.AreEqual(100.0, viewModel.AnalysisProgress);
         StringAssert.Contains(viewModel.StatusText, "1 fehlgeschlagen");
         StringAssert.Contains(viewModel.StatusText, "unterbrochene Stufe");
+    }
+
+    [TestMethod]
+    public async Task AudioAnalysisCommand_ShowsSuspectSegmentedBeatGridAsUncertain()
+    {
+        var project = new ProjectInfo(
+            "Beat Grid",
+            @"C:\Projects\BeatGrid",
+            1,
+            0,
+            false);
+        var beatGrid = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+            """{"status":"suspect","method":"segmented_beat_grid","dominant_bpm":124.0,"segment_count":2,"dominant_span_s":30.0}""");
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(project))
+            .Handle(
+                nameof(IApiClient.AnalyzeAudioAsync),
+                _ => Task.FromResult<AudioAnalysisResult?>(new AudioAnalysisResult(
+                    7,
+                    60.0,
+                    124.0,
+                    120,
+                    [],
+                    AnalysisStatus: "completed",
+                    BeatGrid: beatGrid)));
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(project.Path));
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        using var viewModel = new AudioLibraryViewModel(
+            api.Client,
+            new AudioLibraryStateService(
+                api.Client,
+                NullLogger<AudioLibraryStateService>.Instance),
+            sse,
+            new DialogServiceStub(),
+            projects);
+        WeakReferenceMessenger.Default.UnregisterAll(viewModel);
+        viewModel.SelectedClip = new AudioClipModel { Id = 7, Name = "mix.wav" };
+
+        await viewModel.AnalyzeSelectedCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("suspect", viewModel.BeatGridStatus);
+        StringAssert.Contains(viewModel.BeatGridText, "Segmentraster:");
+        StringAssert.Contains(viewModel.BeatGridText, "2 Abschnitte");
+        StringAssert.Contains(viewModel.BeatGridText, "unsicher");
     }
 
     [TestMethod]
