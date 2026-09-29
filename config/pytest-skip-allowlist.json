@@ -20,6 +20,12 @@
       "reason": "Separate DirectML hardware lane owns real CLAP model and media."
     },
     {
+      "nodeid": "Tests/test_full_audit_render_integrity.py::test_live_music_selected_cutlist_renders_all_fractional_rate_frames",
+      "owner": "render",
+      "expires_on": "2026-09-30",
+      "reason": "Real-media AMD AMF integration is opt-in and separately exercised by the T013 acceptance lane."
+    },
+    {
       "nodeid": "Tests/test_ollama_vision_wrapper.py",
       "owner": "models",
       "expires_on": "2026-09-30",
@@ -89,7 +95,7 @@
       "nodeid": "Tests/test_subtrack_detector.py::test_subtrack_f_measure_realdata",
       "owner": "audio",
       "expires_on": "2026-09-30",
-      "reason": "Real-data quality evaluation is maintained as a separate script."
+      "reason": "Optional real-mix F-measure requires audio plus adjacent manually timestamped .boundaries.txt labels; the test invokes scripts/verify_subtrack_detection.py when both exist."
     },
     {
       "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_physical_directml_and_lhm_identity_is_rx7800xt",
@@ -120,24 +126,6 @@
       "owner": "video",
       "expires_on": "2026-09-30",
       "reason": "Platform codec availability controls MP4 fixture generation."
-    },
-    {
-      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_extract_3band_waveform",
-      "owner": "audio",
-      "expires_on": "2026-09-30",
-      "reason": "Legacy external audio fixture is not present in clean checkout."
-    },
-    {
-      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_downsampled_waveform",
-      "owner": "audio",
-      "expires_on": "2026-09-30",
-      "reason": "Legacy external audio fixture is not present in clean checkout."
-    },
-    {
-      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_frequency_content_analysis",
-      "owner": "audio",
-      "expires_on": "2026-09-30",
-      "reason": "Legacy external audio fixture is not present in clean checkout."
     },
     {
       "nodeid": "Tests/test_runtime_contract.py::test_lhm_runtime_manifest_binds_the_active_files_by_sha256",

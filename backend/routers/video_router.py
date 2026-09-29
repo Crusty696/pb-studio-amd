@@ -2420,7 +2420,7 @@ async def _run_color_and_caption_analysis(
     generate_captions: bool,
     analyze_colors: bool = True,
 ) -> dict[str, Any]:
-    """Extrahiert Farben und Tags (KMeans auf CPU, LM-Studio über HTTP, Moondream als GPU-Fallback)."""
+    """Extrahiert Farben und Tags (KMeans auf CPU, Vision-Provider, Moondream-Fallback)."""
     result = {
         "dominant_colors": [],
         "tags": [],
@@ -2509,7 +2509,7 @@ async def _run_color_and_caption_analysis(
             caption_deadline = caption_started_at + CAPTION_STAGE_TIMEOUT_SECONDS
             caption_progress: dict[str, Any] = {
                 "started_at": caption_started_at,
-                "phase": "LM Studio",
+                "phase": "Vision-Provider",
                 "phase_started_at": caption_started_at,
                 "phase_budget_seconds": CAPTION_STAGE_TIMEOUT_SECONDS,
                 "phase_total_frames": len(frames_rgb),
@@ -2580,7 +2580,7 @@ async def _run_color_and_caption_analysis(
             except asyncio.TimeoutError:
                 caption_timeout_error = (
                     "Captioning-Gesamtdeadline von "
-                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s waehrend LM Studio erreicht"
+                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s waehrend Vision-Provider erreicht"
                 )
                 completed = int(caption_progress["phase_completed_frames"])
                 moondream_frames_to_run.extend(frames_rgb[completed:])
@@ -2597,7 +2597,7 @@ async def _run_color_and_caption_analysis(
                     message=caption_timeout_error,
                 )
 
-            # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
+            # Moondream-Fallback, falls primaerer Vision-Provider keine Tags liefert.
             if moondream_frames_to_run and caption_remaining_seconds() <= 0.0:
                 caption_timeout_error = (
                     caption_timeout_error
@@ -2832,13 +2832,13 @@ async def _run_color_and_caption_analysis(
                 ),
             )
 
-            # Review-Fix MEDIUM (2026-07-09): Terminal-State auch fuer den
-            # reinen LM-Studio-Pfad (Wrapper endet mit "active").
+            # Terminal-State auch fuer den primaeren Vision-Provider-Pfad
+            # (Wrapper endet nach erfolgreichem Aufruf mit "active").
             if not moondream_frames_to_run:
                 try:
                     await publish_event("llm_status", {
                         "model": "none",
-                        "provider": "LM Studio",
+                        "provider": "Vision Provider",
                         "status": "idle",
                         "percent": 0.0,
                         "clip_id": clip_id,
@@ -2847,7 +2847,7 @@ async def _run_color_and_caption_analysis(
                     pass
 
             logger.info(
-                f"KMeans+LMStudio/Moondream-Split: {len(result['dominant_colors'])} colors, "
+                f"KMeans+Vision-Provider/Moondream-Split: {len(result['dominant_colors'])} colors, "
                 f"{len(result['tags'])} tags ({result['tag_source']}) fuer clip {clip_id}"
             )
         else:

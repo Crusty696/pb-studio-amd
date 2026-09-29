@@ -24,7 +24,9 @@ def _load_gt(path: Path) -> list[float]:
     return out
 
 
-def _f_measure(predicted: list[float], gt: list[float], tolerance: float) -> dict:
+def evaluate_boundaries(
+    predicted: list[float], gt: list[float], tolerance: float
+) -> dict:
     matched_pred = set()
     matched_gt = set()
     for i, p in enumerate(predicted):
@@ -69,7 +71,7 @@ def main() -> int:
 
     if gt_file and gt_file.is_file():
         gt = _load_gt(gt_file)
-        m = _f_measure(boundaries, gt, tolerance=15.0)
+        m = evaluate_boundaries(boundaries, gt, tolerance=15.0)
         print(f"Ground truth: {len(gt)} boundaries")
         print(f"  TP={m['tp']} FP={m['fp']} FN={m['fn']}")
         print(f"  precision={m['precision']:.3f} recall={m['recall']:.3f} f1={m['f1']:.3f}")

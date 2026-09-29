@@ -86,9 +86,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-09-19 (Spec 00034 AUDIO-Fixphase abgeschlossen; QC ausstehend)
-- **Current Status:** AUDIO F-12.1–F-12.24 vollständig per Quellpfad auditiert; Projektleases und wahrheitsgetreue Stage-Reads, Waveform-/Metadatenfehler, bounded Beat-Fallback, Schema-Isolation sowie WPF-Import-/Projektwechsel-Lifecycle repariert. `separator.py` blieb unverändert. Specs 00030–00034 liegen auf `codex/source-functional-completion` / PR #31. Nutzer hat lokale Tests, Builds, Audio-/Provider-Probes und GUI-Läufe bis zur ausdrücklichen Freigabe untersagt. Kein PASS-/Release-Claim.
-- **Next Task:** Nutzerbericht zu AUDIO-Fixes; nächster Funktionsbereich nur auf Anweisung. Verifikation von Pacing, KI, Brain, Video und Audio bleibt separat gesperrt.
+- **Date:** 2026-09-29 (Spec 00035 T017 precision-follow-up abgeschlossen; Master-QC offen)
+- **Current Status (2026-09-29, latest isolated run):** T016 echter 337.176-s AMF-Export: -1.58 dBTP, 10,115/10,115 Frames, vollständiger Decode. T017 atomisches, redigiertes Segmentmanifest mit Hashbindung, konsistenten Mikrosekunden-Grenzen und SHA-256 der exakten Concat-Eingabeliste im Run-Beleg. Aktuelle isolierte Python-Vollsuite: 1,958 passed/13 skipped/0 failed/35 warnings in 1,766.58 s; JUnit: `%TEMP%\pb00035-health-full-16ad412326064e45bfb5982c31abf239\pytest-results.xml`. Finding-54 Dispositionsregression separat 1/1. Separate echte AMF-Integration 899/899 Frames, −11.72 dBTP, unabhängiger Full-Decode; physische RX 7800 XT/DirectML/LHM-Probe 1/1. C# 80/80; WPF Release-Build 0 Warnungen/Fehler. Dies belegt keine interaktive GUI-/Projekt-Wiederöffnung.
+- **Next Task:** T003/#34 bleibt ohne unabhängige Zeitcodes/Labels für Mix-Grenzen und Tonart offen. Aktuelle Provider-APIs antworten, aber Ollama und LM Studio melden jeweils 0 geladene Modelle; Ollama-Runtime hatte ROCm ausgewählt und ist damit nicht für DirectML-only-Inferenz freigegeben. T013 GUI/Projekt-Wiederöffnen wartet auf PB Studio-Handover; T014 braucht policy-konforme Inferenz plus menschlich geprüfte Labels. #2 historische Evidenz bleibt nicht wiederherstellbar. Kein `.completed`/`.qc-passed`; kein Release-Claim.
 - **Historischer Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
   Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
   Regressionstest und ausgeführter Gegenprobe (Fix zurückgerollt, Test fällt).

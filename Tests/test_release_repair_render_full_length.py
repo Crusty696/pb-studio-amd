@@ -377,7 +377,7 @@ def test_artifact_end_silence_threshold_compensates_pre_encode_gain(
         expected_end_silence=SOURCE_END_SILENCE_SECONDS,
     )
 
-    assert measured_thresholds == [-62.0]
+    assert measured_thresholds == [-64.0]
 
 
 @pytest.mark.parametrize("encoder", ["h264_amf", "hevc_amf"])
@@ -404,7 +404,7 @@ def test_full_length_render_command_preserves_audio_duration_and_headroom(
     )
 
     audio_filter = command[command.index("-filter:a") + 1]
-    assert audio_filter == "volume=-2.0dB,alimiter=limit=0.89125:level=disabled"
+    assert audio_filter == "volume=-4.0dB,alimiter=limit=0.89125:level=disabled"
     assert command[command.index("-c:a") + 1] == "aac"
     assert command[command.index("-t") + 1] == "6335.027"
     assert effective_duration == FULL_LENGTH_SECONDS
@@ -428,7 +428,7 @@ def test_validator_failure_preserves_existing_target_and_removes_staging(
     monkeypatch.setattr(
         service,
         "_generate_concat_file",
-        lambda *_args, **_kwargs: None,
+        lambda _clips, list_path: Path(list_path).write_text("", encoding="utf-8"),
     )
 
     def write_invalid_staging(

@@ -5,6 +5,14 @@
 
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
+- Health-check reconciliation (2026-09-29): latest isolated Python full suite **1,958 passed / 13 skipped / 0 failed / 35 warnings** (1,766.58 s); native C# 80/80; WPF Release build 0/0; DirectML/core-package checks and AMF encoder discovery passed. Finding-54 decision regression 1/1. Backend startup smoke intentionally not run because startup/recovery may mutate user render/recovery state. T003/T013/T014/#2 still open; no release pass claimed.
+- Removed three missing-audio-fixture skips from waveform file-integration tests: each now creates deterministic 2-s PCM WAV (80/800/8000 Hz). Focused waveform suite: **20 passed, 0 skipped**; no production change. Full suite not rerun; historical aggregate remains scoped to earlier source state.
+
+- Finding 54 now links back to source audit P03 and has a disposition regression: actual `PacingService.generate_cut_list` with semantic matching disabled emitted only `prompt=None`, kept semantic selector off, and generated cuts via motion path (1/1 pass). No product change; finding remains withdrawn.
+- Caption progress no longer mislabels the configurable primary Vision provider as “LM Studio”; timeout, heartbeat, fallback-path and idle-status wording is provider-neutral. Test-first regression reproduced both normal and timeout status defects; focused Spec 00035 + video contract suites: 13 passed. T014 remains open: Ollama model is installed but not loaded, backend-policy compliance and human-reviewed caption labels are unverified.
+- T017 evidence receipt now hashes the exact generated FFmpeg concat-list bytes (`concat_input_sha256`) without writing raw input paths into `result.json`; failed and completed runs both retain the digest. Test-first RED/GREEN plus broad render regressions: 75 passed, 1 skipped; current isolated full Python suite: 1,956 passed, 13 skipped, 0 failed.
+- Activated hardware gates independently: RX 7800 XT + DXGI/DirectML + LHM identity test 1/1 passed; real fixture-backed music-cut → audio preview → AMD AMF export test 1/1 passed, with 899/899 frames, complete independent decode, and −11.72 dBTP. These are service-level real-media checks, not WPF GUI/import/reopen acceptance; see Spec 00035 T013 evidence.
+
 - #35–39/#53 pacing cluster verified: 95 targeted tests passed, covering music-led semantic ranking, bounded theme continuity, source-repeat provenance, rational beat strength and string/int analysis-key normalization. Two legacy Brain-pacing fixture failures surfaced in the broader selector run; T011 reconciliation required.
 - #1–2/#26–28 render path: focused router/service/validator/atomic-output suite 35/35 passed. 30-s/60-s AMF exports remain recorded; original 54:59 source and incident evidence are missing, so no exact long-incident rerun claimed and #2 stays open.
 - #4,#6–15,#44–46 video/model/chat contracts rechecked: 60 focused Python regressions and 3 native C# tests passed; no additional code defect found. LM Studio inventory probe answered; Ollama endpoints timed out, so model inference/recovery remains unverified.
@@ -992,5 +1000,21 @@ pytest: 511 passed / 8 skipped / 0 failed. dotnet build Release: clean.
 
 - Video captioning now stops repeated LM Studio/Ollama failover probes after the wrapper reports no usable provider for a clip; remaining frames still use the existing Moondream DirectML fallback.
 - If neither provider is available, captions stage is persisted as `unavailable` with cooldown/provider cause instead of a generic empty-tag result. Focused video/provider/pipeline regressions: 55 passed; live provider recovery and caption semantic accuracy remain unverified.
+
+## 2026-09-29 — Spec 00035 AAC true-peak correction (T016)
+
+- Reproduced final AAC artifact at +1.47 dBTP against the -1.00 dBTP gate. Increased render pre-encode gain reduction from 2 to 4 dB; kept artifact validation and its gate unchanged.
+- Added encoded transient-rich AAC regression using production filter and artifact meter. Pre-fix signal exceeded gate; post-fix passed.
+- Existing 337.176-s/162-clip AMF export passed at -1.58 dBTP with 10,115/10,115 frames and complete independent decode. Focused tests 43 passed/1 skipped; isolated full suite 1,950 passed/13 skipped/0 failed/35 warnings.
+- T003 ground-truth accuracy and T013/T014 live acceptance remain open; no release/QC marker.
+
+## 2026-09-29 — Spec 00035 render segment evidence (T017)
+
+- RenderService now atomically persists a privacy-minimized ordered segment manifest before final FFmpeg encoding. Source paths are represented by SHA-256 identifiers; exact source and cumulative timeline ranges are recorded without raw paths or media bytes.
+- `result.json` validates run/job ownership and binds the exact manifest and canonical segment-list hashes. Manifest is not overwritten and remains available when final encoding fails.
+- Follow-up RED found concat-list timestamps rounded to milliseconds while manifest retained higher precision; both paths now use identical six-decimal boundaries and integer-microsecond timeline accumulation.
+- Focused manifest/render-evidence regressions: 8 passed. Python full suite is running separately; live AMF rerender not performed because dedicated-memory telemetry reports high use on an adapter LUID not mapped to a physical adapter.
+- Read-only provider recheck: Ollama API online, 15 installed/5 vision-capable/0 loaded; LM Studio 24 installed/5 VLM/0 loaded. No inference or model load performed; provider compliance/semantic accuracy remain unproven.
+- T003, T013, T014 and historical finding #2 remain partial/open; no release/QC marker.
 
 ---

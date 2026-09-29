@@ -33,12 +33,16 @@ As an editor, I need project/chat/recovery/GPU/events scoped and recoverable acr
 - **FR-437:** Guard UI by project generation; refresh changed-media hash/metadata; align counters; inaccessible roots are not deleted.
 - **FR-438:** Failed-stage defaults are not evidence; count valid nonzero pairs; annotations use media time, not timeline time.
 - **FR-439:** Keep existing requests compatible; additive response/status/provenance only. No schema migration or new dependency.
+- **FR-440:** Final AAC artifacts must satisfy the configured true-peak ceiling after encoding; preserve fail-closed artifact validation and prove the production audio filter on encoded audio.
+- **FR-441:** Persist a redacted ordered segment manifest per render and bind its receipt to that exact manifest.
 
 ## Technical Requirements
 
 - **TR-391:** Every active finding gets a focused RED→GREEN regression; conditional findings get both paths.
 - **TR-395:** Time-aligned streaming-structure evidence survives chunk aggregation and checkpoint resume with matched timestamps, bounded memory, source provenance, and explicit incomplete-feature behavior.
 - **TR-396:** FFmpeg machine-progress evidence is flushed to the run-scoped evidence file as blocks arrive, so interruption does not erase already-received progress; final evidence remains complete and compatible.
+- **TR-397:** Exercise the production AAC filter and post-encode true-peak meter against deterministic transient-rich audio; no mocked measurement may substitute for this regression.
+- **TR-398:** Run-scoped manifest records order, source-path SHA-256, source/timeline ranges; no raw paths or media. Create atomically; add manifest/canonical-timeline SHA-256 to `result.json`; retain across render failure.
 - **TR-392:** Run Python, C#, WPF Release, DirectML/AMF gates; record exact results.
 - **TR-393:** Reuse existing QA project/media; verify progress, music-timed cuts, narrative, audible preview, full decode, and reopen in one real run.
 - **TR-394:** GUI acceptance waits for PB Studio handover. Never delete existing project/media/log/test artifacts.
@@ -57,8 +61,10 @@ As an editor, I need project/chat/recovery/GPU/events scoped and recoverable acr
 - **SC-118:** Automated gates pass with evidence and no unresolved Critical/High active finding.
 - **SC-119:** Real-media API passes; GUI passes after handover. Otherwise release acceptance stays pending.
 - **SC-120:** No release-ready claim before automated and applicable live acceptance pass.
+- **SC-121:** A real or deterministic encoded AAC artifact at/under the true-peak ceiling passes; an over-limit artifact remains rejected.
+- **SC-122:** Tests prove path redaction, ordered time mapping, hash binding, pre-encode persistence, and no-overwrite.
 
-**Task range:** T001–T015 (T012 is final implementation marker gate).
+**Task range:** T001–T017 (T012 is final implementation marker gate).
 
 ## Out of Scope
 

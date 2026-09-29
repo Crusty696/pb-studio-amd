@@ -16,6 +16,7 @@ Features:
 import inspect
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -83,6 +84,31 @@ def _get_clip_path_str(clip: dict) -> Optional[str]:
     return None
 
 
+def _get_clip_source_range(clip: dict) -> tuple[float, float]:
+    """Return valid clip boundaries at FFmpeg concat's microsecond resolution."""
+    raw_in = clip.get("in_point")
+    if raw_in is None:
+        raw_in = clip.get("in", 0.0)
+    try:
+        source_in = float(raw_in)
+        raw_out = clip.get("out_point")
+        if raw_out is None:
+            raw_out = clip.get("out", source_in + 2.0)
+        source_out = float(raw_out)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Clip hat ungueltige Segmentgrenzen") from exc
+    if not math.isfinite(source_in) or not math.isfinite(source_out):
+        raise ValueError("Clip hat nicht-endliche Segmentgrenzen")
+
+    # The concat demuxer parses timestamps on a microsecond time base. Keep
+    # persisted provenance and actual FFmpeg input ranges identical.
+    source_in = float(f"{source_in:.6f}")
+    source_out = float(f"{source_out:.6f}")
+    if source_in < 0.0 or source_out <= source_in:
+        raise ValueError("Clip-Segmentgrenzen muessen einen positiven Bereich bilden")
+    return source_in, source_out
+
+
 class RenderService:
     """Timeline-Rendering Service mit AMD AMF Hardware-Encoding."""
 
@@ -100,7 +126,7 @@ class RenderService:
     _ARTIFACT_DECODE_TIMEOUT_FLOOR_SECONDS = 300.0
     _ARTIFACT_FRAME_TOLERANCE = 1
     _ARTIFACT_MIN_DURATION_TOLERANCE_SECONDS = 0.05
-    _AAC_PRE_ENCODE_GAIN_DB = -2.0
+    _AAC_PRE_ENCODE_GAIN_DB = -4.0
     _AAC_TRUE_PEAK_LIMIT_DBTP = -1.0
     _END_SILENCE_THRESHOLD_DB = -60
     _END_SILENCE_MIN_SECONDS = 1.0
@@ -133,6 +159,7 @@ class RenderService:
         self._evidence_run_id: Optional[str] = None
         self._progress_evidence_run_id: Optional[str] = None
         self._final_evidence_run_id: Optional[str] = None
+        self._concat_input_sha256: Optional[str] = None
 
     @classmethod
     def _register_process(cls, process: subprocess.Popen) -> None:
@@ -334,6 +361,7 @@ class RenderService:
         render_start = time.monotonic()
 
         self.run_id = uuid.uuid4().hex
+        self._concat_input_sha256 = None
         self.temp_dir = self.temp_root / self.job_token / self.run_id
         self.temp_dir.mkdir(exist_ok=False, parents=True)
         final_output = self.output_dir / output_filename
@@ -372,6 +400,10 @@ class RenderService:
             )
             concat_list_path = self.temp_dir / "concat_list.txt"
             self._generate_concat_file(normalized_clips, concat_list_path)
+            self._concat_input_sha256 = hashlib.sha256(
+                concat_list_path.read_bytes()
+            ).hexdigest()
+            self._persist_segment_manifest(timeline)
 
             self._emit_progress(
                 progress_callback,
@@ -467,12 +499,11 @@ class RenderService:
             self._cleanup_temp(normalized_clips)
 
     def _calculate_timeline_duration(self, timeline: List[Dict]) -> float:
-        total = 0.0
+        total_microseconds = 0
         for clip in timeline:
-            in_pt = clip.get("in_point") or clip.get("in", 0.0)
-            out_pt = clip.get("out_point") or clip.get("out", in_pt + 2.0)
-            total += out_pt - in_pt
-        return max(total, 1.0)
+            in_pt, out_pt = _get_clip_source_range(clip)
+            total_microseconds += round((out_pt - in_pt) * 1_000_000)
+        return max(total_microseconds / 1_000_000, 1.0)
 
     @staticmethod
     def _validate_timeline_clips(timeline: List[Dict]) -> None:
@@ -481,6 +512,11 @@ class RenderService:
         if missing:
             indexes = ", ".join(str(index) for index in missing)
             raise FileNotFoundError(f"Timeline-Clip(s) fehlen oder sind nicht lesbar: {indexes}")
+        for index, clip in enumerate(timeline):
+            try:
+                _get_clip_source_range(clip)
+            except ValueError as exc:
+                raise ValueError(f"Timeline-Clip {index}: {exc}") from exc
 
     def _normalize_clips(
         self, timeline: List[Dict], w: int, h: int, fps: float,
@@ -832,8 +868,7 @@ class RenderService:
     def _generate_concat_file(self, timeline: List[Dict], list_path: Path):
         with open(list_path, "w", encoding="utf-8") as f:
             for clip in timeline:
-                in_pt = clip.get("in_point") if clip.get("in_point") is not None else clip.get("in", 0.0)
-                out_pt = clip.get("out_point") if clip.get("out_point") is not None else clip.get("out", in_pt + 2.0)
+                in_pt, out_pt = _get_clip_source_range(clip)
                 p = _get_clip_path_str(clip)
                 if not p:
                     raise FileNotFoundError(
@@ -843,8 +878,8 @@ class RenderService:
                 # FFmpeg concat protocol: single quotes required (double quotes treated as literal chars)
                 p_escaped = p_str.replace("'", "'\\''")
                 f.write(f"file '{p_escaped}'\n")
-                f.write(f"inpoint {in_pt:.3f}\n")
-                f.write(f"outpoint {out_pt:.3f}\n")
+                f.write(f"inpoint {in_pt:.6f}\n")
+                f.write(f"outpoint {out_pt:.6f}\n")
 
     def _build_render_cmd(
         self, list_path: Path, audio_path: Optional[str], output_path: Path,
@@ -1668,12 +1703,99 @@ class RenderService:
             ).hexdigest(),
             "recorded_at_epoch": time.time(),
         }
+        if self._concat_input_sha256 is not None:
+            record["concat_input_sha256"] = self._concat_input_sha256
+        manifest_path = evidence_dir / "segments.json"
+        if manifest_path.is_file():
+            manifest_bytes = manifest_path.read_bytes()
+            manifest = json.loads(manifest_bytes)
+            if (
+                manifest.get("job_id") != self.job_token
+                or manifest.get("run_id") != self.run_id
+            ):
+                raise RuntimeError("Render segment manifest belongs to a different run")
+            segments = manifest.get("segments")
+            if not isinstance(segments, list):
+                raise RuntimeError("Render segment manifest has no valid segments list")
+            canonical_segments = json.dumps(
+                segments,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+            timeline_sha256 = hashlib.sha256(canonical_segments).hexdigest()
+            if manifest.get("timeline_sha256") != timeline_sha256:
+                raise RuntimeError("Render segment manifest timeline hash is invalid")
+            record["segment_manifest_sha256"] = hashlib.sha256(
+                manifest_bytes
+            ).hexdigest()
+            record["timeline_sha256"] = timeline_sha256
         self._create_evidence_file(
             record_path,
             json.dumps(record, indent=2, sort_keys=True) + "\n",
         )
         self._final_evidence_run_id = self.run_id
         return record_path
+
+    def _persist_segment_manifest(self, timeline: List[Dict]) -> Path:
+        """Persist ordered cut ranges without exposing raw source paths."""
+        evidence_dir = self._ensure_render_evidence_dir()
+        manifest_path = evidence_dir / "segments.json"
+        segments: list[dict[str, Any]] = []
+        timeline_cursor_microseconds = 0
+
+        for index, clip in enumerate(timeline):
+            source_path = _get_clip_path_str(clip)
+            if not source_path:
+                raise FileNotFoundError(
+                    f"Timeline-Clip {index} fehlt beim Segmentbeleg"
+                )
+            try:
+                source_in, source_out = _get_clip_source_range(clip)
+            except ValueError as exc:
+                raise ValueError(f"Timeline-Clip {index}: {exc}") from exc
+
+            source_identity = os.path.normcase(
+                os.path.normpath(os.path.abspath(source_path))
+            )
+            source_in_microseconds = round(source_in * 1_000_000)
+            source_out_microseconds = round(source_out * 1_000_000)
+            duration_microseconds = source_out_microseconds - source_in_microseconds
+            timeline_end_microseconds = (
+                timeline_cursor_microseconds + duration_microseconds
+            )
+            segments.append({
+                "index": index,
+                "source_path_sha256": hashlib.sha256(
+                    source_identity.encode("utf-8")
+                ).hexdigest(),
+                "source_in_seconds": source_in,
+                "source_out_seconds": source_out,
+                "timeline_start_seconds": timeline_cursor_microseconds / 1_000_000,
+                "timeline_end_seconds": timeline_end_microseconds / 1_000_000,
+            })
+            timeline_cursor_microseconds = timeline_end_microseconds
+
+        canonical_segments = json.dumps(
+            segments,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        manifest = {
+            "schema_version": 1,
+            "job_id": self.job_token,
+            "run_id": self.run_id,
+            "timeline_sha256": hashlib.sha256(canonical_segments).hexdigest(),
+            "segments": segments,
+        }
+        content = json.dumps(
+            manifest, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False
+        ) + "\n"
+        self._create_evidence_file_atomic(manifest_path, content)
+        return manifest_path
 
     def _append_render_progress_evidence(self, progress_block: str) -> None:
         """Flush complete progress blocks to this run's exclusive evidence path."""
@@ -1717,6 +1839,23 @@ class RenderService:
             evidence_file.write(content)
             evidence_file.flush()
             os.fsync(evidence_file.fileno())
+
+    @staticmethod
+    def _create_evidence_file_atomic(path: Path, content: str) -> None:
+        """Publish a durable evidence file atomically without replacing prior data."""
+        temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+        temporary_created = False
+        try:
+            with temporary_path.open("x", encoding="utf-8", newline="") as stream:
+                temporary_created = True
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.rename(temporary_path, path)
+        except Exception:
+            if temporary_created:
+                temporary_path.unlink(missing_ok=True)
+            raise
 
     def _persist_validation_evidence(
         self,

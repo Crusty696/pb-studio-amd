@@ -25,7 +25,11 @@ def _service_without_media_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         lambda *args, **kwargs: {"duration_seconds": 1.0},
     )
     monkeypatch.setattr(service, "_normalize_clips", lambda *args, **kwargs: [])
-    monkeypatch.setattr(service, "_generate_concat_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        service,
+        "_generate_concat_file",
+        lambda _clips, list_path: Path(list_path).write_text("", encoding="utf-8"),
+    )
     return service
 
 
