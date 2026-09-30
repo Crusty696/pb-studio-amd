@@ -337,9 +337,14 @@ def _set_video_audio_key_outcome(
 
 
 def _derive_video_analysis_status(stage_status: dict[str, str]) -> str:
+    # audio_key "unavailable" means the file has no audio track (a detector
+    # fault is recorded as "failed", see _set_video_audio_key_outcome). That is
+    # a property of the media, not a missing analysis — same rule as
+    # pacing_router._CAPABILITY_OPTIONAL_STAGES.
     failed = any(
         status in {"partial", "failed", "interrupted", "unavailable"}
-        for status in stage_status.values()
+        for stage, status in stage_status.items()
+        if not (stage == "audio_key" and status == "unavailable")
     )
     if not failed:
         return "completed"
@@ -354,6 +359,9 @@ def _video_analysis_status(data: Optional[dict], legacy_is_analyzed: bool = Fals
         or payload.get("_analysis_status")
         or payload.get("status")
     )
+    if status == "partial" and payload.get("stage_status"):
+        # Rows persisted before the audio_key rule above stay "partial" on disk.
+        return _derive_video_analysis_status(dict(payload["stage_status"]))
     if status in VIDEO_ANALYSIS_STATES:
         return str(status)
     return "completed" if legacy_is_analyzed else "unavailable"
