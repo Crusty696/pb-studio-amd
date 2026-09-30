@@ -21,7 +21,6 @@ import pytest
 
 PROJEKT_WURZEL = Path(__file__).resolve().parents[1]
 MAIN_PY = PROJEKT_WURZEL / "backend" / "main.py"
-ARBITER_PY = PROJEKT_WURZEL / "src" / "pb_studio" / "core" / "vram_arbiter.py"
 
 
 def _get_vram_manager_aufrufe_mit_monitor(quelle: Path) -> list[int]:
@@ -57,11 +56,7 @@ def test_arbiter_bleibt_der_einzige_andere_monitor_produzent():
     ist zu klären, welcher gewinnt: Der Manager ist ein Singleton und übernimmt
     einen nachgereichten Monitor nur, solange noch keiner gesetzt ist.
     """
-    quellen = [
-        p
-        for p in (PROJEKT_WURZEL / "src").rglob("*.py")
-        if "ui_legacy_archived" not in p.parts
-    ]
+    quellen = list((PROJEKT_WURZEL / "src").rglob("*.py"))
     quellen += list((PROJEKT_WURZEL / "backend").rglob("*.py"))
 
     produzenten = {
@@ -70,10 +65,7 @@ def test_arbiter_bleibt_der_einzige_andere_monitor_produzent():
         if _get_vram_manager_aufrufe_mit_monitor(p)
     }
 
-    assert produzenten == {
-        "backend/main.py",
-        "src/pb_studio/core/vram_arbiter.py",
-    }, f"Unerwartete Monitor-Produzenten: {sorted(produzenten)}"
+    assert produzenten == {"backend/main.py"}, f"Unerwartete Monitor-Produzenten: {sorted(produzenten)}"
 
 
 def test_sensor_gegencheck_existiert_und_faellt_offen_aus():

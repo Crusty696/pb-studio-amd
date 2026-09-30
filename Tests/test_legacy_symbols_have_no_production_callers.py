@@ -12,8 +12,7 @@ allein seine `generate_timeline`-Orchestrierung.
 
 Der Scan arbeitet ueber den AST und zaehlt nur echte Namens- und
 Attributzugriffe. Erwaehnungen in Kommentaren und Docstrings zaehlen nicht -
-`VideoGenerator` kommt in `advanced_pacing_engine` 13-mal in Prosa vor und
-kein einziges Mal als Aufruf.
+Ein Name kann in Prosa oft vorkommen und trotzdem nie als Aufruf.
 
 Wird eine Einheit reaktiviert, gehoert ihr Eintrag hier entfernt - und mit ihm
 der LEGACY-Vermerk im Modul. Wird sie geloescht, ebenfalls.
@@ -28,26 +27,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # symbol -> (definierendes Modul, Begruendung)
 LEGACY_SYMBOLS: dict[str, tuple[str, str]] = {
-    "AnalysisService": (
-        "src/pb_studio/services/analysis_service.py",
-        "PyQt-Ära; einziger Importeur ist ui_legacy_archived",
-    ),
-    "GenerationService": (
-        "src/pb_studio/services/generation_service.py",
-        "PyQt-Ära; haelt als einzige den SyncMode-Planer und VideoGenerator am Leben",
-    ),
-    "MediaService": (
-        "src/pb_studio/services/media_service.py",
-        "PyQt-Ära; einziger Importeur ist ui_legacy_archived",
-    ),
-    "VideoGenerator": (
-        "src/pb_studio/video/engine.py",
-        "nur von GenerationService instanziiert; der reale Renderpfad ist RenderService",
-    ),
-    "VRAMArbiter": (
-        "src/pb_studio/core/vram_arbiter.py",
-        "0 Produktionsaufrufer; vram_budget_manager.py:364 haelt das im Kommentar fest",
-    ),
     "VideoEmbedder": (
         "src/pb_studio/video/video_embedder.py",
         "abgeloest durch den registrierten SigLIP-ONNX-Pfad; nur die Konstanten werden gelesen",
@@ -59,7 +38,7 @@ LEGACY_SYMBOLS: dict[str, tuple[str, str]] = {
 }
 
 PRODUCTION_DIRS = ("src/pb_studio", "backend")
-EXCLUDED_PARTS = ("ui_legacy_archived", "__pycache__", "archive")
+EXCLUDED_PARTS = ("__pycache__", "archive")
 
 
 def _production_files() -> list[Path]:
@@ -99,8 +78,7 @@ def test_legacy_symbol_has_no_production_caller(symbol: str) -> None:
     owner_path = (ROOT / owner).resolve()
     assert owner_path.exists(), f"Definierendes Modul fehlt: {owner}"
 
-    # Verweise ZWISCHEN Legacy-Modulen zaehlen nicht: GenerationService
-    # instanziiert VideoGenerator, ist aber selbst tot. Beide verschwinden
+    # Verweise ZWISCHEN Legacy-Modulen zaehlen nicht: sie verschwinden
     # gemeinsam oder gar nicht.
     legacy_owners = {
         (ROOT / owner_rel).resolve()

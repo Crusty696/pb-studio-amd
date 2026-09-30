@@ -5,7 +5,6 @@ This module provides core infrastructure for GPU resource management.
 
 Components:
 - VRAMBudgetManager: Central VRAM allocation and tracking
-- VRAMArbiter: Legacy interface (uses BudgetManager internally)
 - ModelLoader: VRAM-aware model loading
 - SystemMonitor: Hardware monitoring via LibreHardwareMonitor
 - TaskQueue: Priority-based task scheduling
@@ -20,7 +19,6 @@ from pb_studio.core.directml_adapter import (
     get_directml_adapter,
     get_directml_provider,
 )
-from pb_studio.core.vram_arbiter import VRAMArbiter
 from pb_studio.core.vram_budget_manager import (
     VRAMBudgetManager,
     ModelPriority,
@@ -63,7 +61,6 @@ __all__ = [
     "get_directml_provider",
 
     # VRAM Management
-    "VRAMArbiter",
     "VRAMBudgetManager",
     "ModelPriority",
     "VRAMContext",
