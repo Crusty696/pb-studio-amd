@@ -21,7 +21,7 @@ import numpy as np
 @dataclass
 class CutContext:
     """Quantised context for a single cut (used as backoff key prefix)."""
-    section_type: str = "transition"      # intro|verse|build|drop|break|outro|transition
+    section_type: str = "transition"      # intro|verse|build|drop|break|outro|transition|section
     subtrack_position: str = "middle"     # start|middle|end
     audio_energy_level: str = "medium"    # low|medium|high
     audio_mood: str = "neutral"           # dark|neutral|uplifting

@@ -500,7 +500,13 @@ def _canonical_segment(value: Any) -> str:
         "bridge": "transition",
     }
     canonical = aliases.get(raw, raw)
-    allowed = {"intro", "verse", "build", "drop", "break", "outro", "transition"}
+    # "section" is the long-mix structure path's neutral label (energy change
+    # without semantic evidence, commit 8fe5604). Folding it into "transition"
+    # filed 2872 of 2889 cuts of a 55-min mix under the transition context
+    # although no transition was detected (T013, 2026-09-30).
+    allowed = {
+        "intro", "verse", "build", "drop", "break", "outro", "transition", "section",
+    }
     return canonical if canonical in allowed else "transition"
 
 
