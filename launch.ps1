@@ -112,7 +112,14 @@ $ProjectRoot = $PSScriptRoot
 $BackendPort = 8765
 $BackendHost = '127.0.0.1'
 $HealthCheckUrl = "http://${BackendHost}:${BackendPort}/health"
-$MaxStartupWaitSeconds = 90
+# 90 s reichten nicht mehr (2026-09-30: Recovery-Bootstrap mit grossem Projekt
+# brauchte ~80 s vor dem ersten Log; der Launcher beendete das Backend mitten im
+# Start). Ein Abbruch im Start ist riskanter als Warten, daher 300 s Default,
+# ueberschreibbar per PBSTUDIO_BACKEND_START_TIMEOUT (Sekunden, 30..1800).
+$MaxStartupWaitSeconds = 300
+if ($env:PBSTUDIO_BACKEND_START_TIMEOUT -match '^\d+$') {
+    $MaxStartupWaitSeconds = [Math]::Min(1800, [Math]::Max(30, [int]$env:PBSTUDIO_BACKEND_START_TIMEOUT))
+}
 $startedBackend = $false
 $backendProcess = $null
 $backendWasAlreadyRunning = $false
