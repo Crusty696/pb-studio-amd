@@ -137,6 +137,51 @@
   der 64-Token-Diagnose-Request gilt ausdrücklich nicht als Produktfehlerbeweis.
   T003, Canary und Bulk bleiben bis zum isolierten App-Lauf gesperrt.
 
+## 2026-08-09 - OBJ-75 Offene Bugfixes (PR #28)
+
+### Fixed
+- Chat-Tool/Projekt-Race: Toolaufrufe sind über den vollständigen Stream- und
+  Tool-Turn an eine projektgebundene Capability gebunden; ein Epochwechsel
+  bricht mit eindeutigem 409/SSE-Fehler ab, History bleibt am initialen
+  Projekt-Key.
+- Projector-Replay: stabile Projekt-/Event-UUIDs, Pending-Events, Checkpoints
+  und exactly-once Publish.
+- Cache-/Embedding-Recovery: immutable, hashgeprüfte Generationen mit
+  Startup-Gate und Owner-Adapter; dirty Owner-Generationen konvergieren.
+- Brain-UI: Feedback-Retries auf das jeweilige Projekt begrenzt.
+
+### Verified
+- Breite Python-Bestandsaufnahme 1450 passed / 13 skipped (ein
+  `BrokenBarrierError` im T412-Last-Harness; Root-Cause-Konvergenz danach 3/3,
+  zehn Stressläufe 10/10). Native C# 55/55; WPF Release 0 Warnungen / 0 Fehler.
+- A→B-Live-Smoke und zwei 14-View-GUI-Runden bestanden; Backend regulär beendet
+  (`BACKEND_FORCED=0`).
+- SDD: T001–T053 geschlossen, `.completed` + `.qc-passed` digestgebunden
+  (`specs/00020-obj75-open-bug-fixes`).
+
+### Offen
+- Ein zweiter 17-Minuten-Gesamtlauf wurde auf Nutzerentscheidung nicht
+  ausgeführt; der Bericht behauptet keinen nachträglich grünen Gesamtlauf,
+  sondern die TR-369/TR-371-Konvergenz.
+
+## 2026-08-09 - OBJ-74 Deep-App-Audit, Resume und Pacing (PR #25, #26)
+
+### Fixed
+- Resume und Long-Mix-Checkpoint, Pacing-Provenienz, Lifecycle-Fixcluster und
+  Branch-Konvergenz (nur `main`, `origin/main` und Delivery-Branch, keine
+  Altrefs).
+
+### Verified
+- Python 1371 PASS / 13 SKIP / 0 FAIL; Native C# 54/54; WPF Release 0/0;
+  OpenAPI-Snapshot 4/4; Live-API Resume/Unterbruch PASS; GUI/UIA 14/14.
+- Unabhängiger Diff-Review ohne CRITICAL/HIGH/MEDIUM-Codebefund; keine
+  Migration, keine Dependency-Änderung, `separator.py` unverändert (LOCKED).
+
+### Restgrenzen
+- Keine Partial-Checkpoints je Stem-Datei innerhalb eines abgebrochenen
+  Separationslaufs; `test_20s.mp4` meldet ehrlich `partial`
+  (SigLIP-Frame-Read), der Retry-Beleg nutzt `test_12s.mp4`.
+
 ## 2026-08-08 - OBJ-73 Release-Gate-Remediation
 
 ### Fixed
