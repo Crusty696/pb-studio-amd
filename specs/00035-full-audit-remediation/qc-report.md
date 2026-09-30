@@ -1,5 +1,16 @@
 # QC Report — PB Studio Full Audit Remediation
 
+## Session 2026-09-30 (Nachfolge nach hängender Session)
+
+- **T013 PASS:** API-Volllauf plus WPF-GUI-Lauf per UI Automation (Öffnen, Ordner-Import 5/5, Analyse 5/5, Speichern, Beenden, Neustart, Wiederöffnen identisch, Vorschau 10 s 300 Frames + Stereo-AAC). `evidence/t013-gui-20260930.md`. Keine Screenshots (Anzeige nicht aktualisiert), keine Maus-Bedienung (Computer-Use-Freigabe nicht bestätigbar).
+- **Launcher-Defekt behoben:** `launch.ps1` beendete ein noch startendes Backend nach 90 s. Jetzt 300 s (env-override 30–1800). `Tests/test_launch_backend_start_timeout.py`: 2 passed; Gegenprobe ohne Fix 2 failed; PowerShell-Parser 0 Fehler; realer Start danach erfolgreich (Backend 24 s). Nicht 3× script-validiert (Skill nicht verfügbar).
+- **Befund #2 geschlossen durch Reproduktion** in voller Länge (98.984/98.984, unabhängiges ffprobe). `evidence/finding02-weightsdb-20260930.md`.
+- **weights.db:** alle Kopien `integrity_check ok`; beschädigte Fassung existiert nicht mehr (App-Neuaufbau 30.09. 00:54). Backup `brain_backup_20260930_0700`. Keine Reparatur nötig.
+- **T014:** Policy entschieden (LM Studio Vulkan zulässig, ROCm verboten); Live-Tagging + Sichtprüfung dokumentiert; menschliche Bewertung offen.
+- **T003:** keine unabhängigen Zeitmarken auf dem Rechner/im Web gefunden; Vorlage für David angelegt. Offen.
+- Kein `.completed` (T003/T014 offen).
+- Neue kleinere Befunde (nicht behoben): Statuszeile „LLM: Keines (Moondream-Fallback)“ trotz aktivem `qwen3.5-9b`; Checkbox-Label „Tags & Farben (Moondream)“; langsamer Recovery-Bootstrap/Shutdown-Snapshot (80 s / 2,5 min, `degraded=400`) nach großem Projekt.
+
 ## Finding 54 / Original Audit P03 Disposition — 2026-09-29
 
 - Source audit P03 withdrew the claimed semantic-switch bypass after review of `PacingService._resolve_semantic_audio` and the service call path. Master finding 54 maps to that withdrawn claim.

@@ -1,0 +1,248 @@
+﻿Tab |  | 
+  TabItem |  | PROJEKT
+    Text |  | PROJEKT
+  TabItem |  | AUDIO
+    Text |  | AUDIO
+  TabItem |  | VIDEO
+    Text |  | VIDEO
+  TabItem |  | KI-REGIE
+    Text |  | KI-REGIE
+  TabItem |  | TIMELINE
+    Text |  | TIMELINE
+  TabItem |  | EXPORT
+    Text |  | EXPORT
+  TabItem |  | HIRN
+    Text |  | HIRN
+  TabItem |  | SETTINGS
+    Text |  | SETTINGS
+  TabItem |  | PERFORMANCE
+    Text |  | PERFORMANCE
+  TabItem |  | MODELLE
+    Text |  | MODELLE
+  TabItem |  | CHAT
+    Text |  | CHAT
+  TabItem |  | TERMINAL
+    Text |  | TERMINAL
+  TabItem |  | INGEST
+    Text |  | INGEST
+  TabItem |  | ANCHOR
+    Text |  | ANCHOR
+  Custom |  | 
+    Custom |  | Video-Bibliothek
+      Button |  | Video-Dateien importieren
+        Text |  | Dateien importieren
+      Button |  | Video-Ordner importieren
+        Text |  | Ordner importieren
+      Button |  | Ausgew├ñhlten Video-Clip analysieren
+        Text |  | Analysieren
+      Button |  | Alle Video-Clips analysieren
+        Text |  | Alle analysieren
+      Button |  | Ausgew├ñhlte Video-Clips analysieren
+        Text |  | Auswahl analysieren
+      CheckBox |  | Szenen
+        Text |  | Szenen
+      CheckBox |  | Bewegung (RAFT)
+        Text |  | Bewegung (RAFT)
+      CheckBox |  | Bild-Inferenz (SigLIP)
+        Text |  | Bild-Inferenz (SigLIP)
+      CheckBox |  | Tags & Farben (Moondream)
+        Text |  | Tags & Farben (Moondream)
+      Button |  | Alle Video-Clips markieren
+        Text |  | _Alle markieren
+      Text |  | Lade Bibliothek...
+      Button |  | Ausgew├ñhlte Video-Clips l├Âschen
+        Text |  | Auswahl loeschen
+      Button |  | Alle Video-Clips l├Âschen
+        Text |  | Alle loeschen
+      Text |  | Sortierung:
+      ComboBox |  | Video-Clips sortieren
+      Text |  | Ô£ô 61
+      Text |  | Offen: 0
+      ProgressBar |  | 
+      Text |  | ThumbnailsÔÇª
+      List | VideoClipList | Video-Clip-Liste
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | test_8s
+          Text |  | 00:08
+          Text |  |   |  
+          Text |  | 1280x720
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | test_5s
+          Text |  | 00:05
+          Text |  |   |  
+          Text |  | 1280x720
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | test_20s
+          Text |  | 00:20
+          Text |  |   |  
+          Text |  | 1280x720
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | test_12s
+          Text |  | 00:12
+          Text |  |   |  
+          Text |  | 1280x720
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | test_10s
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 1280x720
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_0955_Tribal_Goddess_Journey_gen_01jy8ykn47evzvc2caky01ts0m
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_0907_Gothic_Tribal_Goddess_Journey_gen_01jy8vwckxeaa8mgf447zv8z3s
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_0814_Gothic_Tribal_Journey_gen_01jy8rvt45e30abe0x8q3wwarf
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_0631_Goddess_Dance_Monolith_gen_01jy8jxwhdfnesm29pvq13kc0p
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_0258_Gothic_Dance_Magic_gen_01jy86rvy3f85a6a9f2h4q360e
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_0212_Mystical_Forest_Dance_gen_01jy844s1df83rfbasagzfvnb9
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250620_2145_Mystical_Chamber_Dance_gen_01jy7mtwzwekybs08930kss8nw
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 2025-06-25T22.19.31_1
+          Text |  | 00:08
+          Text |  |   |  
+          Text |  | 1280x720
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_1206_Gothic_Tribal_Goddess_gen_01jy964kqke9j9tdrbbfhj0mr5
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_1149_Barefoot_Tribal_Goddess_gen_01jy953z0teebvzcgm4by9v3rk
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_1106_Mystical_Jungle_Dance_gen_01jy92pn20fhnv1ftbjd1zeq5t
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_1059_Goddess_Jungle_Journey_gen_01jy929ahte2q871qjcv4mghdq
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_1037_Gothic_Tribal_Enchantment_gen_01jy91056ye55b1dbvpcct6zfe
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_1025_Goddess's_Mystical_Journey_gen_01jy90ajeafykr93wk2qhap24v
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+        ListItem |  | PBStudio.UI.Models.VideoClipModel
+          Image |  | 
+          Text |  | CACHED
+          Text |  | ANALYSIERT
+          CheckBox |  | 
+          Text |  | 20250621_1017_Gothic_Tribal_Goddess_Odyssey_gen_01jy8zwp5efw6rb7dhz4chqheq
+          Text |  | 00:10
+          Text |  |   |  
+          Text |  | 854x480
+      Text |  | CLIP DETAILS
+      Text |  | SCENE ANALYSIS
+      List |  | Szenen des ausgew├ñhlten Video-Clips
+      Text |  | 61 Clips geladen
+screenshot C:\Users\david\AppData\Local\Temp\v.png

@@ -1,0 +1,66 @@
+﻿items: 1
+Tab |  | 
+  TabItem |  | PROJEKT
+    Text |  | PROJEKT
+  TabItem |  | AUDIO
+    Text |  | AUDIO
+  TabItem |  | VIDEO
+    Text |  | VIDEO
+  TabItem |  | KI-REGIE
+    Text |  | KI-REGIE
+  TabItem |  | TIMELINE
+    Text |  | TIMELINE
+  TabItem |  | EXPORT
+    Text |  | EXPORT
+  TabItem |  | HIRN
+    Text |  | HIRN
+  TabItem |  | SETTINGS
+    Text |  | SETTINGS
+  TabItem |  | PERFORMANCE
+    Text |  | PERFORMANCE
+  TabItem |  | MODELLE
+    Text |  | MODELLE
+  TabItem |  | CHAT
+    Text |  | CHAT
+  TabItem |  | TERMINAL
+    Text |  | TERMINAL
+  TabItem |  | INGEST
+    Text |  | INGEST
+  TabItem |  | ANCHOR
+    Text |  | ANCHOR
+  Custom |  | 
+    Custom |  | Audio-Bibliothek
+      Text |  | AUDIO-CLIPS
+      Button |  | Audio-Dateien importieren
+        Text |  | Dateien
+      Button |  | Audio-Ordner importieren
+        Text |  | Ordner
+      Button |  | Alle Audio-Clips markieren
+        Text |  | _Alle markieren
+      Button |  | Audio-Auswahl aufheben
+        Text |  | _Keine
+      Button |  | Markierte Audio-Clips l├Âschen
+        Text |  | Markierte loeschen
+      Button |  | Alle Audio-Clips l├Âschen
+        Text |  | Alle loeschen
+      Button |  | Alle Audio-Clips analysieren
+        Text |  | Alle analysieren
+      List | AudioClipList | Audio-Clip-Liste
+        ListItem |  | PBStudio.UI.Models.AudioClipModel
+          Text |  | Progressive Psy Summer Dream mix  by Crusty Free download
+          Text |  | CACHED
+      Button |  | Ausgew├ñhlten Audio-Clip analysieren
+        Text |  | Analysieren
+      Button |  | Stems des ausgew├ñhlten Audio-Clips trennen
+        Text |  | Stems trennen
+      Edit |  | Audio-Status
+      Text |  | ANALYSE-ERGEBNISSE
+      Text |  | TEMPO
+      Text |  | 136.4
+      Text |  |  BPM
+      Text |  | TONART
+      Text |  | E minor
+      Text |  | BEATS ERKANNT
+      Text |  | 7401
+      Text |  | DAUER
+      Text |  | 54:59

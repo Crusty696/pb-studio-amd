@@ -1,0 +1,14 @@
+# T003 Referenzmarken – Vorlage fuer David
+# Mix: E:\02_Musik_&_Medien\Musik_&_Audio\Audio_Clips\Psy-Set\Progressive Psy Summer Dream mix  by Crusty Free download.wav
+# Dauer 3299,46 s (54:59). Bitte pro Trackwechsel EINE Zeile: Sekunden ab Mixbeginn,
+# optional danach Tab + Titel. Zeilen mit # werden ignoriert.
+# Als Wechselzeitpunkt gilt der Moment, ab dem der neue Track fuehrt (nicht der Beginn des Blends).
+# Optional Tonart je Track als dritte Spalte (z.B. "F#m"), dann kann auch die Tonart geprueft werden.
+#
+# Beispiel:
+# 0	Track 1 Titel	F#m
+# 245	Track 2 Titel	Am
+#
+# Ablage danach: Datei neben die WAV legen als
+#   "Progressive Psy Summer Dream mix  by Crusty Free download.boundaries.txt"
+# oder hier im Repo lassen und Claude Bescheid geben.

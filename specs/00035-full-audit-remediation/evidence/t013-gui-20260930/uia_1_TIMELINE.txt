@@ -1,0 +1,365 @@
+﻿Tab |  | 
+  TabItem |  | PROJEKT
+    Text |  | PROJEKT
+  TabItem |  | AUDIO
+    Text |  | AUDIO
+  TabItem |  | VIDEO
+    Text |  | VIDEO
+  TabItem |  | KI-REGIE
+    Text |  | KI-REGIE
+  TabItem |  | TIMELINE
+    Text |  | TIMELINE
+  TabItem |  | EXPORT
+    Text |  | EXPORT
+  TabItem |  | HIRN
+    Text |  | HIRN
+  TabItem |  | SETTINGS
+    Text |  | SETTINGS
+  TabItem |  | PERFORMANCE
+    Text |  | PERFORMANCE
+  TabItem |  | MODELLE
+    Text |  | MODELLE
+  TabItem |  | CHAT
+    Text |  | CHAT
+  TabItem |  | TERMINAL
+    Text |  | TERMINAL
+  TabItem |  | INGEST
+    Text |  | INGEST
+  TabItem |  | ANCHOR
+    Text |  | ANCHOR
+  Custom |  | 
+    Custom |  | Timeline
+      Button |  | Timeline laden
+        Text |  | Timeline _laden
+      Button |  | Vorherigen Cut auswõhlen
+        Text |  | _Zur³ck
+      Button |  | Nõchsten Cut auswõhlen
+        Text |  | _Weiter
+      Separator |  | 
+      Slider |  | Horizontaler Timeline-Zoom
+        Button | DecreaseLarge | 
+        Button | IncreaseLarge | 
+        Thumb |  | 
+      Separator |  | 
+      CheckBox |  | Wellenform anzeigen
+        Text |  | Wellen_form
+      CheckBox |  | Beatgrid anzeigen
+        Text |  | _Beatgrid
+      Separator |  | 
+      Text |  | ab
+      Edit |  | Vorschau-Startsekunde
+      Text |  | s À 
+      Text |  | Dauer
+      Edit |  | Vorschau-Dauer
+      Text |  | s
+      Button |  | Vorschau rendern
+        Text |  | _Vorschau rendern
+      Edit |  | Timeline-Status
+      Text |  | 
+      Text |  | Dauer: 3299.5s
+      Text |  | 2889 Clips
+      ProgressBar |  | Wellenform wird geladen
+      Text |  | Wellenform wird geladen à
+      Text |  | MOTION
+      List |  | 
+        DataItem |  | 59.40592575073242
+        DataItem |  | 39.230247497558594
+        DataItem |  | 113.49884033203125
+        DataItem |  | 174.6850128173828
+        DataItem |  | 189.6275634765625
+        DataItem |  | 44.07881546020508
+        DataItem |  | 37.131675720214844
+        DataItem |  | 27.836639404296875
+        DataItem |  | 39.00947189331055
+        DataItem |  | 66.95652770996094
+        DataItem |  | 38.756099700927734
+        DataItem |  | 47.82875061035156
+        DataItem |  | 57.445274353027344
+        DataItem |  | 49.582637786865234
+        DataItem |  | 43.85712814331055
+        DataItem |  | 40.937992095947266
+        DataItem |  | 35.82889175415039
+        DataItem |  | 26.12687110900879
+        DataItem |  | 27.63933753967285
+      Text |  | CLIP PREVIEW
+      Custom | PreviewPlayer | 
+      Button |  | Clip-Vorschau starten
+        Text |  | _Start
+      Button |  | Clip-Vorschau pausieren
+        Text |  | _Pause
+      Button |  | Clip-Vorschau stoppen
+        Text |  | St_oppen
+      Text | PreviewStatusText | Bereit: 20250621_1206_Gothic_Tribal_Goddess_gen_01jy964kqke9j9tdrbbfhj0mr5.mp4
+      Text |  | Clip 00:04 - 00:05
+      Text |  | SELEKTIERTER CUT
+      Pane |  | 
+        Text |  | 20250621_1206_Gothic_Tribal_Goddess_gen_01jy964kqke9j9tdrbbfhj0mr5
+        Text |  | ZEITRAUM
+        Text |  | 00:00 - 00:01
+        Text |  | CLIP-IN
+        Text |  | 4.41s
+        Text |  | TRIGGER
+        Text |  | kick (0.80)
+        Text |  | DATEI
+        Edit |  | Ausgewõhlter Clip-Dateipfad
+        Edit |  | Ausgewõhlte Timeline-Evidenz
+      DataGrid | TimelineSummaryList | Timeline-Cut-Liste
+        Header | PART_GridViewHeaderRowPresenter | 
+          HeaderItem |  | Clip
+            Thumb | PART_HeaderGripper | 
+            Text |  | Clip
+          HeaderItem |  | Zeitraum
+            Thumb | PART_HeaderGripper | 
+            Text |  | Zeitraum
+          HeaderItem |  | Trigger
+            Thumb | PART_HeaderGripper | 
+            Text |  | Trigger
+          HeaderItem |  | Dauer
+            Thumb | PART_HeaderGripper | 
+            Text |  | Dauer
+        DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+          Text |  | 20250621_1206_Gothic_Tribal_Goddess_gen_01jy964kqke9j9tdrbbfhj0mr5
+          Text |  | 00:00 - 00:01
+          Text |  | kick
+          Text |  | 1.31s
+        DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+          Text |  | gemini_generated_video_450131b0
+          Text |  | 00:01 - 00:03
+          Text |  | kick
+          Text |  | 1.91s
+        DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+          Text |  | 20250621_0212_Mystical_Forest_Dance_gen_01jy844s1df83rfbasagzfvnb9
+          Text |  | 00:03 - 00:04
+          Text |  | subtrack
+          Text |  | 1.38s
+        DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+          Text |  | 20250621_1011_Goddess_in_Mystical_Jungle_gen_01jy8zhhgnfwat7pdsmqe9vdfn
+          Text |  | 00:04 - 00:05
+          Text |  | kick
+          Text |  | 1.22s
+        DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+          Text |  | 20250614_0301_Enchanted_Stone_Circle_gen_01jxp655zreg3rnat5avndse4g
+          Text |  | 00:05 - 00:06
+          Text |  | kick
+          Text |  | 1.16s
+      Thumb |  | 
+      Text |  | V1
+      Text |  | A1
+      Pane | LanesScrollViewer | Interaktive Timeline-Spuren
+        List |  | 
+        List | TimelineItemsControl | 
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250621_1206_Gothic_Tribal_Goddess_gen_01jy964kqke9j9tdrbbfhj0mr5
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+            Text |  | gemini_generated_video_450131b0
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250621_0212_Mystical_Forest_Dance_gen_01jy844s1df83rfbasagzfvnb9
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250621_1011_Goddess_in_Mystical_Jungle_gen_01jy8zhhgnfwat7pdsmqe9vdfn
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250614_0301_Enchanted_Stone_Circle_gen_01jxp655zreg3rnat5avndse4g
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250621_1025_Goddess's_Mystical_Journey_gen_01jy90ajeafykr93wk2qhap24v
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250614_0432_Enchanted_Fairy_Dance_gen_01jxpbbmstf6q9f56jxaep5m6a
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250614_0409_Neon_Shadows_Dance_gen_01jxpa1b09fy6t75shwek8cjyh
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250621_1106_Mystical_Jungle_Dance_gen_01jy92pn20fhnv1ftbjd1zeq5t
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 1 (38)
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+              DataItem |  | System.Windows.Media.Imaging.BitmapImage
+                Image |  | 
+            Text |  | 20250614_0309_Mystical_Mirror_Dance_gen_01jxp6me8tefqabn8694bj40qy
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+            Text |  | 20250614_0156_Mystical_Jungle_Dance_gen_01jxp2ek5yfx2v9x13kx0shvjm
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+            Text |  | 20250621_1017_Gothic_Tribal_Goddess_Odyssey_gen_01jy8zwp5efw6rb7dhz4chqheq
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+            Text |  | gemini_generated_video_188c9095
+          DataItem |  | PBStudio.UI.Models.TimelineEntryModel
+            List |  | 
+            Text |  | gemini_generated_video_9821016f
+        List |  | 
+        List |  | 
+        List |  | 
+        ScrollBar | HorizontalScrollBar | 
+          Button | PART_LineLeftButton | 
+          Button | PageLeft | 
+          Button | PageRight | 
+          Thumb |  | 
+          Button | PART_LineRightButton | 
+screenshot C:\Users\david\AppData\Local\Temp\t013_TIMELINE.png

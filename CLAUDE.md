@@ -39,6 +39,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 
 ## 2. ⚠️ IRON RULES (NEVER OVERRIDE)
 1. **AMD DIRECTML ONLY:** NO CUDA, NO ROCm. Use `onnxruntime-directml`.
+   **Einzige Ausnahme (User-Entscheid 2026-09-30, Spec 00035 T014):** LLM/VLM-Inferenz über LM Studio mit der **Vulkan**-Runtime (`llama.cpp-win-x86_64-vulkan-*`) auf der RX 7800 XT ist zulässig (z. B. `qwen3.5-9b`, Apache-2.0). ROCm bleibt auch dort verboten (auch Ollama-ROCm); alle ONNX-Pfade bleiben DirectML.
 2. **DIRECTML PATTERN:** `enable_mem_pattern = False` AND `enable_cpu_mem_arena = False` (BOTH MANDATORY).
 3. **PYTHON & NUMPY:** Python 3.11.x | NumPy 1.26.4 (< 2.0 strict — BeatNet).
 4. **HARDWARE ENCODING:** NO NVENC. Use `h264_amf`, `hevc_amf`, `av1_amf` via FFmpeg.
@@ -86,9 +87,10 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-09-29 (Spec 00035 T017 precision-follow-up abgeschlossen; Master-QC offen)
+- **Date:** 2026-09-30 (Spec 00035: T013 + Befund #2 geschlossen, Launcher-Start-Timeout 90→300 s, weights.db geprüft ok; offen T003 Referenzmarken + T014 menschliche Caption-Bewertung, daher kein `.completed`)
 - **Current Status (2026-09-29, latest isolated run):** T016 echter 337.176-s AMF-Export: -1.58 dBTP, 10,115/10,115 Frames, vollständiger Decode. T017 atomisches, redigiertes Segmentmanifest mit Hashbindung, konsistenten Mikrosekunden-Grenzen und SHA-256 der exakten Concat-Eingabeliste im Run-Beleg. Aktuelle isolierte Python-Vollsuite: 1,958 passed/13 skipped/0 failed/35 warnings in 1,766.58 s; JUnit: `%TEMP%\pb00035-health-full-16ad412326064e45bfb5982c31abf239\pytest-results.xml`. Finding-54 Dispositionsregression separat 1/1. Separate echte AMF-Integration 899/899 Frames, −11.72 dBTP, unabhängiger Full-Decode; physische RX 7800 XT/DirectML/LHM-Probe 1/1. C# 80/80; WPF Release-Build 0 Warnungen/Fehler. Dies belegt keine interaktive GUI-/Projekt-Wiederöffnung.
-- **Next Task:** T003/#34 bleibt ohne unabhängige Zeitcodes/Labels für Mix-Grenzen und Tonart offen. Aktuelle Provider-APIs antworten, aber Ollama und LM Studio melden jeweils 0 geladene Modelle; Ollama-Runtime hatte ROCm ausgewählt und ist damit nicht für DirectML-only-Inferenz freigegeben. T013 GUI/Projekt-Wiederöffnen wartet auf PB Studio-Handover; T014 braucht policy-konforme Inferenz plus menschlich geprüfte Labels. #2 historische Evidenz bleibt nicht wiederherstellbar. Kein `.completed`/`.qc-passed`; kein Release-Claim.
+- **Next Task (2026-09-30):** David liefert Trackwechsel-Zeiten (Vorlage `specs/00035-full-audit-remediation/evidence/t003-referenz-vorlage.boundaries.txt`) und bewertet 12 Caption-Kontaktbögen (`evidence/t014-caption-review-20260930/`); danach T003/T014 auswerten und T012 `.completed`.
+- **Next Task (älter):** T003/#34 bleibt ohne unabhängige Zeitcodes/Labels für Mix-Grenzen und Tonart offen. Aktuelle Provider-APIs antworten, aber Ollama und LM Studio melden jeweils 0 geladene Modelle; Ollama-Runtime hatte ROCm ausgewählt und ist damit nicht für DirectML-only-Inferenz freigegeben. T013 GUI/Projekt-Wiederöffnen wartet auf PB Studio-Handover; T014 braucht policy-konforme Inferenz plus menschlich geprüfte Labels. #2 historische Evidenz bleibt nicht wiederherstellbar. Kein `.completed`/`.qc-passed`; kein Release-Claim.
 - **Historischer Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
   Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
   Regressionstest und ausgeführter Gegenprobe (Fix zurückgerollt, Test fällt).

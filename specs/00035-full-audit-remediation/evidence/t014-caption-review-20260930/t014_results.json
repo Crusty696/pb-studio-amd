@@ -1,0 +1,378 @@
+{
+ "lmstudio_loaded": [
+  [
+   "qwen3.5-9b",
+   "vlm",
+   "qwen35",
+   "Q8_0"
+  ]
+ ],
+ "results": [
+  {
+   "media_id": 919,
+   "file": "1 (1).mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "high heels",
+    "blaues licht",
+    "frau",
+    "blondes haar",
+    "dramatische stimmung",
+    "schwarze lederkleidung",
+    "schwarzer glitzer-outfit",
+    "schwarze glitzer-top",
+    "steht in wald",
+    "strumpfhosen"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 2.46,
+   "fresh_tags": [
+    "frau mit blondem haar",
+    "schwarzer glitzer-top",
+    "strümpfe und high heels",
+    "steht im wald",
+    "rücken zur kamera",
+    "gräulich-bläuliches licht",
+    "nebel am boden",
+    "dramatische stimmung"
+   ]
+  },
+  {
+   "media_id": 923,
+   "file": "1 (38).mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "dunkle lippen",
+    "mystische atmosphäre",
+    "person in weißem gewand",
+    "eine frau mit hörnern",
+    "frau mit hörnern",
+    "magische gestik",
+    "leuchtende stäbe",
+    "schwarzes netztop",
+    "durchscheinendes oberteil",
+    "dunkler wald"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 1.66,
+   "fresh_tags": [
+    "eine frau",
+    "dunkle haut",
+    "schwarze brauen",
+    "rote lippen",
+    "hörner auf dem kopf",
+    "durchsichtige weiße flügel",
+    "schwarzer spitzen-bh mit schnüren",
+    "armbänder",
+    "halskette",
+    "geflochtener zopf"
+   ]
+  },
+  {
+   "media_id": 927,
+   "file": "20250608_0333_enchanted_neon_forest_rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "eine frau von hinten",
+    "schwarzes haar",
+    "moosbedeckte bäume",
+    "frau von hinten",
+    "dunkle haare",
+    "schwarze spitze-top mit glitzer",
+    "dunkle kleidung mit glitzerakzenten",
+    "flügelähnliche accessoires",
+    "leuchtende flügel",
+    "kleine leuchtende flügel"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 2.27,
+   "fresh_tags": [
+    "frau von hinten",
+    "schwarze haut",
+    "lange dunkle haare",
+    "schwarzer crop-top mit glitzerpunkten",
+    "violett-lila hintergrundnebel",
+    "mystische",
+    "traumhafte",
+    "futuristische stimmung"
+   ]
+  },
+  {
+   "media_id": 931,
+   "file": "20250612_2103_enchanted_forest_encounter_gen_01jxjz98z7fzcbtjerjgcrsy8j.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "stehend im wasser",
+    "nächtliche atmosphäre",
+    "hornträgerin in schwarzer kleidung",
+    "hornträgerin in schwarzer robe",
+    "hornträgerin",
+    "dunkle haut",
+    "mystisches licht",
+    "arme erhoben",
+    "schwarzes kleid mit spitzenschlitz",
+    "neblige atmosphäre"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 2.27,
+   "fresh_tags": [
+    "hornträgerin",
+    "dunkle haut",
+    "schwarzes kleid",
+    "lange haare",
+    "arme erhoben",
+    "mystische waldszene",
+    "leuchtende pilze",
+    "grünes und lila licht",
+    "nächtliche atmosphäre",
+    "magischer fluss"
+   ]
+  },
+  {
+   "media_id": 935,
+   "file": "20250612_2109_neon_forest_rave_gen_01jxjzjy17ez3t5v8ca6dbka6a.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "frau von hinten",
+    "schwarze haut",
+    "dunkler wald",
+    "eine person",
+    "weiblich",
+    "kurze dunkle haare",
+    "schwarze kleidung mit glitzer",
+    "kurze haare",
+    "schwarzer crop-top mit metallverzierung",
+    "rennt durch wald"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 1.27,
+   "fresh_tags": [
+    "eine person",
+    "weiblich",
+    "schwarze kleidung mit glitzerakzenten",
+    "läuft weg",
+    "dunkler wald",
+    "riesige baumstämme",
+    "neonfarbenes licht",
+    "mystische atmosphäre",
+    "futuristisch-fantastischer stil"
+   ]
+  },
+  {
+   "media_id": 939,
+   "file": "20250614_0254_mystical_temple_dance_gen_01jxp5rzc7e6q9v0z82akw4wgt.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "lange dunkle haare",
+    "moosbedeckte säulen",
+    "zwei frauen",
+    "frau von hinten",
+    "eine frau von hinten",
+    "lange schwarze kleider",
+    "schwarzes kleid",
+    "mystische gesten",
+    "schwarzer fließender mantel",
+    "dichter urwald"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 1.48,
+   "fresh_tags": [
+    "frau von hinten",
+    "dunkles langes haar",
+    "schwarzer fließender mantel",
+    "dämmeriges blaues licht",
+    "grüne moosbedeckung",
+    "neblige atmosphäre",
+    "geheimnisvolle stimmung",
+    "alte säulen",
+    "magische glühquelle"
+   ]
+  },
+  {
+   "media_id": 943,
+   "file": "20250614_0333_mystical_forest_rave_gen_01jxp7zeg8f12bws0qm9n8frhm.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "leuchtende pilze",
+    "digitale kunst",
+    "keine personen",
+    "dunkle baumstämme",
+    "nebliger wald",
+    "grüne stäbe",
+    "dunkler wald",
+    "grüne moosbaldachine",
+    "moosbedeckter waldboden",
+    "grüne moosbedeckung"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 1.05,
+   "fresh_tags": [
+    "wald",
+    "dunkle baumstämme",
+    "leuchtende pilze",
+    "grünes moos",
+    "magische atmosphäre",
+    "nebliger hintergrund",
+    "violette und grüne akzente",
+    "mystisch",
+    "ruhig",
+    "fantastisch"
+   ]
+  },
+  {
+   "media_id": 947,
+   "file": "20250614_0402_neon_reflections_dance_gen_01jxp9kxn7fx4rmg4xc954fw0k.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "mystische atmosphäre",
+    "silhouette-figuren",
+    "nächtliche szenerie",
+    "zwei personen im wasser",
+    "reflektierender mondlichtstreifen",
+    "dunkle kleidung",
+    "futuristische landschaft",
+    "silhouetten in dunklem wasser",
+    "welliges oberflächenmuster",
+    "stehende pose"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 2.42,
+   "fresh_tags": [
+    "silhouettenfiguren",
+    "zwei personen im wasser",
+    "dunkle kleidung",
+    "stehend oder tauchend",
+    "runde welle im vordergrund",
+    "nächtlicher see",
+    "leuchtende blaue uferlinie",
+    "rote akzente am rand",
+    "dunkler himmel",
+    "reflektierendes wasser"
+   ]
+  },
+  {
+   "media_id": 951,
+   "file": "2025-06-25t22.19.31_1.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "nebel",
+    "frau von hinten",
+    "weiches diffuses licht",
+    "mystische atmosphäre",
+    "eine frau",
+    "langes geflochtenes haar",
+    "langhaarig",
+    "langes dunkles haar",
+    "barfuß",
+    "rücken zur kamera"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 1.33,
+   "fresh_tags": [
+    "frau von hinten",
+    "langes dunkles haar",
+    "fließendes kleid in lila-blau-tönen",
+    "rennt durch dichten regenwald",
+    "nebel",
+    "grüne farbdominanz",
+    "mystische atmosphäre",
+    "weiches diffuses licht",
+    "feuchte vegetation",
+    "magischer glanz an pflanzen"
+   ]
+  },
+  {
+   "media_id": 955,
+   "file": "gemini_generated_video_450131b0.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "skelettfigur mit federkranz",
+    "eine frau mit hörnern",
+    "tanzend oder schwebend",
+    "magische gesten",
+    "blauer federhaube",
+    "antike tempelruinen",
+    "leuchtende energiestrahlen",
+    "metallischer rüstung",
+    "dichter dschungel",
+    "verfallene tempelruine"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 1.69,
+   "fresh_tags": [
+    "eine frau mit hörnern",
+    "blau-schwarzer federhaube",
+    "metallischer rüstung",
+    "stehend vor steinportal",
+    "mystische schriftzeichen an wänden",
+    "dichter nebel im hintergrund",
+    "hängende pflanzen",
+    "kühles blau-grün-tonpalett",
+    "düstere atmosphäre",
+    "gotisch-fantastisches ambiente"
+   ]
+  },
+  {
+   "media_id": 959,
+   "file": "20250621_1011_goddess_in_mystical_jungle_gen_01jy8zhhgnfwat7pdsmqe9vdfn.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "mystischer wald",
+    "frau",
+    "kniend",
+    "eine frau",
+    "person",
+    "schwarze kleidung",
+    "dunkles haar in bewegung",
+    "schwarzes haar",
+    "bückt sich",
+    "grünes oberteil mit ärmeln"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 1.33,
+   "fresh_tags": [
+    "eine frau",
+    "kniend",
+    "dunkles haar in bewegung",
+    "grüne oberteile mit ärmeln",
+    "schwarze strumpfhosen mit tattoos",
+    "mystischer wald",
+    "lila und grünes licht",
+    "magische kreise an bäumen",
+    "neblig",
+    "dramatisch"
+   ]
+  },
+  {
+   "media_id": 963,
+   "file": "20250621_1059_goddess_jungle_journey_gen_01jy929ahte2q871qjcv4mghdq.mp4",
+   "stored_source": "qwen3.5-9b",
+   "stored_tags": [
+    "glitzernder bikini",
+    "grüne pflanzen",
+    "eine frau",
+    "frau",
+    "dame",
+    "bauchtanzerin",
+    "person",
+    "bauchtanz-outfit",
+    "bikini mit glitzersteinen",
+    "fließendes tuch"
+   ],
+   "fresh_model": "qwen3.5-9b",
+   "fresh_seconds": 2.44,
+   "fresh_tags": [
+    "frau",
+    "person",
+    "bikini mit glitzersteinen",
+    "fließendes lila-grünes tuch",
+    "barfuß",
+    "schwert in der hand",
+    "wald bei nacht",
+    "helle scheinwerferlichtstrahl",
+    "dunkle atmosphäre",
+    "mystische stimmung"
+   ]
+  }
+ ]
+}

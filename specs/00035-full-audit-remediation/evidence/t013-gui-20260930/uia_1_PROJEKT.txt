@@ -1,0 +1,59 @@
+﻿Tab |  | 
+  TabItem |  | PROJEKT
+    Text |  | PROJEKT
+  TabItem |  | AUDIO
+    Text |  | AUDIO
+  TabItem |  | VIDEO
+    Text |  | VIDEO
+  TabItem |  | KI-REGIE
+    Text |  | KI-REGIE
+  TabItem |  | TIMELINE
+    Text |  | TIMELINE
+  TabItem |  | EXPORT
+    Text |  | EXPORT
+  TabItem |  | HIRN
+    Text |  | HIRN
+  TabItem |  | SETTINGS
+    Text |  | SETTINGS
+  TabItem |  | PERFORMANCE
+    Text |  | PERFORMANCE
+  TabItem |  | MODELLE
+    Text |  | MODELLE
+  TabItem |  | CHAT
+    Text |  | CHAT
+  TabItem |  | TERMINAL
+    Text |  | TERMINAL
+  TabItem |  | INGEST
+    Text |  | INGEST
+  TabItem |  | ANCHOR
+    Text |  | ANCHOR
+  Custom |  | 
+    Custom |  | Projekt³bersicht
+      Pane |  | 
+        Text |  | t013_psy_20260930
+        Text |  | C:\Users\david\Documents\PBStudio\t013_psy_20260930\t013_psy_20260930
+        Button |  | Projektstatus aktualisieren
+        Button |  | Projekt ÷ffnen
+          Text |  | Projekt _÷ffnen
+        Button |  | Projekt schlie▀en
+          Text |  | Projekt s_chlie▀en
+        Button |  | Projekt speichern
+          Text |  | _Speichern
+        Button |  | Neues Projekt erstellen
+          Text |  | _Neues Projekt
+        Text |  | PROJEKT▄BERSICHT
+        Text |  | AUDIO-MATERIAL
+        Text |  | 1
+        Text |  |  Clips
+        Text |  | VIDEO-BIBLIOTHEK
+        Text |  | 56
+        Text |  |  Clips
+        Text |  | GESAMTDAUER
+        Text |  | 3299.5
+        Text |  |  Sek.
+        Text |  | KI-WORKFLOW STATUS
+        Text |  | Video Timeline generiert
+        Separator |  | 
+        Text |  | KI-Engine Status
+        Text |  | Projekt-Status aktuell
+screenshot C:\Users\david\AppData\Local\Temp\t013_PROJEKT.png
