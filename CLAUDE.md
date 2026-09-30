@@ -291,6 +291,27 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   465 taglose Videos wurden nur read-only inventarisiert. Der isolierte
   Wiederholungslauf benötigt eine eigene Freigabe zum kurzen Pausieren des
   externen Hermes-Research-Watchdogs, der sein 14,27-GB-Modell automatisch lädt.
+- **Historischer Stand:** 2026-08-09 (OBJ-75 offene Bugfixes; PR #28)
+- **Status (OBJ-75 — abgeschlossen):**
+  - T001–T053 geschlossen; `.completed` + `.qc-passed` in
+    `specs/00020-obj75-open-bug-fixes`.
+  - Drei High-Risiken geschlossen: Chat-Tool/Projekt-Race (projektgebundene
+    Capability über den ganzen Stream-/Tool-Turn), Projector-Replay (stabile
+    Projekt-/Event-UUIDs, Checkpoints, exactly-once Publish) und
+    Cache-/Embedding-Recovery (immutable hashgeprüfte Generationen,
+    Startup-Gate, Owner-Adapter).
+  - **1450 passed / 13 skipped**, Native C# **55/55**, WPF Release **0/0**,
+    A→B-Live-Smoke und zwei 14-View-GUI-Runden bestanden.
+  - **Ehrlich offen:** ein zweiter 17-Minuten-Gesamtlauf wurde auf
+    Nutzerentscheidung nicht ausgeführt.
+- **Historischer Stand:** 2026-08-09 (OBJ-74 Resume, Pacing, Branch-Konvergenz)
+- **Status (OBJ-74 — abgeschlossen):**
+  - T001–T035 geschlossen; `.qc-passed` in
+    `specs/00019-deep-app-audit-resume-pacing`.
+  - **1371 passed / 13 skipped / 0 failed**, Native C# **54/54**, WPF Release
+    **0/0**, OpenAPI-Snapshot 4/4, Live-API Resume/Unterbruch PASS, GUI 14/14.
+  - Restgrenzen: keine Partial-Checkpoints je Stem-Datei innerhalb eines
+    abgebrochenen Separationslaufs; `separator.py` blieb unverändert (LOCKED).
 - **Historischer Stand:** 2026-08-08 (OBJ-73 Remote PASS; geschützter
   Default-Branch `main`)
 - **Status (2026-08-08 — autoritativ):**
