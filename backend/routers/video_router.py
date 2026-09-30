@@ -336,6 +336,23 @@ def _set_video_audio_key_outcome(
         result["stage_errors"].pop("audio_key", None)
 
 
+def _merge_frame_tags(frame_tags: list[list[str]], limit: int = 10) -> list[str]:
+    """Combine per-frame caption tags so every sampled frame can contribute.
+
+    Plain first-come order let frame 1 fill all slots and dropped frames 2 and
+    3 entirely. Tags seen in more frames rank first (most reliable), the rest
+    are taken round-robin by position so each frame keeps its leading tags.
+    """
+    counts: dict[str, int] = {}
+    first_pos: dict[str, tuple[int, int]] = {}
+    for f, tags in enumerate(frame_tags):
+        for pos, tag in enumerate(dict.fromkeys(tags)):
+            counts[tag] = counts.get(tag, 0) + 1
+            first_pos.setdefault(tag, (pos, f))
+    order = sorted(counts, key=lambda t: (-counts[t], first_pos[t]))
+    return order[:limit]
+
+
 def _derive_video_analysis_status(stage_status: dict[str, str]) -> str:
     # audio_key "unavailable" means the file has no audio track (a detector
     # fault is recorded as "failed", see _set_video_audio_key_outcome). That is
@@ -2498,6 +2515,7 @@ async def _run_color_and_caption_analysis(
             # 2. Tags extrahieren
             all_tags = []
             seen_tags = set()
+            frame_tag_lists: list[list[str]] = []
             tag_sources = []
             caption_frames_with_tags = 0
             caption_provider_unavailable: Optional[str] = None
@@ -2545,6 +2563,7 @@ async def _run_color_and_caption_analysis(
                     caption_progress["phase_completed_frames"] = frame_number
                     if tags:
                         caption_frames_with_tags += 1
+                        frame_tag_lists.append(list(tags))
                         for tag in tags:
                             if tag not in seen_tags:
                                 all_tags.append(tag)
@@ -2697,6 +2716,7 @@ async def _run_color_and_caption_analysis(
                     for tags in moondream_tags_list:
                         if tags:
                             caption_frames_with_tags += 1
+                            frame_tag_lists.append(list(tags))
                             for tag in tags:
                                 if tag not in seen_tags:
                                     all_tags.append(tag)
@@ -2757,7 +2777,7 @@ async def _run_color_and_caption_analysis(
             except asyncio.CancelledError:
                 pass
 
-            result["tags"] = all_tags[:10]
+            result["tags"] = _merge_frame_tags(frame_tag_lists) if frame_tag_lists else all_tags[:10]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
             expected_caption_frames = len(sampled_frame_indices)
             if expected_caption_frames == 0:

@@ -195,11 +195,15 @@ def _publish_status(model: str, provider: str, status: str, percent: float) -> N
         logger.debug("llm_status publish fehlgeschlagen: %s", exc)
 
 # Deutscher Prompt — Tags kommagetrennt, knapp, keine Erklaerung.
+# Figuren zuerst: der fruehere Prompt lieferte fast nur Ort und Stimmung
+# (T013, 2026-09-30). Keine Merkmal-Beispiele wie "Fluegel" im Text — die
+# hat qwen2.5-vl im A/B-Test in jedes Bild hineinhalluziniert.
 DEFAULT_PROMPT = (
-    "Analysiere dieses Video-Frame. Gib 5-10 praegnante Tags zurueck, "
-    "kommagetrennt, deutsch. Beispiel: 'tanzen, club, neonlicht, gruppe, "
-    "energetisch'. Nur die Tags, keine Erklaerung, keine Aufzaehlung mit "
-    "Nummern."
+    "Analysiere dieses Video-Frame. Gib 8-12 praegnante Tags zurueck, "
+    "kommagetrennt, deutsch. Beginne mit den sichtbaren Personen oder Wesen: "
+    "wie viele, was fuer eine Figur, Kleidung, was sie tun. Danach Ort, "
+    "Licht und Farben, Stimmung. Nenne nur, was eindeutig im Bild zu sehen "
+    "ist. Nur die Tags, keine Erklaerung, keine Nummern."
 )
 
 _STOPWORDS = frozenset({
@@ -256,6 +260,12 @@ def _looks_like_prose(
     has_list_prefix: bool,
 ) -> bool:
     if has_list_prefix or re.search(r"(?m)^\s*(?:[-*]|\d+[.)])\s+", text):
+        return False
+    # Three or more comma items are a tag list even if one item is long or the
+    # answer ends with a period. Treating it as prose split every multi-word
+    # tag into single words ('fuenf', 'traditionelle', 'kleidung'; T013
+    # 2026-09-30). The over-long item is dropped by _parse_tags instead.
+    if sum(1 for part in parts if part) >= 3:
         return False
     word_counts = [
         len(re.findall(r"[^\W\d_]+", part, flags=re.UNICODE))
@@ -446,7 +456,7 @@ async def _async_extract_tags(
         cache_key = (
             _frame_hash(frame_rgb),
             f"{receipt.provider}:{receipt.model_id}",
-            mode,
+            f"{mode}:{hashlib.blake2b(prompt.encode(), digest_size=8).hexdigest()}",
         )
         cached = _cache_get(cache_key)
         if cached:
