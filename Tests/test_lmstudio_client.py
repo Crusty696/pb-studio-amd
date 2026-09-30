@@ -241,6 +241,24 @@ def test_chat_returns_ollama_style_message():
     assert resp["usage"]["total_tokens"] == 8
 
 
+def test_lmstudio_native_tool_use_flag_grants_tool_calls():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [
+            {"id": "qwen3.5-9b", "type": "vlm", "arch": "qwen35", "capabilities": ["tool_use"]},
+            {"id": "qwen2.5-vl-7b-instruct", "type": "vlm", "arch": "qwen2vl"},
+            {"id": "nomic-embed", "type": "embeddings", "capabilities": ["tool_use"]},
+        ]})
+
+    async def go():
+        async with LMStudioClient(transport=_make_transport(handler)) as client:
+            return await client.get_model_capabilities()
+
+    caps = _run(go())
+    assert caps["qwen3.5-9b"] == {"chat", "vision", "tool_calls"}
+    assert caps["qwen2.5-vl-7b-instruct"] == {"chat", "vision"}
+    assert caps["nomic-embed"] == {"embedding"}
+
+
 def test_chat_disables_reasoning_by_default_and_allows_override():
     # qwen3.5-9b spent its whole token budget thinking and returned empty tags
     # until reasoning_effort="none" was sent (2026-09-30).

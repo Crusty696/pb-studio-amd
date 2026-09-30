@@ -530,7 +530,10 @@ def test_model_manager_uses_live_truth_labels_without_static_ghost_cards():
         "private void ApplyInstalled",
         "private void ApplyAvailable",
     )
-    assert "foreach (var entry in resp.Models" in apply_installed
+    # Live inventory only; since 2026-09-30 filtered by IsAppRelevant, the
+    # source is still resp.Models (no curated or static list).
+    assert "var visible = resp.Models" in apply_installed
+    assert "foreach (var entry in visible)" in apply_installed
     assert "CURATED" not in apply_installed.upper()
     assert "Loaded = entry.Loaded;" in view_model
     assert "Usable = entry.Usable;" in view_model

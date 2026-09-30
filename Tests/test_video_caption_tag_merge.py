@@ -22,6 +22,23 @@ def test_tags_seen_in_several_frames_rank_first():
     assert merged[:2] == ["wald", "frau"]
 
 
+def test_near_duplicates_collapse_to_most_specific():
+    merged = _merge_frame_tags([
+        ["frau in weißem kleid", "nebel", "dunkle kleidung"],
+        ["frau in weißem gewand", "steinerner kreis mit runen", "dunkle kleidung mit hörnern"],
+        ["steinerne kreise mit runen", "frau", "wald"],
+    ])
+    assert sum(t.startswith("frau in weißem") for t in merged) == 1
+    assert sum("runen" in t for t in merged) == 1
+    assert "dunkle kleidung mit hörnern" in merged and "dunkle kleidung" not in merged
+    assert "frau" in merged and "nebel" in merged and "wald" in merged
+
+
+def test_different_tags_with_shared_word_stay():
+    merged = _merge_frame_tags([["dunkle kleidung", "dunkle farben", "dunkler wald"]])
+    assert merged == ["dunkle kleidung", "dunkle farben", "dunkler wald"]
+
+
 def test_single_frame_keeps_order():
     assert _merge_frame_tags([["x", "y", "z"]]) == ["x", "y", "z"]
 

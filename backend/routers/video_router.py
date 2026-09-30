@@ -350,7 +350,36 @@ def _merge_frame_tags(frame_tags: list[list[str]], limit: int = 10) -> list[str]
             counts[tag] = counts.get(tag, 0) + 1
             first_pos.setdefault(tag, (pos, f))
     order = sorted(counts, key=lambda t: (-counts[t], first_pos[t]))
-    return order[:limit]
+    kept: list[str] = []
+    for tag in order:
+        stems = _tag_stems(tag)
+        duplicate_of = next(
+            (i for i, k in enumerate(kept) if _same_tag_meaning(stems, _tag_stems(k))),
+            None,
+        )
+        if duplicate_of is None:
+            kept.append(tag)
+        elif len(stems) > len(_tag_stems(kept[duplicate_of])):
+            kept[duplicate_of] = tag  # keep the more specific wording
+        if len(kept) >= limit:
+            break
+    return kept
+
+
+def _tag_stems(tag: str) -> list[str]:
+    return [word[:5] for word in tag.lower().split() if len(word) > 2]
+
+
+def _same_tag_meaning(a: list[str], b: list[str]) -> bool:
+    """'frau in weißem kleid'/'frau in weißem gewand', 'steinerner kreis mit
+    runen'/'steinerne kreise mit runen', 'dunkle kleidung'/'dunkle kleidung mit
+    hoernern' are one tag each (qwen3.5-9b, 3 frames, 2026-09-30)."""
+    if not a or not b:
+        return False
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    if len(short) >= 2 and long_[: len(short)] == short:
+        return True
+    return len(short) >= 3 and sum(x == y for x, y in zip(short, long_)) >= len(short) - 1 and short[0] == long_[0]
 
 
 def _derive_video_analysis_status(stage_status: dict[str, str]) -> str:

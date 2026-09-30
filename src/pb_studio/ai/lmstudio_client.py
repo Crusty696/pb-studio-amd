@@ -728,6 +728,20 @@ class LMStudioClient:
                     capabilities.add(MODEL_CAPABILITY_CHAT)
                 elif model_type in {"embedding", "embeddings"}:
                     capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+                # LM Studio meldet Tool-Faehigkeit nativ als capabilities=["tool_use"].
+                # Ungelesen bekam kein LM-Studio-Modell je tool_calls, und
+                # chat_tool_use fiel immer auf ein Ollama-Modell zurueck (2026-09-30,
+                # bonsai-27b statt qwen3.5-9b). Live gegengeprueft: qwen3.5-9b traegt
+                # das Flag und ruft Tools korrekt auf, qwen2.5-vl traegt es nicht und
+                # antwortet auf Tool-Anfragen mit Fliesstext.
+                native_lms = {
+                    str(value).strip().lower()
+                    for value in (raw.get("capabilities") or [])
+                }
+                if MODEL_CAPABILITY_CHAT in capabilities and (
+                    {"tool_use", "tools", "function_calling"} & native_lms
+                ):
+                    capabilities.add(MODEL_CAPABILITY_TOOL_CALLS)
             if capabilities:
                 capabilities_by_name[name] = frozenset(capabilities)
         return capabilities_by_name
