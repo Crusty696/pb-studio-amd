@@ -45,6 +45,9 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _selectedProvider = "lmstudio";
     [ObservableProperty] private string _discoverActionsText = "Katalog nicht verifiziert";
     [ObservableProperty] private DateTime? _lastFetchedAt;
+    [ObservableProperty] private bool _showAllModels;
+    [ObservableProperty] private string _hiddenModelsText = "";
+    private ModelListResponse? _lastInstalled;
 
     public ObservableCollection<InstalledModelCardViewModel> InstalledModels { get; } = new();
     public ObservableCollection<AvailableModelCardViewModel> AvailableModels { get; } = new();
@@ -222,12 +225,50 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
 
     private void ApplyInstalled(ModelListResponse? resp)
     {
+        _lastInstalled = resp;
         InstalledModels.Clear();
-        if (resp?.Models is null) return;
-        foreach (var entry in resp.Models
+        if (resp?.Models is null)
+        {
+            HiddenModelsText = "";
+            return;
+        }
+        var visible = resp.Models
+            .Where(m => ShowAllModels || IsAppRelevant(m))
             .OrderBy(m => m.Provider, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
+            .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var entry in visible)
             InstalledModels.Add(new InstalledModelCardViewModel(entry, this));
+        var hidden = resp.Models.Count - visible.Count;
+        HiddenModelsText = hidden > 0
+            ? $"{hidden} für PB Studio ungeeignete Modelle ausgeblendet (Videogeneratoren, Audio, Embedding, Draft, reine Textmodelle)"
+            : "";
+    }
+
+    partial void OnShowAllModelsChanged(bool value) => ApplyInstalled(_lastInstalled);
+
+    /// <summary>
+    /// PB Studio braucht Vision (Clip-Tags) und Chat mit Tool-Aufrufen. Alles
+    /// andere, was ein Provider installiert hat, ist hier Rauschen: LTX-
+    /// Videogeneratoren, Audio-, Embedding- und Draft-Modelle, Vision-Projektor-
+    /// Dateien. Einer Aufgabe zugewiesene Modelle bleiben immer sichtbar.
+    /// </summary>
+    public static bool IsAppRelevant(ModelListEntry m)
+    {
+        if (m.IsActive || m.ActiveTasks is { Count: > 0 })
+            return true;
+        var name = m.Name.ToLowerInvariant();
+        var arch = (m.Architecture ?? "").ToLowerInvariant();
+        var caps = m.Capabilities ?? new List<string>();
+        if (!caps.Contains("chat", StringComparer.OrdinalIgnoreCase))
+            return false;
+        if (arch is "ltxv" or "clip" or "whisper" || name.Contains("ltx") || name.Contains("audio"))
+            return false;
+        if (m.SizeGb is > 0 and < 1.5)
+            return false;
+        return m.Vision
+            || caps.Contains("vision", StringComparer.OrdinalIgnoreCase)
+            || caps.Contains("tool_calls", StringComparer.OrdinalIgnoreCase);
     }
 
     private void ApplyAvailable(AvailableModelsResponse? resp)

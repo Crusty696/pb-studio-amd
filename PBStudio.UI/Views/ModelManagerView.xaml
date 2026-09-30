@@ -136,10 +136,21 @@
                 </Border>
 
                 <!-- ══ Installiert ══ -->
-                <TextBlock Text="INSTALLIERT"
-                           FontSize="12" FontWeight="SemiBold"
-                           Foreground="{StaticResource AbletonAccent}"
-                           Margin="0,0,0,8"/>
+                <DockPanel Margin="0,0,0,8">
+                    <CheckBox DockPanel.Dock="Right" Content="Alle anzeigen"
+                              IsChecked="{Binding ShowAllModels}"
+                              Foreground="{StaticResource AbletonTextDim}" FontSize="11"
+                              VerticalAlignment="Center"
+                              AutomationProperties.Name="Alle Modelle anzeigen"/>
+                    <TextBlock Text="INSTALLIERT"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="{StaticResource AbletonAccent}"
+                               VerticalAlignment="Center"/>
+                </DockPanel>
+                <TextBlock Text="{Binding HiddenModelsText}"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Visibility="{Binding HiddenModelsText, Converter={StaticResource NullToVisibilityConverter}}"/>
 
                 <!-- Empty-State Installiert -->
                 <TextBlock Text="Keine Modelle installiert. Waehle eines aus der Verfuegbaren-Liste."

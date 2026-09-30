@@ -15,22 +15,22 @@
     },
     "ai": {
         "task_overrides": {
-            "video_captioning": "qwen3.5:9b",
-            "image_captioning": "qwen3.5:9b",
-            "chat": "qwen3.5:9b",
-            "chat_general": "qwen3.5:9b",
-            "chat_tool_use": "qwen3.5:9b",
-            "brain_explanation": "qwen3.5:9b"
+            "video_captioning": "qwen3.5-9b",
+            "image_captioning": "qwen3.5-9b",
+            "chat": "qwen3.5-9b",
+            "chat_general": "qwen3.5-9b",
+            "chat_tool_use": "qwen3.5-9b",
+            "brain_explanation": "qwen3.5-9b"
         },
         "task_provider_overrides": {
-            "video_captioning": "ollama",
-            "image_captioning": "ollama",
-            "chat": "ollama",
-            "chat_general": "ollama",
-            "chat_tool_use": "ollama",
-            "brain_explanation": "ollama"
+            "video_captioning": "lmstudio",
+            "image_captioning": "lmstudio",
+            "chat": "lmstudio",
+            "chat_general": "lmstudio",
+            "chat_tool_use": "lmstudio",
+            "brain_explanation": "lmstudio"
         },
-        "provider": "ollama",
+        "provider": "auto",
         "lmstudio_base_url": "http://127.0.0.1:1234/v1",
         "ollama_base_url": "http://localhost:11434/v1",
         "default_mode": "balance",
@@ -61,11 +61,11 @@
             },
             "brain_explanation": {
                 "speed": [
-                    "qwen3-4b-computer-science"
+                    "qwen3.5-9b"
                 ],
                 "balance": [
                     "qwen3.6-27b-mtp-pi-reasoning",
-                    "qwen3-4b-computer-science"
+                    "qwen3.5-9b"
                 ],
                 "quality": [
                     "qwen3.6-27b-mtp-pi-reasoning",
@@ -74,43 +74,43 @@
             },
             "chat": {
                 "speed": [
-                    "qwen3-4b-computer-science",
+                    "qwen3.5-9b",
                     "granite-4.0-h-tiny"
                 ],
                 "balance": [
-                    "qwen3-4b-computer-science",
+                    "qwen3.5-9b",
                     "qwen3.6-27b-mtp-pi-reasoning"
                 ],
                 "quality": [
                     "qwen3.6-27b-mtp-pi-reasoning",
-                    "qwen3-4b-computer-science"
+                    "qwen3.5-9b"
                 ]
             },
             "chat_general": {
                 "speed": [
-                    "qwen3-4b-computer-science",
+                    "qwen3.5-9b",
                     "granite-4.0-h-tiny"
                 ],
                 "balance": [
-                    "qwen3-4b-computer-science",
+                    "qwen3.5-9b",
                     "qwen3.6-27b-mtp-pi-reasoning"
                 ],
                 "quality": [
                     "qwen3.6-27b-mtp-pi-reasoning",
-                    "qwen3-4b-computer-science"
+                    "qwen3.5-9b"
                 ]
             },
             "chat_tool_use": {
                 "speed": [
-                    "qwen3-4b-computer-science"
+                    "qwen3.5-9b"
                 ],
                 "balance": [
-                    "qwen3-4b-computer-science",
+                    "qwen3.5-9b",
                     "qwen3.6-27b-mtp-pi-reasoning"
                 ],
                 "quality": [
                     "qwen3.6-27b-mtp-pi-reasoning",
-                    "qwen3-4b-computer-science"
+                    "qwen3.5-9b"
                 ]
             }
         }

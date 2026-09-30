@@ -241,6 +241,24 @@ def test_chat_returns_ollama_style_message():
     assert resp["usage"]["total_tokens"] == 8
 
 
+def test_chat_disables_reasoning_by_default_and_allows_override():
+    # qwen3.5-9b spent its whole token budget thinking and returned empty tags
+    # until reasoning_effort="none" was sent (2026-09-30).
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content.decode()).get("reasoning_effort", "<absent>"))
+        return httpx.Response(200, json=_chat_response("ok"))
+
+    async def go():
+        async with LMStudioClient(transport=_make_transport(handler)) as client:
+            await client.chat(model="m", messages=[{"role": "user", "content": "x"}])
+            await client.chat(model="m", messages=[{"role": "user", "content": "x"}], reasoning_effort=None)
+
+    _run(go())
+    assert seen == ["none", "<absent>"]
+
+
 def test_chat_with_tools_passes_tools_param():
     captured = {}
 

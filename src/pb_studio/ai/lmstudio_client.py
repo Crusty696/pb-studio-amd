@@ -89,6 +89,14 @@ def _is_audio_generation_model(name: str, arch: str = "") -> bool:
     return any(token in name_normalized for token in _AUDIO_GENERATION_ID_TOKENS)
 
 
+# Keine PB-Studio-Aufgabe (Clip-Tags, Chat mit Tools, Hirn-Erklaerung) braucht
+# sichtbares Nachdenken. qwen3.5-9b verbrauchte ohne diesen Wert 400-600 Tokens
+# im Denkblock und lieferte leere Tags/Antworten; mit "none" 1-2 s pro Frame
+# (2026-09-30). LM Studio wertet nur reasoning_effort aus, nicht
+# chat_template_kwargs.enable_thinking; Nicht-Reasoning-Modelle ignorieren ihn.
+DEFAULT_REASONING_EFFORT: Optional[str] = "none"
+
+
 class LMStudioError(RuntimeError):
     """Basis-Exception fuer alle LM-Studio-HTTP-Fehler."""
 
@@ -771,6 +779,7 @@ class LMStudioClient:
         keep_alive: Optional[str] = None,
         tools: Optional[list[dict[str, Any]]] = None,
         format: Optional[str] = None,
+        reasoning_effort: Optional[str] = DEFAULT_REASONING_EFFORT,
     ) -> dict[str, Any]:
         """``POST /v1/chat/completions`` (non-streaming).
 
@@ -798,6 +807,8 @@ class LMStudioClient:
             "messages": msgs,
             "stream": bool(stream),
         }
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
         body.update(_ollama_options_to_openai(options))
         if tools:
             body["tools"] = tools
@@ -830,6 +841,7 @@ class LMStudioClient:
         keep_alive: Optional[str] = None,
         tools: Optional[list[dict[str, Any]]] = None,
         format: Optional[str] = None,
+        reasoning_effort: Optional[str] = DEFAULT_REASONING_EFFORT,
     ) -> AsyncIterator[dict[str, Any]]:
         """Stream chat deltas with separate content, reasoning and tool fields.
 
@@ -844,6 +856,8 @@ class LMStudioClient:
             "messages": msgs,
             "stream": True,
         }
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
         body.update(_ollama_options_to_openai(options))
         if tools:
             body["tools"] = tools
