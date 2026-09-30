@@ -149,6 +149,11 @@ _TEMPOGRAM_CONST = 60.0 * 22050.0 / HOP_LENGTH
 # abgelesen, nicht gegen eine Nullhypothese kalibriert.
 GRID_CONTRAST_MIN = 2.0
 
+# Halbschlag-Aufloesung (siehe `_resolve_phase`): Band des Kick-Koerpers und
+# noetiger Vorsprung der Halbschlag-Position, bevor das Raster verschoben wird.
+SUB_BAND_HZ = (20.0, 90.0)
+HALF_BEAT_MARGIN = 1.1
+
 # Oktavpruefung: eine Alternative muss deutlich besser sein, um das
 # bestbewertete Tempo zu verdraengen. Verhindert Flattern bei knappen Faellen.
 OCTAVE_MARGIN = 0.05
@@ -374,6 +379,53 @@ def _kick_agreement(
     return _near(kicks, grid_times), _near(grid_times, kicks)
 
 
+def _resolve_phase(
+    mel: np.ndarray, sr: int, bpm: float, anchor: float, span: float
+) -> tuple[float, str]:
+    """Halbschlag-Fehler aufloesen und den Ein-Frame-Versatz der Huellkurve ausgleichen.
+
+    **Halbschlag (T003, 2026-09-30).** Gemessen an 69 Titeln gegen die
+    rekordbox-Raster der Nutzerbibliothek sass das Raster bei rund der Haelfte
+    genau eine halbe Schlagperiode daneben. Ursache: die Onset-Huellkurve ueber
+    das ganze Spektrum ist auf dem Off-Beat am staerksten (Rollbass und
+    Off-Beat-Hi-Hat im Psytrance, offene Hi-Hat im Techno). Der Kick dagegen
+    traegt die Energie unterhalb von 90 Hz. Vergleich der Sub-Bass-Energie an
+    Raster- und Halbschlagposition: 23 von 24 versetzten Rastern waeren
+    korrigiert, 1 von 26 richtigen faelschlich verschoben worden. Die
+    Onset-Staerke im selben Band trennt deutlich schlechter (17/24, 3/26),
+    die Vollband-Huellkurve gar nicht (2/24).
+
+    **Ein Frame Versatz.** Nach der Halbschlag-Korrektur lag der Median des
+    Restfehlers bei +23,2 ms = genau eine Hop-Laenge bei 22,05 kHz - derselbe
+    Versatz, den docs/measurements/2026-08-31-kick-gegenprobe-befund.md an den
+    Kicks gemessen hat: die Spektraldifferenz meldet einen Anstieg erst in dem
+    Frame nach dem Anschlag. Der Anker wird deshalb um eine Hop-Dauer
+    vorgezogen.
+    """
+    interval = 60.0 / bpm if bpm > 0.0 else 0.0
+    if interval <= 0.0 or span <= 2.0 * interval or mel.size == 0:
+        return anchor, ""
+    import librosa
+
+    freqs = librosa.mel_frequencies(n_mels=mel.shape[0], fmax=sr / 2.0)
+    band = (freqs >= SUB_BAND_HZ[0]) & (freqs < SUB_BAND_HZ[1])
+    note = ""
+    if np.any(band):
+        energy = mel[band].sum(axis=0)
+        times = librosa.times_like(energy, sr=sr, hop_length=HOP_LENGTH)
+
+        def _at(phase: float) -> float:
+            positions = np.arange(phase % interval, span, interval)
+            return float(np.mean(np.interp(positions, times, energy))) if positions.size else 0.0
+
+        on_beat, off_beat = _at(anchor), _at(anchor + interval / 2.0)
+        if on_beat > 0.0 and off_beat > on_beat * HALF_BEAT_MARGIN:
+            anchor = (anchor + interval / 2.0) % interval
+            note = "half_beat_corrected"
+    anchor = (anchor - HOP_LENGTH / float(sr)) % interval
+    return anchor, note
+
+
 def estimate_beat_grid(
     y: np.ndarray,
     sr: int,
@@ -404,7 +456,13 @@ def estimate_beat_grid(
     import librosa
 
     _low, _high = tempo_range or TEMPO_RANGE
-    envelope = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP_LENGTH)
+    # Mel-Spektrum einmal berechnen: es speist die Onset-Huellkurve (identisch
+    # zu `onset_strength(y=...)`, das intern genau so rechnet) und die
+    # Halbschlag-Aufloesung weiter unten.
+    mel = librosa.feature.melspectrogram(y=y, sr=sr, hop_length=HOP_LENGTH)
+    envelope = librosa.onset.onset_strength(
+        S=librosa.power_to_db(mel), sr=sr, hop_length=HOP_LENGTH
+    )
     if envelope.size < 16 or float(np.mean(envelope)) <= 0.0:
         return BeatGrid(0.0, 0.0, 0.0, "onset_envelope_empty", "unavailable")
 
@@ -496,6 +554,16 @@ def estimate_beat_grid(
                 "Beatgrid: Oktave korrigiert auf %.2f BPM "
                 "(Trefferquote %.2f, Praezision %.2f)", bpm, recall or 0.0, precision or 0.0
             )
+
+    anchor, phase_note = _resolve_phase(mel, sr, bpm, anchor, span)
+    if phase_note:
+        method = f"{method}_{phase_note}"
+    if recall is not None:
+        if kicks.size >= 4:
+            # Gegenprobe am tatsaechlich ausgelieferten Raster, nicht am
+            # verworfenen - sonst beschreiben die Zahlen ein anderes Raster.
+            grid_times = BeatGrid(bpm, anchor, contrast, "", "").beat_times(0.0, span)
+            recall, precision = _kick_agreement(grid_times, kicks, _kick_tolerance(sr))
 
     # Status: Kontrast ALLEIN reicht nicht.
     #

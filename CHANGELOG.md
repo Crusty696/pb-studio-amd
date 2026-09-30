@@ -5,6 +5,8 @@
 
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
+- 2026-09-30 T003 accuracy fixes, measured against rekordbox reference + three constructed mixes: key 25→32/40 (`KeyDetector.MINOR_PRIOR` 0.075, shared decision path), beat-grid half-beat error fixed via sub-bass (20–90 Hz) on/off-beat check plus one-hop anchor lag correction (phase median 0.37→1.00), long-mix boundaries rebuilt on chroma recurrence novelty + precise tempo step (F1 0.375→0.842, 0.364→1.000, holdout 0.186→0.556, still below 0.65 for same-tempo mixes; ~4–5× slower). Launcher start timeout 90→300 s. New `Tests/test_t003_analysis_accuracy.py` 9 passed; see `specs/00035-full-audit-remediation/evidence/t003-fixes-20260930.md`.
+
 - Health-check reconciliation (2026-09-29): latest isolated Python full suite **1,958 passed / 13 skipped / 0 failed / 35 warnings** (1,766.58 s); native C# 80/80; WPF Release build 0/0; DirectML/core-package checks and AMF encoder discovery passed. Finding-54 decision regression 1/1. Backend startup smoke intentionally not run because startup/recovery may mutate user render/recovery state. T003/T013/T014/#2 still open; no release pass claimed.
 - Removed three missing-audio-fixture skips from waveform file-integration tests: each now creates deterministic 2-s PCM WAV (80/800/8000 Hz). Focused waveform suite: **20 passed, 0 skipped**; no production change. Full suite not rerun; historical aggregate remains scoped to earlier source state.
 

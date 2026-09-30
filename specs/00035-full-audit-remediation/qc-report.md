@@ -9,6 +9,7 @@
 - **T014:** Policy entschieden (LM Studio Vulkan zulässig, ROCm verboten); Live-Tagging + Sichtprüfung dokumentiert; menschliche Bewertung offen.
 - **T003:** keine unabhängigen Zeitmarken auf dem Rechner/im Web gefunden; Vorlage für David angelegt. Offen.
 - Kein `.completed` (T003/T014 offen).
+- **T003-Fixes (später am 30.09.):** Tonart 25→32/40, Beat-Phase-Median 0,37→1,00, Mix-Grenzen F1 0,375→0,842 / 0,364→1,000 / Holdout 0,186→0,556 (unter 0,65). Neue Tests 9 passed, Gegenprobe 7/9 fallen am alten Stand; betroffene Audio-/Beat-/Pacing-Tests 484 passed, 1 skipped (isoliertes APPDATA, eigenes basetemp). Grenzerkennung ~4–5× langsamer. `evidence/t003-fixes-20260930.md`.
 - Neue kleinere Befunde (nicht behoben): Statuszeile „LLM: Keines (Moondream-Fallback)“ trotz aktivem `qwen3.5-9b`; Checkbox-Label „Tags & Farben (Moondream)“; langsamer Recovery-Bootstrap/Shutdown-Snapshot (80 s / 2,5 min, `degraded=400`) nach großem Projekt.
 
 ## Finding 54 / Original Audit P03 Disposition — 2026-09-29
