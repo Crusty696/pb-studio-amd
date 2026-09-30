@@ -25,6 +25,16 @@ from unittest.mock import MagicMock, patch
 TEST_OWNER_CAPABILITY = "pb-studio-pytest-owner-capability"
 os.environ["PBSTUDIO_OWNER_CAPABILITY"] = TEST_OWNER_CAPABILITY
 
+# Recovery-Steuerverzeichnis isolieren, BEVOR backend.main importiert wird.
+# backend.recovery_bootstrap leitet es fest aus LOCALAPPDATA ab. Ohne diese
+# Zeile schrieb ein pytest-Lauf bei laufender App ein Restore-Journal in das
+# echte %LOCALAPPDATA%\PB_Studio\recovery-control\v1 und versuchte,
+# data/pb_studio.db zu ersetzen - es scheiterte nur, weil die App die DB
+# sperrte; der naechste App-Start rollte dann auf eine alte Generation zurueck
+# (2026-09-30). Tests, die den Pfad selbst pruefen, setzen ihn per monkeypatch.
+PBSTUDIO_REAL_LOCALAPPDATA = os.environ.get("LOCALAPPDATA", "")
+os.environ["LOCALAPPDATA"] = tempfile.mkdtemp(prefix="pbstudio-pytest-localappdata-")
+
 # Bewusst NACH dem Setzen der Owner-Capability: die Reihenfolge wird
 # festgeschrieben, statt sich darauf zu verlassen, dass heute zufaellig nichts
 # in der Importkette diese Variable liest.

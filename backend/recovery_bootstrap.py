@@ -660,9 +660,50 @@ def _clear_runtime_dirty_file(control_root: Path) -> None:
         _fsync_parent(path)
 
 
+_BACKEND_LOCKS: dict[str, Any] = {}
+
+
+def _acquire_backend_lock(root: Path) -> None:
+    """Hold an exclusive per-root lock for the lifetime of this process.
+
+    ensure_recovery_ready runs at backend.main import time, before the port is
+    bound. A second backend (second app window, driver script, a pytest run
+    against the real root) therefore read the RUNNING backend's RUNTIME_DIRTY
+    as a crash, started a restore, failed on the locked DB and left an
+    APPLYING journal behind. The running backend's shutdown snapshot then
+    failed and the next start rolled back to an old generation (observed
+    twice on 2026-09-30). The OS releases the lock when the process dies, so
+    a real crash still recovers on the next start.
+    """
+    key = str(root)
+    if key in _BACKEND_LOCKS:
+        return
+    lock_path = root.parent / f"{root.name}.backend.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "a+b")  # noqa: SIM115 - held until process exit
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        handle.close()
+        raise RecoveryBootstrapError(
+            "Ein anderes PB-Studio-Backend läuft bereits und hält "
+            f"{root}; Recovery wird nicht angefasst."
+        ) from exc
+    _BACKEND_LOCKS[key] = handle
+
+
 def mark_runtime_dirty(control_root: Path | None = None) -> bool:
     """Durably bind accepted runtime work to the current backup generation."""
     root = (control_root or fixed_control_root()).resolve()
+    _acquire_backend_lock(root)
     current = _validated_current(root, _current_pointer(root))
     if current is None:
         return False
@@ -743,6 +784,7 @@ def ensure_recovery_ready(
 ) -> RecoveryBootstrapResult:
     """Converge interrupted recovery before any product owner opens data."""
     root = (control_root or fixed_control_root()).resolve()
+    _acquire_backend_lock(root)
     if not root.exists():
         return RecoveryBootstrapResult(status="uninitialized")
 
