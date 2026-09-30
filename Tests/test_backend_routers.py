@@ -361,6 +361,23 @@ class TestVideoRouter:
         assert r2.status_code == 200
         assert len(r2.json()) == 2
 
+    def test_clips_liste_zeigt_tags_direkt_nach_analyse(self, client, fresh_state):
+        """T013 2026-09-30: Tags erschienen erst nach Projekt-Reopen."""
+        fresh_state.video_clips[1] = {
+            "id": 1, "name": "clip_1", "path": "/pfad/clip_1.mp4",
+            "duration_seconds": 10.0, "width": 1920, "height": 1080,
+            "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
+        }
+        fresh_state.set_video_analysis(1, {
+            "clip_id": 1, "tags": ["fünf tanzende frauen", "steinkreis"],
+            "tag_source": "qwen3.5-9b", "analysis_status": "completed",
+            "stage_status": {"captions": "completed"}, "stage_errors": {},
+        })
+
+        r = client.get("/video/clips")
+        assert r.status_code == 200
+        assert r.json()[0]["tags"] == ["fünf tanzende frauen", "steinkreis"]
+
     def test_thumbnail_nicht_gefunden_404(self, client):
         r = client.get("/video/thumbnails/999")
         assert r.status_code == 404

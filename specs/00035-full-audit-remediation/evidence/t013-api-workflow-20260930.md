@@ -38,3 +38,25 @@ Bedienung über dieselben Endpunkte wie die WPF, nicht über Buttons.
 
 ## Offen für T013
 GUI-Sichtprüfung (Projekt in der WPF öffnen, Tabs/Tags/Timeline ansehen) durch den Nutzer.
+
+## Nachtrag 2026-09-30/10-01 — Auflösung der Befunde
+
+| Befund | Ergebnis | Commit |
+|---|---|---|
+| 1 Struktur → transition | Streaming-Struktur vergibt bewusst neutral `section` (8fe5604); `_canonical_segment` faltete das in `transition`. `section` ist jetzt eigener neutraler Wert. | bf596c3 |
+| 2 Brain-Achsen nur Kick | **Zurückgezogen, Fehldeutung:** Trigger-Achsen gelten pro Cut-Trigger; 2685/2889 Cuts waren Kick-Cuts. | — |
+| 5 `/video/clips` ohne Tags | Analyse schrieb Tags nicht in den In-Memory-Clip; Liste las nur diesen. Beides korrigiert. | (dieser Commit) |
+| 6 partial ohne Tonspur | `audio_key=unavailable` zählt nicht als Fehler. | fc25f21 |
+| Captions ohne Figuren | Nur Frame 1 zählte (first-come + `[:10]`); Prompt ohne Figuren; Parser zerhackte Listen; Dubletten. | dd3ee87, a558db2 |
+| Modellwechsel | Ein Modell (qwen3.5-9b, `reasoning_effort=none`); LM-Studio-`tool_use` wurde nie gelesen → Chat fiel auf Ollama. | 8a91eed, a558db2 |
+| 10 DB-Bereinigung beim Start | **Kein Bereinigungscode, sondern Recovery-Rollback** (siehe unten). | a380a13 |
+| Tests schreiben ins echte Recovery-Verzeichnis | conftest isoliert `LOCALAPPDATA`; Prozess-Lock. | a380a13 |
+
+### Befund 10 im Detail: DB-Rollback auf 2026-09-24
+Log `logs/backend.log`:
+- 2026-09-28 05:15 Bootstrap „ready generation=20260924T051049…“, obwohl 2026-09-25T20:15 bereits CURRENT war — Ursache vor dieser Sitzung, nicht geloggt (wahrscheinlich Testlauf gegen echtes Recovery-Verzeichnis).
+- 2026-09-28 11:05 Shutdown-Snapshot fehlgeschlagen → CURRENT blieb 09-24.
+- 2026-09-30 00:48:53 zweites Backend (launch.ps1) startete, während das Driver-Backend noch herunterfuhr; sah RUNTIME_DIRTY, begann Restore auf 09-24, scheiterte an gesperrter DB → APPLYING-Journal.
+- 2026-09-30 00:54:59 nächster Start: „recovered generation=20260924…“ → DB auf 09-24 zurückgesetzt. Verloren: Projekt `gui_qc_20260925` (572 Media) und `test` von 2026-09-28 (396 Media); das heutige Projekt 9 „test“ ist die Fassung vom 2026-09-23.
+- Vorhanden zur Wiederherstellung: Generation `20260929T224820168496Z-bc85…` und `data/backups/t013_pre_20260930/pb_studio.db`. Nicht zurückgespielt (IDs 9–11 neu belegt; Nutzerentscheid nötig).
+- Behoben: exklusiver Prozess-Lock in `ensure_recovery_ready`/`mark_runtime_dirty` (live belegt: zweites Backend abgewiesen, Journal unverändert).

@@ -522,12 +522,19 @@ def _persist_video_analysis_outcome(
         "is_analyzed": is_analyzed,
     })
     state.set_video_analysis(int(result["clip_id"]), cache_result)
+    # Tags too: the clip dict keeps the import-time "tags": [], and
+    # GET /video/clips showed 0 tags for freshly analysed clips until the
+    # project was reopened (T013, 2026-09-30).
+    clip_updates: dict[str, Any] = {}
+    if "tags" in result:
+        clip_updates["tags"] = list(result.get("tags") or [])
     state.update_video_clip(
         int(result["clip_id"]),
         is_analyzed=is_analyzed,
         analysis_status=status,
         stage_status=stage_status,
         stage_errors=stage_errors,
+        **clip_updates,
     )
 
 
@@ -936,6 +943,9 @@ async def list_clips(
                     embedding_samples = None
             has_embedding = bool(va.get("has_embedding", False))
             tag_source = va.get("tag_source")
+        tags = c.get("tags") or []
+        if va and isinstance(va.get("tags"), list):
+            tags = list(va["tags"])
 
         # L-N3: Felder die hier explizit als kwarg uebergeben werden, aus c_payload entfernen
         # damit kein TypeError "multiple values for keyword" auftritt (passiert nach analyze_video,
@@ -944,12 +954,13 @@ async def list_clips(
         _explicit_kwargs = {
             "video_hash", "is_analyzed", "avg_motion", "peak_motion", "motion_category",
             "embedding_dim", "embedding_samples", "has_embedding", "tag_source",
-            "analysis_status", "stage_status", "stage_errors",
+            "analysis_status", "stage_status", "stage_errors", "tags",
         }
         c_payload = {k: v for k, v in c.items() if k not in _explicit_kwargs}
         result.append(
             VideoClipInfo(
                 **c_payload,
+                tags=tags,
                 is_analyzed=is_analyzed,
                 video_hash=video_hash_value,
                 avg_motion=avg_motion,
