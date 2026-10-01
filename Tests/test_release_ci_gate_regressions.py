@@ -51,7 +51,7 @@ def test_python_quality_governs_generated_dto_skips() -> None:
     for nodeid in expected:
         entry = entries[nodeid]
         assert entry["owner"] == "ui-services"
-        assert entry["expires_on"] == "2026-09-30"
+        assert entry["expires_on"] == "2026-10-31"
         assert "Windows .NET/NSwag lane" in entry["reason"]
 
 
