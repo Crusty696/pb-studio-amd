@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-1",
+  "task_range": "T001-T017",
+  "commit_sha": "e14b8b65ce381ca774a7f3e5dfac0065a8969689",
+  "review_status": "PASS",
+  "open_blockers": [],
+  "receipts": [
+    {
+      "task_id": "T001",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T002",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T003",
+      "path": "evidence/t003-melodic-analyse-20261001.md",
+      "sha256": "8ed36363579c88f34861d6905d2c2c3ec758e122d593dd7ef457a7821d760ca9"
+    },
+    {
+      "task_id": "T004",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T005",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T006",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T007",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T008",
+      "path": "evidence/finding02-weightsdb-20260930.md",
+      "sha256": "9d28147437c788329dca04fb90e4ab4523a5756db24d35dc9c94a981bd15f2e6"
+    },
+    {
+      "task_id": "T009",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T010",
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "task_id": "T011",
+      "path": "qc-report.md",
+      "sha256": "9d725e52bf7643e98d67fec0ae3d738053f5613a270ab5bbbc3b22737e9500d7"
+    },
+    {
+      "task_id": "T012",
+      "path": "qc-report.md",
+      "sha256": "9d725e52bf7643e98d67fec0ae3d738053f5613a270ab5bbbc3b22737e9500d7"
+    },
+    {
+      "task_id": "T013",
+      "path": "evidence/t013-api-workflow-20260930.md",
+      "sha256": "ed9b4e53731cd41e5076ca7171c3b3335f8e754d9712b3117b4bdcde468016f3"
+    },
+    {
+      "task_id": "T014",
+      "path": "evidence/t014-caption-review-20261001.md",
+      "sha256": "f5d1b2627d9848ea3afefbdd7d7ca380bf7fe933d460640747f9c5912292312a"
+    },
+    {
+      "task_id": "T015",
+      "path": "evidence/t016-final-video-log-review-20260929.md",
+      "sha256": "502b71a44d8248929ed30f55d7f5d10f4d74d6f39a3ed780f77aeea0f3437749"
+    },
+    {
+      "task_id": "T016",
+      "path": "evidence/t016-final-video-log-review-20260929.md",
+      "sha256": "502b71a44d8248929ed30f55d7f5d10f4d74d6f39a3ed780f77aeea0f3437749"
+    },
+    {
+      "task_id": "T017",
+      "path": "evidence/t016-final-video-log-review-20260929.md",
+      "sha256": "502b71a44d8248929ed30f55d7f5d10f4d74d6f39a3ed780f77aeea0f3437749"
+    }
+  ],
+  "artifact_hashes": [
+    {
+      "path": "tasks.md",
+      "sha256": "9f1e0b812ab00f5c31509c51b496a10f4f06ac14f19742ada2128f004f58bd36"
+    },
+    {
+      "path": "evidence/traceability.md",
+      "sha256": "d9cd098398bac5ca0afec5f8ba13ec4d9f444ac627568655fdf2e5130c79deaa"
+    },
+    {
+      "path": "clarifications.md",
+      "sha256": "b2f14a51ea7c8a9b0b77e9b22a43de5ec35af8a06661a53bb15fa6ff98b93a6c"
+    }
+  ],
+  "note": "Implementation complete (T001-T017). Not a QC/release claim: GUI/live acceptance items noted in evidence/traceability.md remain separate gates. Python full suite 1979 passed / 9 skipped / 0 failed (2026-10-01, before the final caption-merge and T003 scoring commits; affected bundles re-run green), WPF Release 0/0, C# 85/85."
+}
