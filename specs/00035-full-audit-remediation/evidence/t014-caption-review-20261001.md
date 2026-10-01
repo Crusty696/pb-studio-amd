@@ -45,5 +45,17 @@
 4. **Hautfarbe unter farbigem Licht / Gegenlicht** wird weiterhin geraten (wie am 30.09.).
 5. Detail-Tags aus späteren Bildern fallen beim Merge zugunsten mehrfach gesehener Stimmungs-Tags raus (Kristall 939, Pilz 969).
 
+## Menschliche Bewertung (David, 2026-10-01)
+- Gesehen: Kontaktbögen **919, 924, 944, 954, 969, 974** zusammen mit der Claude-Einschätzung
+  aus der Tabelle oben (per Handy übermittelt).
+- Urteil, wörtlich: **„Ja“** – Bestätigung, dass Tags und Einschätzung passen.
+- Damit sind für diese 6 Clips die Einstufungen richtig/falsch/unsicher menschlich bestätigt,
+  darunter alle drei als falsch markierten Fälle (944, 954, 969) und beide „dunkle haut“-Fälle
+  (969, 974).
+- **Grenze:** Die übrigen 6 Clips (929, 934, 939, 949, 959, 964) sind nur von Claude bewertet.
+  Davids Urteil ist eine Gesamtbestätigung, keine eigene Tag-für-Tag-Auszählung.
+
 ## Status
-Plausibel, Hauptmotiv 12/12. T014 bleibt offen bis zu Davids Bewertung (richtig/falsch/unsicher je Clip).
+T014 abgenommen am 2026-10-01: konformer, geladener Provider (LM Studio Vulkan, `qwen3.5-9b`)
+mit Provenienz, Einstufung richtig/falsch/unsicher je Clip, menschlich bestätigt an 6 von 12
+Clips. Die Merge-Schwächen oben sind als Folgearbeit erfasst.
