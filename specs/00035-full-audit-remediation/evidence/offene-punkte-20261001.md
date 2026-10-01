@@ -24,7 +24,7 @@ Alles braucht einen sichtbaren GUI-Test durch David oder eine freigegebene GUI-S
 
 ## C. Nur David kann entscheiden
 
-1. **Zwei verlorene Projekte** `gui_qc_20260925` (572 Medien) und `test` vom 28.09. (396 Medien): am 30.09. 00:54 durch Recovery-Rollback verloren. Vorhanden in Recovery-Generation `20260929T224820…` und `data/backups/t013_pre_20260930/`. Zurückspielen ja/nein? (Ursache behoben in `a380a13`.)
+1. ~~**Zwei verlorene Projekte** `gui_qc_20260925` (572 Medien) und `test` vom 28.09. (396 Medien)~~ — **ENTSCHIEDEN 2026-10-01: nicht zurückspielen** („Die braucht es nicht mehr, alles Altlasten.“). Sicherungen in Recovery-Generation `20260929T224820…` und `data/backups/t013_pre_20260930/` bleiben unangetastet; können bei Bedarf später manuell entfernt werden. Ursache behoben in `a380a13`. Vermerkt in `clarifications.md` und `traceability.md`.
 2. **T014** Kontaktbögen bewerten (am besten neu erzeugt mit aktuellem Prompt).
 3. **T003** echten DJ-Mitschnitt mit Trackwechsel-Zeiten liefern (Vorlage `evidence/t003-referenz-vorlage.boundaries.txt`) oder 0,556 bei 56-s-Blenden akzeptieren.
 4. **Sichtbarer GUI-Test** der WPF-Änderungen vom 01.10. (Projektübernahme per SSE, INGEST-Tab weg, Launcher-Wartezeit).

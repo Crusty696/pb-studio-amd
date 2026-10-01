@@ -64,3 +64,7 @@
 - Initial dirty paths recorded in `.superpowers/sdd/plan/progress.md`; all retained.
 - No baseline product tests/builds run by the initial audit. This plan will run regression tests per task and full verification after `.completed`.
 - GUI is not handed over yet; GUI acceptance remains pending.
+
+## Decisions without code change
+
+- 2026-10-01: Recovery-rollback data loss of 2026-09-30 (`evidence/t013-api-workflow-20260930.md`, Befund 10; fix `a380a13`) - **CLOSED BY USER DECISION**: `gui_qc_20260925` and `test` (2026-09-28) are legacy and will not be restored. Backups (recovery generation `20260929T224820...`, `data/backups/t013_pre_20260930/`) kept; manual removal later is optional. See `clarifications.md`.
