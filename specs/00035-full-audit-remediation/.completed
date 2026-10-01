@@ -5,7 +5,7 @@
   "task_range": "T001-T017",
   "task_digest_sha256": "1b60847a07cb5063d3a6f29899d35a4a56e2d42dda90a19a2ebcdf51c9a9d907",
   "evidence_manifest": "evidence/completion-manifest.json",
-  "evidence_manifest_sha256": "1b35a97260f52d5dc137e7c61f84e9502d5b77b99fd6d73b6d38824f67739c0e",
-  "commit_sha": "e74065a8490e44beed4a15e730bc8cc18787b429",
+  "evidence_manifest_sha256": "b56c1a40d23d04ba37c3f6b9319845190f0302e6b51209e3c0636a63a846137d",
+  "commit_sha": "7beb80c6e652640bc927d88f8cb3a624c536a06e",
   "completed": "2026-10-01"
 }

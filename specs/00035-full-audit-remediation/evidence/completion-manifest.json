@@ -2,7 +2,7 @@
   "schema_version": 1,
   "objective": "OBJ-1",
   "task_range": "T001-T017",
-  "commit_sha": "e74065a8490e44beed4a15e730bc8cc18787b429",
+  "commit_sha": "7beb80c6e652640bc927d88f8cb3a624c536a06e",
   "review_status": "PASS",
   "open_blockers": [],
   "receipts": [
@@ -74,7 +74,7 @@
     {
       "task_id": "T014",
       "path": "evidence/t014-caption-review-20261001.md",
-      "sha256": "f5d1b2627d9848ea3afefbdd7d7ca380bf7fe933d460640747f9c5912292312a"
+      "sha256": "34dea43f6bb06ef1f2cba8fa46dc626285448b4385760497cd443f6f85e3110c"
     },
     {
       "task_id": "T015",
@@ -106,5 +106,5 @@
       "sha256": "b2f14a51ea7c8a9b0b77e9b22a43de5ec35af8a06661a53bb15fa6ff98b93a6c"
     }
   ],
-  "note": "Implementation complete (T001-T017). Not a QC/release claim: GUI/live acceptance items noted in evidence/traceability.md remain separate gates. Full suite on 635708e: 1986 passed / 9 skipped / 0 failed (isolated AppData, release guard); WPF Release 0/0, C# 85/85."
+  "note": "Implementation complete (T001-T017). Not a QC/release claim: GUI/live acceptance items in evidence/traceability.md remain separate gates. Full suite on b111d27: 1989 passed / 9 skipped / 0 failed (isolated AppData, release guard); WPF Release 0/0, C# 85/85."
 }
