@@ -215,7 +215,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   **Verschwinden von `RUNTIME_DIRTY`** warten (gemessen 36 s).
 - **Historischer Stand:** 2026-08-29 (Funktionsaudit + Reparaturplan 01)
 - **Audit 2026-08-29:** ~243 Befunde (18 CRITICAL, 61 HIGH, 74 MEDIUM).
-  Bericht: `FUNKTIONSAUDIT_2026-08-29.md`. Kernbefund: die Ketten brechen an den
+  Bericht: `docs/archive/FUNKTIONSAUDIT_2026-08-29.md`. Kernbefund: die Ketten brechen an den
   Übergabestellen zwischen Domänen, nicht innerhalb — und die Tests sind
   durchgehend domänenintern.
   Der uncommittete Stand (892 Z., maschinell via `patch.py` erzeugt) ist NICHT
@@ -453,7 +453,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
     PB-Studio-Brainpfade normal gepusht; Remote-SHAs verifiziert.
 - **Status (2026-07-28 — Neue vollständige App-Statusaufnahme):**
 - **Status (2026-07-28 — Vollständige App-Statusaufnahme):**
-  - Sechs disjunkte read-only Fach-Audits über alle Produktzonen; Masterbericht `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md`.
+  - Sechs disjunkte read-only Fach-Audits über alle Produktzonen; Masterbericht `docs/archive/FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md`.
   - Verifiziert: pytest **853 passed/11 skipped**, Release-Build 0/0, Backend Health 200, 17 SQLite-DBs integer, FAISS/SQLite 0 Orphans, 12 WPF-Tabs gerendert.
   - Live-Lücken: MODELLE-Endpunkte hängen bei offline Ollama; nur Embedding-Modell geladen; Chat/Vision-LLM nicht nutzbar; H.264/HEVC AMF PASS, AV1 AMF FAIL.
   - Befunde: **2 CRITICAL, 26 HIGH, 25 MEDIUM, 7 LOW**. Kernthemen: CPU-CLAP-Iron-Verstoß, unbestätigte Chat-Mutationen, Long-Mix-OOM, Brain-Deep-Hook, Projekt-/Render-Datenrisiken, WPF-Projektwechsel.
@@ -575,8 +575,8 @@ backend/
 PBStudio.UI/
 ├── Services/   # ApiClient.cs (VOLLSTÄNDIG), IApiClient.cs, SSEClient.cs,
 │               # PythonBridgeService.cs (PBSTUDIO_PYTHON_EXE env var)
-├── ViewModels/ # 9 VMs (alle implementiert, MVVM Toolkit)
-├── Views/      # 9 XAML Views (alle vorhanden, kein StartupUri)
+├── ViewModels/ # 15 VMs (MVVM Toolkit; Stand 2026-10-01, INGEST-Tab entfernt)
+├── Views/      # 13 XAML Views + 2 Dialoge (kein StartupUri)
 ├── Converters/ # NullToVisibility, InverseBool, InverseNullToVisibility
 ├── Resources/  # app.ico (3-size, 16/32/48px)
 └── Models/     # AudioClipModel (Key+BeatCount), VideoClipModel (Thumbnail)

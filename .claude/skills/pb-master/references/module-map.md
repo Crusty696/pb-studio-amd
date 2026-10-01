@@ -1,260 +1,237 @@
 # PB Studio — Modul-Map
 
-Vollständige Übersicht aller Module mit Dateien, Abhängigkeiten und Verbindungen.
+**Automatisch erzeugt am 2026-10-01** aus `git ls-files src/pb_studio backend`
+(erste Docstring-Zeile je Datei). Die frühere handgeschriebene Karte nannte
+gelöschte Module (`clap_pytorch`, `moondream_pytorch`, `stem_runner`,
+`video/engine.py`, `workers/`) und ist ersetzt.
 
-## Inhaltsverzeichnis
-1. [AI-Module](#ai-module)
-2. [Audio-Module](#audio-module)
-3. [Video-Module](#video-module)
-4. [Core-Module](#core-module)
-5. [Data-Module](#data-module)
-6. [Pacing-Module](#pacing-module)
-7. [Rendering-Module](#rendering-module)
-8. [Services](#services)
-9. [Workers](#workers)
-10. [Models (Daten-Modelle)](#models)
-11. [Utils](#utils)
-12. [Backend (FastAPI)](#backend)
-13. [Frontend (C# WPF)](#frontend)
+Neu erzeugen: Dateiliste per `git ls-files` + `ast.get_docstring` (siehe
+Commit-Text). Fakten zu Laufzeitpfaden stehen in `CLAUDE.md` §3/§4:
 
----
+- GPU-Inferenz nur über `onnxruntime-directml`; LLM/VLM über LM Studio (Vulkan).
+- Beats: librosa (BeatNet/madmom zur Laufzeit wirkungslos), Downbeats abgeleitet.
+- Stem-Separation htdemucs auf CPU; ONNX-MDX über DirectML.
+- Mix-Grenzen: `audio/subtrack_detector.py` (optimale Zerlegung, Stand T003).
+### `backend/`
 
-## AI-Module
-**Pfad:** `src/pb_studio/ai/`
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `_brain_singleton.py` | BrainService accessor for FastAPI routers (Plan Phase 4). |
+| `app_state.py` | Zentraler In-Memory App-State für alle FastAPI Router. |
+| `config.py` | Backend-Konfiguration für PB Studio AMD FastAPI Server. |
+| `dependencies.py` | Shared Dependencies für FastAPI Dependency Injection. |
+| `main.py` | PB Studio AMD – FastAPI Backend |
+| `media_path_policy.py` | Fail-closed policy for persisted media paths. |
+| `owner_capability.py` | Process-local authorization and backend identity proof for loopback API calls. |
+| `recovery_bootstrap.py` | Stdlib-only crash recovery bootstrap for PB Studio product generations. |
+| `recovery_runtime.py` | Runtime owner adapter for automatic startup/shutdown recovery snapshots. |
 
-| Datei | Funktion | Abhängigkeiten |
-|-------|----------|----------------|
-| `siglip_wrapper.py` | SigLIP ONNX Embeddings (1152-dim) | onnxruntime-directml, PIL |
-| `clap_wrapper.py` | CLAP Audio-Embeddings (nur NVIDIA) | — (deaktiviert auf AMD) |
-| `clap_pytorch.py` | CLAP PyTorch Backend | — (deaktiviert auf AMD) |
-| `moondream_pytorch.py` | Moondream ONNX FP16 Vision LLM | onnxruntime-directml |
-| `smart_director.py` | KI-gesteuerte Schnitt-Entscheidungen | siglip_wrapper, vector_store |
-| `video_specialist.py` | Video-spezifische AI-Analyse | moondream, siglip_wrapper |
+### `backend/middleware/`
 
-**Wichtig:** Auf AMD kein CLAP verfügbar. SigLIP ersetzt CLIP (1152-dim statt 512-dim).
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `gpu_lock.py` | GPU-Timing Middleware für FastAPI. |
+| `owner_capability.py` | Default-deny authorization for PB Studio's local HTTP boundary. |
 
----
+### `backend/routers/`
 
-## Audio-Module
-**Pfad:** `src/pb_studio/audio/`
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `audio_router.py` | Audio Router – Import, Analyse, Beats, Waveform, Stems. |
+| `brain_router.py` | Brain Router (Plan Phase 4 + R-Brain-09) -- 6 Endpoints. |
+| `chat_router.py` | Chat Router — KI-Chat-Endpoints fuer PB Studio (LM Studio Tool-Use). |
+| `events_router.py` | Events Router – Server-Sent Events (SSE) für Echtzeit-Updates. |
+| `health_router.py` | Health Router – Sub-Endpoints fuer System-Telemetrie. |
+| `models_router.py` | Providerübergreifendes Modellinventar und Management für PB Studio. |
+| `pacing_router.py` | Pacing Router – Cut-List Generierung und Timeline. |
+| `project_router.py` | Project Router – CRUD Operationen für PB Studio Projekte. |
+| `render_router.py` | Render Router – Video-Rendering starten, Status abrufen, abbrechen. |
+| `video_router.py` | Video Router – Import, Analyse, Thumbnails, Scenes, Motion. |
 
-| Datei | Funktion | Abhängigkeiten |
-|-------|----------|----------------|
-| `analyzer.py` | Haupt-Audio-Analyse (BPM, Key, Energy) | librosa, numpy |
-| `anchor_features.py` | Feature-Extraktion für Anchor-Punkte | librosa |
-| `beat_detector.py` | BeatNet CPU Beat-Detection | BeatNet, madmom |
-| `dj_mix_analyzer.py` | DJ-Mix spezifische Analyse | analyzer, beat_detector |
-| `key_detector.py` | Tonart-Erkennung | librosa |
-| `separator.py` | **LOCKED** Stem-Separation (ONNX DirectML) | onnxruntime-directml, UVR-MDX-NET |
-| `spectral_analyzer.py` | Spektral-Analyse | librosa, scipy |
-| `stem_runner.py` | Stem-Separation Ausführung | separator |
-| `streaming_analyzer.py` | Streaming für lange Dateien (>60min) | librosa, soundfile |
-| `structure_analyzer.py` | Song-Struktur-Erkennung (Intro, Verse, etc.) | librosa |
-| `waveform_analyzer.py` | 3-Band Waveform-Extraktion | librosa, numpy |
-| `waveform_cache.py` | Cache für berechnete Waveforms | cache_manager |
+### `backend/schemas/`
 
-**Signalkette Audio-Analyse:**
-```
-AudioRouter.analyze → AudioService.analyze_audio → analyzer.py
-  → beat_detector (BPM, Beats)
-  → key_detector (Tonart)
-  → spectral_analyzer (Spektrum)
-  → waveform_analyzer (3-Band Waveform)
-  → Ergebnis → DB speichern → SSE Event
-```
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `audio_schemas.py` | Audio-bezogene Schemas. |
+| `brain_schemas.py` | Brain-Endpoint Schemas (Plan Phase 4 + R-Brain-09). |
+| `common.py` | Gemeinsame Schemas für alle Router. |
+| `health_schemas.py` | Health endpoint schemas (T5b S-H1b: Pydantic-backed /health/vram für NSwag). |
+| `pacing_schemas.py` | Pacing-bezogene Schemas. |
+| `project_schemas.py` | Projekt-bezogene Schemas. |
+| `render_schemas.py` | Render-bezogene Schemas. |
+| `video_schemas.py` | Video-bezogene Schemas. |
 
----
+### `src/pb_studio/`
 
-## Video-Module
-**Pfad:** `src/pb_studio/video/`
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `config_manager.py` | — |
+| `runtime_contract.py` | Canonical local runtime paths for PB Studio. |
 
-| Datei | Funktion | Abhängigkeiten |
-|-------|----------|----------------|
-| `moondream.py` | Moondream ONNX Captioning | onnxruntime-directml |
-| `raft.py` | RAFT ONNX Optical Flow | onnxruntime-directml |
-| `scene_detect.py` | PySceneDetect Scene Detection | scenedetect, opencv |
-| `frame_extractor.py` | Frame-Extraktion aus Video | opencv |
-| `auto_tagger.py` | Automatisches Video-Tagging | siglip, moondream |
-| `encoder_utils.py` | FFmpeg Encoding Utilities | ffmpeg |
-| `engine.py` | Video-Processing Engine | alle video-Module |
-| `thumbnail_generator.py` | Thumbnail-Erzeugung | opencv, PIL |
-| `video_renderer.py` | Video-Rendering Pipeline | ffmpeg, encoder_utils |
+### `src/pb_studio/ai/`
 
-**Signalkette Video-Analyse:**
-```
-VideoRouter.analyze → VideoService → engine.py
-  → frame_extractor (Keyframes)
-  → scene_detect (Szenen-Grenzen)
-  → siglip_wrapper (Embeddings pro Frame)
-  → moondream (Captions pro Szene)
-  → raft (Motion-Scores)
-  → auto_tagger (Tags)
-  → Ergebnis → FAISS + DB → SSE Event
-```
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `chat_agent.py` | KI-Chat-Agent fuer PB Studio. |
+| `clap_wrapper.py` | CLAP Audio Specialist - ONNX Implementation with DirectML |
+| `config_loader.py` | Shared best-effort readers for AI configuration. |
+| `llm_provider.py` | LLM-Provider-Factory fuer exklusiv gewähltes Ollama oder LM Studio. |
+| `lmstudio_client.py` | LM Studio HTTP-Client fuer PB Studio (AMD Premium). |
+| `model_inventory.py` | Truthful, provider-aware inventory for local AI models. |
+| `model_registry.py` | Model-Registry und Auto-Selection fuer PB Studio AI-Tasks. |
+| `siglip_wrapper.py` | SigLIP Image Encoder - ONNX Implementation with DirectML. |
+| `smart_director.py` | Smart Director - AI-Powered Video Generation Orchestrator |
+| `tool_registry.py` | Tool-Registry fuer den PB-Studio KI-Chat-Agenten. |
+| `video_specialist.py` | Video Specialist - Video Analysis and Clip Matching with SigLIP. |
 
----
+### `src/pb_studio/audio/`
 
-## Core-Module
-**Pfad:** `src/pb_studio/core/`
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `analyzer.py` | — |
+| `audio_embedder.py` | Legacy Brain cache identity for the registered CLAP ONNX encoder. |
+| `band_params.py` | Gemeinsame Bandgrenzen und STFT-Parameter fuer die Drum-Trigger. |
+| `beat_detector.py` | BeatDetector mit BeatNet für präzise KI-basierte Beat- & Downbeat-Erkennung. |
+| `beat_grid.py` | Beatgrid-Schaetzung: Tempo, Anker und eine belastbare Guete. |
+| `beat_grid_segments.py` | Segmentiertes Beatgrid fuer DJ-Mixe: mehrere Grid-Abschnitte statt eines Tempos. |
+| `beat_this_tracker.py` | Hash-bound Beat This! inference; callers must hold the shared GPU lock. |
+| `dj_mix_analyzer.py` | DJ-Mix-Analyzer - Erkennung von Übergängen und Energie-Phasen in DJ-Mixes. |
+| `downbeat_alignment.py` | Neural event validation and diagnostic comparison with legacy beat grids. |
+| `key_detector.py` | Key Detector — Krumhansl-Kessler Algorithmus für Tonarten-Erkennung. |
+| `separator.py` | Stem Separator for AMD GPUs (DirectML Patched) |
+| `spectral_analyzer.py` | Spectral Analyzer - 8-Band Frequenzanalyse für Audio. |
+| `streaming_analyzer.py` | Streaming-Audio-Analyzer fuer lange Mixe (>60min). |
+| `structure_analyzer.py` | Structure-Analyzer - Erkennung von Song-Abschnitten. |
+| `subtrack_detector.py` | Sub-Track-Detection für DJ-Mixes (Plan Phase 1 #4). |
+| `waveform_analyzer.py` | 3-Band Waveform Analyzer (Rekordbox-Style) |
+| `waveform_cache.py` | Waveform Cache with LRU Eviction |
 
-| Datei | Funktion | Abhängigkeiten |
-|-------|----------|----------------|
-| `vram_arbiter.py` | VRAM-Budgetierung & Zuweisung | system_monitor |
-| `vram_budget_manager.py` | Detailliertes VRAM-Budget-Management | vram_arbiter |
-| `task_queue.py` | Aufgaben-Queue mit Prioritäten | threading |
-| `thread_pool.py` | Thread-Pool Management | concurrent.futures |
-| `crash_handler.py` | Crash-Recovery & Logging | logging |
-| `model_loader.py` | ONNX-Modell-Laden mit DirectML | onnxruntime-directml |
-| `system_monitor.py` | GPU/System-Monitoring | LibreHardwareMonitor (pythonnet) |
-| `worker_signals.py` | Signal-Definitionen für Worker | — |
+### `src/pb_studio/brain/`
 
-**GPU-Zugriff-Kette:**
-```
-Request → gpu_lock Middleware → VramArbiter.request_vram()
-  → model_loader.load_model() → ONNX DirectML Session
-  → Inference → VramArbiter.release_vram()
-```
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `brain_service.py` | BrainService — Singleton der Brain-Pipeline (Plan Phase 3+4). |
+| `bridge_dimensions.py` | 17 Bridge-Achsen Berechnungen (Plan Decision #10 + Section 5). |
+| `cold_start.py` | Cold-start defaults für 17 Brücken-Achsen (Plan Decision #9 + Section 5). |
+| `context_resolver.py` | 6 Kontext-Slots + 5 Backoff-Keys (Plan Section 5). |
+| `cross_modal_projector.py` | Cross-Modal Projector CLAP <-> SigLIP (R-Brain-04 + R-Brain-05 + R-Brain-08). |
+| `feature_adapter.py` | Canonical real-data adapter shared by Brain scoring entry points. |
+| `feedback_logger.py` | Durable Brain feedback logging across project state and global weights. |
+| `llm_narrator.py` | LLM-Narrator fuer das Brain-Modul. |
+| `loader_cache.py` | R-Brain-08: Process-level LRU cache for loaded raw embeddings. |
+| `post_processor.py` | Brain post-processor for cut lists (Plan Phase 4 + R-Brain-01..09). |
+| `projector_trainer.py` | R-Brain-05: Sammelt Audio-Video-Embedding-Paare aus Brain-Feedback und |
+| `reranker.py` | BrainReranker — Eingriffspunkt in clip_selector.select_clip (Plan Phase 4). |
+| `scorer.py` | BrainScorer — kombiniert verfügbare Brücken-Werte × Posterior-Gewichte. |
+| `smart_sampler.py` | Smart-Sampler — Top-N Cuts fuer aktives Lernen (Plan Phase 4 + R-Brain-06). |
+| `weight_store.py` | Beta-Bernoulli WeightStore mit Hierarchical Backoff |
 
----
+### `src/pb_studio/core/`
 
-## Data-Module
-**Pfad:** `src/pb_studio/data/`
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `crash_handler.py` | — |
+| `directml_adapter.py` | Central DXGI adapter selection for every DirectML consumer. |
+| `gpu_lock.py` | Global GPU inference lock for PB Studio AMD. |
+| `media_hash.py` | Streaming sha256 hash for media files. |
+| `model_loader.py` | VRAM-Aware Model Loader for AMD DirectML |
+| `system_monitor.py` | — |
+| `task_queue.py` | — |
+| `thread_pool.py` | — |
+| `vram_budget_manager.py` | VRAM Budget Manager - Central Authority for GPU Memory Management |
+| `worker_signals.py` | — |
 
-| Datei | Funktion | Abhängigkeiten |
-|-------|----------|----------------|
-| `database_core.py` | SQLite via SQLAlchemy | sqlalchemy |
-| `vector_store.py` | FAISS-CPU Vector Store | faiss-cpu |
-| `repositories/` | Repository-Pattern für DB-Zugriff | database_core |
+### `src/pb_studio/data/`
 
----
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `database_core.py` | — |
+| `vector_operation_outbox.py` | Crash-consistent SQLite/FAISS delete operations. |
+| `vector_store.py` | — |
 
-## Pacing-Module
-**Pfad:** `src/pb_studio/pacing/`
+### `src/pb_studio/data/repositories/`
 
-| Datei | Funktion | Abhängigkeiten |
-|-------|----------|----------------|
-| `advanced_pacing_engine.py` | Haupt-Pacing-Engine | clip_selector, semantic_matcher |
-| `anchor_manager.py` | Anchor-Punkt-Verwaltung | — |
-| `clip_selector.py` | Video-Clip-Auswahl basierend auf Beats | vector_store, siglip |
-| `constants.py` | Pacing-Konstanten | — |
-| `export_handler.py` | Export der Cut-List | — |
-| `mood_generator.py` | Stimmungs-Generierung aus Audio | audio analyzer |
-| `motion_preference.py` | Motion-Präferenz pro Beat-Phase | raft scores |
-| `pacing_models.py` | Daten-Modelle für Pacing | pydantic |
-| `semantic_matcher.py` | Semantisches Matching Audio↔Video | siglip, vector_store |
-| `smart_director.py` | Regie-Entscheidungen | advanced_pacing_engine |
-| `timeline_models.py` | Timeline-Datenstrukturen | — |
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `media_repository.py` | — |
+| `project_repository.py` | — |
 
-**Signalkette Pacing:**
-```
-PacingRouter.generate → PacingService → advanced_pacing_engine
-  → anchor_manager (Beat-Anchors laden)
-  → mood_generator (Stimmung aus Audio)
-  → clip_selector (Video-Clips wählen via FAISS)
-  → semantic_matcher (Audio↔Video Matching)
-  → motion_preference (Motion-Score pro Segment)
-  → export_handler (Cut-List generieren)
-  → SSE Events (Progress)
-```
+### `src/pb_studio/data/schemas/`
 
----
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `media_json_schema.py` | C4-Fix (S-C1, 2026-05-19): Versioned schema for SQLite JSON-blob columns. |
 
-## Rendering-Module
-**Pfad:** `src/pb_studio/rendering/`
+### `src/pb_studio/models/`
 
-| Datei | Funktion | Abhängigkeiten |
-|-------|----------|----------------|
-| `final_renderer.py` | Finales Video-Rendering | ffmpeg, render_engine |
-| `preview_renderer.py` | Schnelle Vorschau-Generierung | ffmpeg |
-| `proxy_service.py` | Proxy-Dateien für leichte Vorschau | ffmpeg |
-| `render_engine.py` | Rendering-Orchestrator | final_renderer, video_renderer |
-| `render_service.py` | Service-Schicht für Rendering | render_engine |
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `audio.py` | Audio-related data models for PB Studio AMD. |
+| `timeline.py` | Timeline-related data models for PB Studio AMD. |
+| `video.py` | Video-related data models for PB Studio AMD. |
 
----
+### `src/pb_studio/pacing/`
 
-## Services
-**Pfad:** `src/pb_studio/services/`
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `advanced_pacing_engine.py` | Advanced Pacing Engine - Musical Intelligence for Video Editing |
+| `clip_selector.py` | Clip Selector - Intelligent Video Segment Selection (AMD Edition) |
+| `constants.py` | Pacing Constants |
+| `pacing_models.py` | Pacing Models |
+| `timeline_models.py` | Timeline Models |
 
-| Datei | Funktion | Verbindet |
-|-------|----------|-----------|
-| `analysis_service.py` | Koordiniert Audio+Video Analyse | audio/, video/, ai/ |
-| `audio_service.py` | Audio-Operationen | audio/ Module |
-| `generation_service.py` | Video-Generierung aus Pacing | pacing/, rendering/ |
-| `media_service.py` | Medien-Import/-Verwaltung | data/, audio/, video/ |
-| `pacing_service.py` | Pacing-Operationen | pacing/ Module |
+### `src/pb_studio/rendering/`
 
----
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `preview_renderer.py` | PreviewGenerator - Schnelle Vorschau ab beliebigem Zeitpunkt (AMD Version). |
+| `render_queue.py` | Render-Queue mit SQLite-Persistenz. |
+| `render_service.py` | Render Service (AMD Version) |
 
-## Workers
-**Pfad:** `src/pb_studio/workers/`
+### `src/pb_studio/services/`
 
-| Datei | Funktion |
-|-------|----------|
-| `orchestrator.py` | Koordiniert Worker-Ausführung |
-| `worker_registry.py` | Registry aller verfügbaren Worker |
-| `registry_setup.py` | Worker-Registrierung beim Start |
-| `base_worker.py` | Basis-Klasse für alle Worker |
-| `audio/` | Audio-spezifische Worker |
-| `video/` | Video-spezifische Worker |
-| `generation/` | Generierungs-Worker |
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `audio_service.py` | Audio Service für PB_studio AMD |
+| `pacing_service.py` | Pacing Service für PB_studio AMD |
 
----
+### `src/pb_studio/storage/`
 
-## Models
-**Pfad:** `src/pb_studio/models/`
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `backup.py` | Atomare VACUUM INTO Backups für den Hirn-Store (Plan Phase 6). |
+| `brain_store.py` | 3-DB Hirn-Store unter %APPDATA%\PB_Studio\brain\ (Plan Phase 3). |
+| `embedding_cache.py` | Hash-keyed embedding cache (Plan Phase 2/3, Hirn-Store). |
+| `embedding_repository.py` | sqlite-vec embedding repository (Plan Phase 2). |
+| `migration_runner.py` | Lightweight SQLite migrations via PRAGMA user_version (Plan Phase 3). |
+| `recovery_adapters.py` | Owner inventory and semantic validation for product recovery generations. |
+| `recovery_barrier.py` | Process-wide write barrier used by crash-consistent recovery snapshots. |
+| `recovery_generation.py` | Immutable product-generation snapshots for PB Studio recovery. |
+| `sqlite_init.py` | Standard PRAGMA setup for every SQLite connection (Plan Phase 2/3). |
 
-| Datei | Inhalt |
-|-------|--------|
-| `audio.py` | AudioClip, AudioAnalysisResult, StemResult |
-| `video.py` | VideoClip, VideoAnalysisResult, SceneInfo |
-| `timeline.py` | TimelineEntry, CutList, PacingResult |
+### `src/pb_studio/utils/`
 
----
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `cache_manager.py` | Cache Manager für PB_studio AMD |
+| `log_rotation.py` | Log-Rotation + Retention für PB Studio AMD. |
+| `path_helpers.py` | Path Helpers |
+| `profiling.py` | Einfacher Profiler und Context-Manager für Performance-Messung. |
 
-## Utils
-**Pfad:** `src/pb_studio/utils/`
+### `src/pb_studio/video/`
 
-| Datei | Funktion |
-|-------|----------|
-| `cache_manager.py` | Allgemeiner Cache (Waveforms, Thumbnails, etc.) |
-| `logging_setup.py` | Logging-Konfiguration |
-| `path_helpers.py` | Pfad-Utilities |
-| `profiling.py` | Performance-Profiling |
-
----
-
-## Backend
-**Pfad:** `backend/`
-
-### Router
-| Router | Prefix | Kern-Funktionen |
-|--------|--------|-----------------|
-| `audio_router.py` | `/api/audio` | analyze, separate, beats, waveform |
-| `video_router.py` | `/api/video` | analyze, scenes, embeddings, thumbnails |
-| `pacing_router.py` | `/api/pacing` | generate, preview, export |
-| `render_router.py` | `/api/render` | start, status, cancel |
-| `project_router.py` | `/api/project` | load, save, list |
-| `events_router.py` | `/api/events` | SSE stream |
-
-### Middleware
-- `gpu_lock.py` — Stellt sicher, dass nur ein GPU-Job gleichzeitig läuft
-
-### Schemas (Pydantic)
-Ein Schema-Modul pro Router in `backend/schemas/`.
-
----
-
-## Frontend
-**Pfad:** `PBStudio.UI/`
-
-### Technologie-Stack
-- .NET 9.0, WPF
-- CommunityToolkit.Mvvm
-- MaterialDesignThemes.Wpf
-- MahApps.Metro.IconPacks.Material
-- Microsoft.Xaml.Behaviors.Wpf
-
-### Architektur
-MVVM-Pattern: View (XAML) ↔ ViewModel (C#) ↔ Service (HTTP/SSE)
-
-Kein Code-Behind wo MVVM möglich.
+| Datei | Zweck (erste Docstring-Zeile) |
+|---|---|
+| `audio_key_detector.py` | Extrahiert Audio-Track aus Video + detektiert Tonart via Krumhansl-Kessler (L-K4). |
+| `auto_tagger.py` | Auto-Tagger für Video-Szenen basierend auf Moondream-Captions. |
+| `clip_audio_peaks.py` | Extract a downsampled mono peak array from a video/audio file via ffmpeg. |
+| `encoder_utils.py` | AMD AMF Encoder Utilities for PB Studio. |
+| `frame_extractor.py` | Frame Extractor - Extrahiert Frames aus Videos mittels OpenCV. |
+| `lmstudio_vision_wrapper.py` | LM-Studio-Vision-Wrapper fuer Video-Frame Tag-Extraktion. |
+| `moondream.py` | Moondream Vision-Language Model - ONNX Implementation with DirectML. |
+| `moondream_wrapper.py` | Moondream-Wrapper fuer Video-Frame Captioning + dominante Farb-Extraktion. |
+| `raft.py` | RAFT Optical Flow - ONNX Implementation with DirectML. |
+| `scene_detect.py` | — |
+| `thumbnail_generator.py` | Thumbnail Generator - Erstellt Thumbnails für Video-Clips. |
+| `video_embedder.py` | Legacy Brain cache identity for the registered SigLIP ONNX encoder. |
+| `visual_curves.py` | Brightness / Saturation / Color-Temperature pro Frame. |
