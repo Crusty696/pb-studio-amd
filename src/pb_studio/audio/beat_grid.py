@@ -275,13 +275,41 @@ def _phase_scores(
     overall = float(np.mean(envelope))
     if overall <= 0.0 or interval <= 0.0 or span <= interval:
         return np.zeros(0)
-    scores = np.empty(PHASE_STEPS, dtype=np.float64)
-    for step in range(PHASE_STEPS):
-        positions = np.arange(interval * step / PHASE_STEPS, span, interval)
-        if positions.size < 8:
-            return np.zeros(0)
-        scores[step] = float(np.mean(np.interp(positions, times, envelope)) / overall)
-    return scores
+    # Alle Phasen in einem Schritt (T003-Laufzeit, 2026-10-01). Frueher eine
+    # Python-Schleife mit 64 `np.arange`/`np.interp`-Aufrufen je Tempo; bei
+    # 6 Kandidaten x 81 Feinstufen waren das ~31.000 Aufrufe pro Raster und
+    # der Hauptteil der Mix-Grenzerkennung. Ergebnis gleich (Abweichung
+    # < 1e-12, Test `test_phase_scores_match_reference_loop`): dieselben
+    # Positionen `step*interval/64 + i*interval < span`, gleicher Mittelwert.
+    offsets = interval * np.arange(PHASE_STEPS, dtype=np.float64) / PHASE_STEPS
+    counts = np.ceil((span - offsets) / interval).astype(np.int64)
+    if int(counts.min()) < 8:
+        return np.zeros(0)
+    beats = np.arange(int(counts.max()), dtype=np.float64) * interval
+    positions = offsets[:, None] + beats[None, :]
+    valid = np.arange(beats.size)[None, :] < counts[:, None]
+    values = _interp_on_grid(np.where(valid, positions, 0.0), times, envelope)
+    scores = (values * valid).sum(axis=1) / counts / overall
+    return scores.astype(np.float64)
+
+
+def _interp_on_grid(x: np.ndarray, times: np.ndarray, values: np.ndarray) -> np.ndarray:
+    """`np.interp` fuer das gleichmaessige Frame-Raster von `librosa.times_like`.
+
+    Index direkt aus der Zeit statt Binaersuche je Punkt: gemessen ~5x
+    schneller, Abweichung zu `np.interp` < 1e-12. Nicht gleichmaessige
+    Zeitachsen gehen unveraendert an `np.interp`.
+    """
+    n = times.size
+    if n < 2:
+        return np.interp(x, times, values)
+    step = float(times[1] - times[0])
+    if step <= 0.0 or abs(float(times[-1]) - float(times[0]) - step * (n - 1)) > 1e-9 * n:
+        return np.interp(x, times, values)
+    frac = np.clip((x - float(times[0])) / step, 0.0, n - 1.0)
+    left = np.minimum(frac.astype(np.int64), n - 2)
+    weight = frac - left
+    return values[left] * (1.0 - weight) + values[left + 1] * weight
 
 
 def _contrast(scores: np.ndarray) -> tuple[float, float]:

@@ -1,5 +1,11 @@
 # QC Report — PB Studio Full Audit Remediation
 
+## Session 2026-10-01 (Claude/Cowork, David unterwegs)
+
+- **Liegengebliebene WPF-Änderungen geprüft, gebaut, committet** (`99dd5eb` Projektübernahme vom Backend, `bf99e6a` INGEST-Tab entfernt, `6204940` Launcher wartet 180 s auf den Recovery-Snapshot): WPF Release 0 Warnungen/0 Fehler, C# 85/85, betroffene Python-Tests 28/28, PowerShell-Parser 0 Fehler. `.claude/settings.local.json` (lokale MCP-Freigabe) bewusst nicht committet. Nicht geprüft: sichtbare GUI.
+- **T003 Mix-Grenzen:** optimale Zerlegung der Chroma-Ähnlichkeit statt Spitzenwahl. Beatgematchte/tempogleiche Referenzmixe Mittel F1 0,538 → 0,783; unberührte Holdouts 0,700 → 0,889 und 0,444 → 0,556 (56-s-Blenden, unter 0,65); `techno` 1,000 → 0,889. Laufzeit A/B 141,9 → 56,2 s bzw. 118,9 → 51,8 s je Mix (unter Last, ~0,8 min/h). Tonart/BPM/Beatgrid an 40 rekordbox-Titeln feldgleich. `evidence/t003-boundaries-20261001.md`. T003 bleibt offen: kein echter DJ-Mitschnitt mit Zeitmarken, ein Holdout unter 0,65.
+- **Vollsuite (isoliertes APPDATA/LOCALAPPDATA, eigenes basetemp):** Lauf 1 (Zwischenstand) 1.973 passed / 10 skipped / 1 failed — `test_caption_deadline_budget_is_shared_with_moondream`, Uhrauflösung (Windows ~15,6 ms, 10-ms-Schlaf las dieselbe Zeit); Test auf 50 ms gestellt, 5/5 + Datei 10/10 grün. **Lauf 2 auf dem Endstand: 1.979 passed / 10 skipped / 0 failed / 35 warnings (25:56).**
+
 ## Session 2026-09-30 (Nachfolge nach hängender Session)
 
 - **T013 PASS:** API-Volllauf plus WPF-GUI-Lauf per UI Automation (Öffnen, Ordner-Import 5/5, Analyse 5/5, Speichern, Beenden, Neustart, Wiederöffnen identisch, Vorschau 10 s 300 Frames + Stereo-AAC). `evidence/t013-gui-20260930.md`. Keine Screenshots (Anzeige nicht aktualisiert), keine Maus-Bedienung (Computer-Use-Freigabe nicht bestätigbar).

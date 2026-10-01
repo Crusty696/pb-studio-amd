@@ -177,3 +177,122 @@ def test_long_mix_without_tempo_cue_still_uses_harmonic_repetition(monkeypatch, 
     assert found and all(b.components["tempo"] == 0.0 for b in detector.detect(tmp_path / "mix.wav").boundaries)
     hits = sum(min(abs(f - t) for f in found) <= 15.0 for t in (420.0, 900.0, 1380.0))
     assert hits >= 2, found
+
+
+# ----------------------------------------------------- Mix-Grenzen (2026-10-01)
+
+def _related_tracks_features(boundaries, duration: float = 3000.0, odd_one: int = 3):
+    """Beatgematchter Mix (ueberall 140 BPM) aus verwandten Titeln: jeder Titel
+    hat eine eigene Grundfaerbung (Tonart/Klang) plus vier wiederkehrende
+    Muster; die Grundfaerbung eines Titels uebernimmt 30 % der vorigen, nur
+    Titel `odd_one` bricht hart. Die Tempostufe schweigt, die Grenzen muessen
+    aus der Harmonie kommen."""
+    rng = np.random.default_rng(11)
+    n = int(duration)
+    edges = [0, *[int(b) for b in boundaries], n]
+    signature = rng.random(12) ** 2
+    chroma = np.zeros((12, n), dtype=np.float32)
+    for index, (start, end) in enumerate(zip(edges[:-1], edges[1:])):
+        if index == odd_one:
+            signature = 2.0 * rng.random(12) ** 2
+        elif index:
+            signature = 0.3 * signature + 0.7 * rng.random(12) ** 2
+        motifs = rng.random((4, 12)) ** 3
+        for second in range(start, end):
+            chroma[:, second] = signature + 0.5 * motifs[(second // 8) % 4] + rng.normal(0, 0.02, 12)
+    activity = np.abs(rng.normal(0.0, 0.01, n)).astype(np.float32)
+    flux = np.abs(rng.normal(0.0, 0.05, n)).astype(np.float32)
+    tempo = np.full(n, 140.0, dtype=np.float32)
+    return np.clip(chroma, 0, None).astype(np.float32), activity, flux, tempo
+
+
+def test_partition_finds_every_change_in_beatmatched_mix(monkeypatch, tmp_path) -> None:
+    import librosa
+
+    boundaries = (420.0, 830.0, 1260.0, 1700.0, 2120.0, 2560.0)
+    features = _related_tracks_features(boundaries)
+    monkeypatch.setattr(librosa, "get_duration", lambda **_kw: 3000.0)
+    detector = sd.SubtrackDetector()
+    monkeypatch.setattr(detector, "_bounded_chunk_features", lambda *_a: features)
+    result = detector.detect(tmp_path / "mix.wav")
+    found = [b.time for b in result.boundaries]
+    assert len(found) == len(boundaries), found
+    for truth in boundaries:
+        assert min(abs(f - truth) for f in found) <= 15.0, (truth, found)
+    assert all(b.components["tempo"] == 0.0 for b in result.boundaries)
+    assert all(0.0 < b.confidence <= 1.0 for b in result.boundaries)
+
+    # Gegenprobe: ohne die Zerlegung (Preis unbezahlbar, keine Hoechstlaenge)
+    # bleibt nichts uebrig - die Grenzen stammen aus ihr, nicht aus der Tempostufe.
+    monkeypatch.setattr(sd, "PARTITION_PENALTY", 1e9)
+    monkeypatch.setattr(sd, "PARTITION_MAX_SEC", 1e9)
+    assert detector.detect(tmp_path / "mix.wav").boundaries == []
+
+
+def test_partition_recovers_block_structure_and_ignores_homogeneous_input() -> None:
+    blocks = [40, 75, 55, 90]  # Frames a 4 s: 160-360 s je Abschnitt
+    m = sum(blocks)
+    similarity = np.full((m, m), -0.2)
+    start = 0
+    for size in blocks:
+        similarity[start:start + size, start:start + size] = 0.8
+        start += size
+    cuts = sd.SubtrackDetector._optimal_partition(similarity, 4.0)
+    assert cuts == list(np.cumsum(blocks)[:-1])
+    one_track = 200  # 800 s, kuerzer als PARTITION_MAX_SEC: nichts zu teilen
+    assert sd.SubtrackDetector._optimal_partition(np.full((one_track, one_track), 0.8), 4.0) == []
+
+
+def test_partition_respects_minimum_segment_length() -> None:
+    m = 200
+    similarity = np.full((m, m), -0.2)
+    similarity[:10, :10] = similarity[10:, 10:] = 0.8  # 40-s-"Titel" am Anfang
+    cuts = sd.SubtrackDetector._optimal_partition(similarity, 4.0)
+    assert all(c * 4.0 >= sd.PARTITION_MIN_SEC for c in cuts), cuts
+    assert all((m - c) * 4.0 >= sd.PARTITION_MIN_SEC for c in cuts), cuts
+
+
+# ------------------------------------------------------- Raster-Laufzeit (2026-10-01)
+
+def _phase_scores_reference(envelope, times, bpm, span):
+    """Die bis 2026-09-30 ausgelieferte Schleife, unveraendert."""
+    interval = 60.0 / bpm
+    overall = float(np.mean(envelope))
+    if overall <= 0.0 or interval <= 0.0 or span <= interval:
+        return np.zeros(0)
+    scores = np.empty(bg.PHASE_STEPS, dtype=np.float64)
+    for step in range(bg.PHASE_STEPS):
+        positions = np.arange(interval * step / bg.PHASE_STEPS, span, interval)
+        if positions.size < 8:
+            return np.zeros(0)
+        scores[step] = float(np.mean(np.interp(positions, times, envelope)) / overall)
+    return scores
+
+
+def test_phase_scores_match_reference_loop() -> None:
+    import librosa
+
+    rng = np.random.default_rng(5)
+    for _ in range(400):
+        n = int(rng.integers(20, 2500))
+        envelope = rng.random(n) ** 3
+        times = librosa.times_like(envelope, sr=SR, hop_length=bg.HOP_LENGTH)
+        span = float(times[-1])
+        bpm = float(rng.uniform(40.0, 300.0))
+        expected = _phase_scores_reference(envelope, times, bpm, span)
+        got = bg._phase_scores(envelope, times, bpm, span)
+        assert got.shape == expected.shape
+        if expected.size:
+            np.testing.assert_allclose(got, expected, rtol=0, atol=1e-10)
+
+
+def test_interp_on_grid_falls_back_for_irregular_times() -> None:
+    rng = np.random.default_rng(6)
+    values = rng.random(50)
+    regular = np.arange(50) * 0.0232
+    irregular = np.sort(rng.random(50)) * 2.0
+    x = rng.uniform(0.0, 1.1, 300)
+    np.testing.assert_allclose(bg._interp_on_grid(x, regular, values),
+                               np.interp(x, regular, values), atol=1e-12)
+    np.testing.assert_array_equal(bg._interp_on_grid(x, irregular, values),
+                                  np.interp(x, irregular, values))
