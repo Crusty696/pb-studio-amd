@@ -53,6 +53,15 @@ Gegengeprüft per `git grep` am 01.10.:
 | CLAUDE.md §4 „9 VMs / 9 Views“ | real 15/15 + 2 Dialoge | korrigieren |
 | Skills `pb-master/module-map.md`, `dev-video.md`, `video-expertise` | nennen gelöschte Module / `moondream_pytorch` | korrigieren |
 
+## E0. Am 01.10. nachmittags erledigt (Commits)
+
+- Quality-Gate entsperrt: 24 Skip-Ausnahmen waren am 30.09. abgelaufen (`1e28098`).
+- Abschnitt D umgesetzt: Module gelöscht (`2fc7029`), Berichte archiviert, Doku/Skills (`49d1a24`), Müllordner, Venvs, Worktrees entfernt.
+- Caption-Wortreihenfolge-Dubletten (`58b8bca`).
+- T003-melodic analysiert, bleibt offen (`ab6e6f3`, `t003-melodic-analyse-20261001.md`).
+- T014-Sampler um zusammengeführte Tags erweitert (`09bcb9b`); Neulauf scheiterte an LM Studio (Modell lud nicht, ~9 GB VRAM belegt – evtl. ComfyUI).
+- Obsidian `INDEX.md` neu angelegt.
+
 ## E. Bereits erledigt (frühere Offen-Punkte, am 01.10. gegengeprüft)
 
 - `"peak"` in `STRUCTURE_INTENSITY_MULTIPLIERS` – vorhanden (`advanced_pacing_engine.py:40`).

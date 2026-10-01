@@ -1,5 +1,16 @@
 # QC Report — PB Studio Full Audit Remediation
 
+## Session 2026-10-01 nachmittags (Cowork, Aufräumen + Offen-Liste)
+
+- **Offen-Liste** `evidence/offene-punkte-20261001.md` (Tasks, Befunde, Davids Entscheidungen, Learnings).
+- **Quality-Gate war blockiert:** alle 24 Skip-Ausnahmen liefen am 2026-09-30 ab; `scripts.pytest_release_guard` brach jeden Lauf mit „Expired skip exception“ ab (am alten Stand reproduziert). Auf 2026-10-31 verlängert, Gründe geprüft (`1e28098`).
+- **Toter Code entfernt** (`2fc7029`): `ai/clap_pytorch.py`, `ai/moondream_pytorch.py`, `audio/stem_runner.py`, `core/compression.py`, `video/ollama_vision_wrapper.py` + Marker-Test. `schemas/health_schemas.py` ist entgegen der Bestandsaufnahme in Gebrauch. C#-Klassen-Heuristik: keine toten Klassen.
+- **Aufgeräumt:** 18 Altberichte → `docs/archive/`, CLAUDE.md §4, pb-master-Modulkarte neu erzeugt (`49d1a24`); 76 `.pytest_tmp_*`, `.venv-lock`, `.venv-pre-lock-20260830`, zwei verwaiste Worktree-Einträge entfernt (nicht getrackt).
+- **Caption-Dubletten** mit vertauschter Wortreihenfolge (`58b8bca`), test-first.
+- **T003 melodic** analysiert (`ab6e6f3`, `evidence/t003-melodic-analyse-20261001.md`): 3 von 4 Fehlern liegen in der 56-s-Blende; Nachverortung gemessen und verworfen (0,806 → 0,790). Offen.
+- **T014:** Sampler schreibt jetzt die zusammengeführte Tagliste (`09bcb9b`); Neulauf scheiterte, LM Studio lud `qwen3.5-9b` nicht („Engine protocol startup was aborted“, ~9 GB VRAM belegt). Offen.
+- **Belege:** Python-Vollsuite isoliert mit Release-Guard **1.979 passed / 9 skipped / 0 failed (15:48)**, danach Video-Router-Bündel 179 passed (Caption-Fix kam nach Suite-Start). WPF Release 0/0, C# 85/85. Keine sichtbare GUI geprüft.
+
 ## Session 2026-10-01 (Claude/Cowork, David unterwegs)
 
 - **Liegengebliebene WPF-Änderungen geprüft, gebaut, committet** (`99dd5eb` Projektübernahme vom Backend, `bf99e6a` INGEST-Tab entfernt, `6204940` Launcher wartet 180 s auf den Recovery-Snapshot): WPF Release 0 Warnungen/0 Fehler, C# 85/85, betroffene Python-Tests 28/28, PowerShell-Parser 0 Fehler. `.claude/settings.local.json` (lokale MCP-Freigabe) bewusst nicht committet. Nicht geprüft: sichtbare GUI.
