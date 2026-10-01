@@ -20,6 +20,12 @@ import numpy as np
 
 from pb_studio.video.lmstudio_vision_wrapper import extract_tags_and_model_via_lmstudio
 
+try:  # production merge of the per-frame lists (run with isolated APPDATA)
+    from backend.routers.video_router import _merge_frame_tags
+except Exception:  # pragma: no cover - keep the sampler usable without backend deps
+    def _merge_frame_tags(frame_tags, limit=10):
+        return list(dict.fromkeys(t for tags in frame_tags for t in tags))[:limit]
+
 
 def loaded_models() -> list[dict]:
     with urllib.request.urlopen("http://127.0.0.1:1234/api/v0/models", timeout=10) as r:
@@ -77,7 +83,9 @@ def main() -> None:
         results.append({"media_id": mid, "file": Path(path).name,
                         "stored_tags": stored.get("tags"),
                         "stored_tag_source": stored.get("tag_source"),
-                        "live": frame_results})
+                        "live": frame_results,
+                        # what the production analysis would store for this clip
+                        "live_merged": _merge_frame_tags([fr["tags"] for fr in frame_results])})
         print(mid, Path(path).name, [fr["tags"] for fr in frame_results], flush=True)
 
     receipt = {"loaded_before": before, "loaded_after": loaded_models(),
