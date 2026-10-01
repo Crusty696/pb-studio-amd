@@ -96,30 +96,6 @@ class AudioAnalysisResult:
             confidence=float(data.get("confidence", 0)),
         )
 
-    @classmethod
-    def from_analyzer_output(cls, data: dict[str, Any]) -> "AudioAnalysisResult":
-        """Create from AudioAnalyzer.analyze_file() output.
-
-        Transformiert das Analyzer-Format {bpm, beat_data, count}
-        in das standardisierte AudioAnalysisResult-Format.
-        """
-        beat_data = data.get("beat_data", [])
-        # BeatNet gibt [[time, beat_type], ...] zurueck
-        beat_times = [float(b[0]) for b in beat_data] if beat_data else []
-        # Downbeats: beat_type == 1
-        downbeat_times = [
-            float(b[0]) for b in beat_data
-            if len(b) > 1 and int(b[1]) == 1
-        ] if beat_data else []
-        return cls(
-            bpm=float(data.get("bpm", 0)),
-            beat_times=beat_times,
-            downbeat_times=downbeat_times,
-            energy_curve=data.get("energy_curve", []),
-            energy_times=data.get("energy_times", []),
-            confidence=1.0 if data.get("bpm", 0) > 0 else 0.0,
-        )
-
     def get_beats(self) -> list[BeatInfo]:
         """Generate BeatInfo objects for all beats."""
         beats = []
@@ -166,21 +142,6 @@ class StemResult:
             other_path=data.get("other_path"),
         )
 
-    def get_available_stems(self) -> dict[str, str]:
-        """Return dictionary of available stems (non-None paths)."""
-        stems = {}
-        if self.vocals_path:
-            stems["vocals"] = self.vocals_path
-        if self.instrumental_path:
-            stems["instrumental"] = self.instrumental_path
-        if self.drums_path:
-            stems["drums"] = self.drums_path
-        if self.bass_path:
-            stems["bass"] = self.bass_path
-        if self.other_path:
-            stems["other"] = self.other_path
-        return stems
-
 
 @dataclass
 class AudioEmbeddingResult:
@@ -214,19 +175,3 @@ class AudioEmbeddingResult:
             model_name=data.get("model_name", "default"),
             embedding_dim=int(data.get("embedding_dim", 0)),
         )
-
-    def get_embedding_at_time(self, target_time: float) -> Optional[list[float]]:
-        """Get the embedding vector closest to the target time."""
-        if not self.timestamps or not self.embeddings:
-            return None
-
-        # Find closest timestamp
-        min_diff = float("inf")
-        closest_idx = 0
-        for i, t in enumerate(self.timestamps):
-            diff = abs(t - target_time)
-            if diff < min_diff:
-                min_diff = diff
-                closest_idx = i
-
-        return self.embeddings[closest_idx]

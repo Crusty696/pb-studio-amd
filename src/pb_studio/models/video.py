@@ -190,24 +190,3 @@ class VideoAnalysisResult:
         if not self.scenes:
             return 0.0
         return self.scenes[-1].end
-
-    def get_scene_at_time(self, time: float) -> Optional[SceneInfo]:
-        """Find the scene that contains a specific time point."""
-        for scene in self.scenes:
-            if scene.contains_time(time):
-                return scene
-        return None
-
-    def get_high_motion_scenes(self) -> list[SceneInfo]:
-        """Get all scenes with high motion."""
-        high_motion_indices = {
-            m.scene_index for m in self.motion_data if m.is_high_motion
-        }
-        return [s for s in self.scenes if s.scene_index in high_motion_indices]
-
-    def get_motion_for_scene(self, scene_index: int) -> Optional[MotionData]:
-        """Get motion data for a specific scene."""
-        for m in self.motion_data:
-            if m.scene_index == scene_index:
-                return m
-        return None

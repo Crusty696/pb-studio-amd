@@ -112,14 +112,6 @@ def _thumbnail_exists_for_clip(
     return any(p.exists() for p in candidates)
 
 
-def resolve_active_project_root(state: "AppState", fallback_root: str | Path) -> Path:
-    """Gibt den aktiven Projekt-Root zurück, sonst den konfigurierten Fallback."""
-    current = state.current_project or {}
-    current_path = current.get("path") if isinstance(current, dict) else None
-    if current_path:
-        return Path(current_path).resolve()
-    return Path(fallback_root).resolve()
-
 
 def resolve_project_db_id(project_data: Optional[dict]) -> int:
     """Extrahiert die DB-Projekt-ID aus current_project; Fallback bleibt 1 für Legacy-Fälle."""

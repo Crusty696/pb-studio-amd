@@ -218,35 +218,6 @@ class SpectralAnalyzer:
             "num_frames": len(times),
         }
 
-    def get_band_energy_at_time(
-        self, analysis_result: Dict, time_seconds: float
-    ) -> Dict[str, float]:
-        """Gibt die Band-Energien zu einem bestimmten Zeitpunkt zurück."""
-        times = analysis_result.get("times", [])
-        if not times:
-            return {band: 0.0 for band in BAND_NAMES}
-
-        # Nächsten Frame-Index finden
-        idx = int(np.searchsorted(times, time_seconds))
-        idx = min(idx, len(times) - 1)
-
-        result = {}
-        for band_name in BAND_NAMES:
-            energies = analysis_result["band_energies"].get(band_name, [])
-            if idx < len(energies):
-                result[band_name] = float(energies[idx])
-            else:
-                result[band_name] = 0.0
-        return result
-
-    def get_band_means(self, analysis_result: Dict) -> List[float]:
-        """Gibt die 8 Band-Mittelwerte als Liste zurück (für Feature-Vektoren)."""
-        return [analysis_result["band_means"].get(b, 0.0) for b in BAND_NAMES]
-
-    def get_band_variances(self, analysis_result: Dict) -> List[float]:
-        """Gibt die 8 Band-Varianzen als Liste zurück (für Feature-Vektoren)."""
-        return [analysis_result["band_variances"].get(b, 0.0) for b in BAND_NAMES]
-
     def _detect_events(
         self, band_energies: Dict[str, FloatArray], times: FloatArray
     ) -> List[Dict[str, Any]]:

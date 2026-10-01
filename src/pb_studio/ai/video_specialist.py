@@ -439,32 +439,6 @@ class VideoSpecialist:
 
         return results[:k]
 
-    def find_similar_clips_by_video(
-        self,
-        video_path: str,
-        k: int = 5,
-        interval: float = 1.0
-    ) -> List[Tuple[VideoClip, float]]:
-        """
-        Find clips similar to a query video.
-
-        Args:
-            video_path: Path to query video
-            k: Number of results to return
-            interval: Keyframe extraction interval
-
-        Returns:
-            List of (VideoClip, score) tuples sorted by similarity
-        """
-        # Compute query embedding
-        query_embedding = self.embed_video(video_path, interval=interval)
-
-        if query_embedding is None:
-            logger.error(f"Failed to embed query video: {video_path}")
-            return []
-
-        return self.find_similar_clips(query_embedding, k=k)
-
     def tag_video(
         self,
         video_path: str,

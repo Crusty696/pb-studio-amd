@@ -24,14 +24,6 @@ _gpu_cleanup_tasks: set[asyncio.Task[None]] = set()
 db_write_lock = asyncio.Lock()
 
 
-async def get_gpu_lock() -> asyncio.Lock:
-    """Dependency: GPU-Lock für DirectML Serialisierung."""
-    return gpu_lock
-
-
-async def get_db_write_lock() -> asyncio.Lock:
-    """Dependency: Globales Lock für SQLite-Schreibzugriffe (Vermeidung von WAL-Lock-Contention)."""
-    return db_write_lock
 
 
 async def with_gpu_task(

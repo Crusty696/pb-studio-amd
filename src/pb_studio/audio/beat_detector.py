@@ -395,23 +395,6 @@ class BeatDetector:
             logger.error(f"BeatNet Scan Error: {e}")
             return self._detect_beats_librosa(audio_path), []
 
-    def detect_beats_streaming(
-        self, audio_path: str | Path, total_duration: float,
-        progress_callback: ProgressCallback = None,
-    ) -> List[float]:
-        return self.detect_beats(audio_path=audio_path, duration=total_duration, progress_callback=progress_callback)
-
-    def get_bpm(self, beat_times: List[float]) -> float | None:
-        if not beat_times or len(beat_times) < 2:
-            return None
-        intervals = np.diff(beat_times)
-        if len(intervals) == 0:
-            return None
-        median_interval = np.median(intervals)
-        if median_interval <= 0:
-            return None
-        return float(60.0 / median_interval)
-
     def _detect_beats_librosa(
         self,
         audio_path: str,

@@ -2623,30 +2623,3 @@ class AdvancedPacingEngine:
                     pass  # callback errors duerfen Generation nicht brechen
 
         return sorted(result, key=lambda c: c.time)
-
-    def get_trigger_statistics(self, cuts: List["PacingCut"]) -> Dict[str, Any]:
-        """Gibt Statistiken über die generierten Cuts zurück."""
-        if not cuts:
-            return {
-                "total_cuts": 0,
-                "trigger_types": {},
-                "avg_interval": 0.0,
-                "min_interval": 0.0,
-                "max_interval": 0.0,
-                "avg_strength": 0.0,
-            }
-
-        trigger_counts: Dict[str, int] = {}
-        for cut in cuts:
-            trigger_counts[cut.trigger_type] = trigger_counts.get(cut.trigger_type, 0) + 1
-
-        intervals = [cuts[i + 1].time - cuts[i].time for i in range(len(cuts) - 1)]
-
-        return {
-            "total_cuts": len(cuts),
-            "trigger_types": trigger_counts,
-            "avg_interval": float(np.mean(intervals)) if intervals else 0.0,
-            "min_interval": float(np.min(intervals)) if intervals else 0.0,
-            "max_interval": float(np.max(intervals)) if intervals else 0.0,
-            "avg_strength": float(np.mean([c.strength for c in cuts])),
-        }

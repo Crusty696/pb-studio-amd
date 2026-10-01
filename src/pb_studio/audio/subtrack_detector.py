@@ -542,21 +542,6 @@ class SubtrackDetector:
             ),
         )
 
-    def _foote_novelty_from_features(self, chroma: np.ndarray) -> np.ndarray:
-        ssm = self._cosine_ssm(chroma.T)
-        kernel_size = min(64, max(8, ssm.shape[0] // 4))
-        kernel = self._foote_kernel(kernel_size)
-        half = kernel_size // 2
-        padded = np.pad(ssm, ((half, half), (half, half)), mode="edge")
-        novelty = np.zeros(ssm.shape[0], dtype=np.float32)
-        for index in range(ssm.shape[0]):
-            block = padded[
-                index : index + kernel_size,
-                index : index + kernel_size,
-            ]
-            novelty[index] = float(np.sum(block * kernel))
-        return np.maximum(novelty, 0.0)
-
     def _foote_novelty(
         self, y: np.ndarray, sr: int
     ) -> tuple[np.ndarray, np.ndarray]:

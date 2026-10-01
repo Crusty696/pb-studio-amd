@@ -8,7 +8,6 @@ Rückgabe: z.B. "C major", "A minor", "F# minor"
 """
 
 import logging
-from typing import Optional
 
 import numpy as np
 import librosa
@@ -130,27 +129,3 @@ class KeyDetector:
                     best_corr = corr_minor
                     best_key = f"{_NOTE_NAMES[i]} minor"
         return best_key, best_corr
-
-    def detect_key_from_file(
-        self,
-        audio_path: str,
-        duration: Optional[float] = None,
-    ) -> str:
-        """
-        Erkennt Tonart direkt aus Audio-Datei.
-
-        Args:
-            audio_path: Pfad zur Audio-Datei
-            duration:   Optional — nur erste N Sekunden (Performance bei langen Files)
-
-        Returns:
-            Tonart-String, z.B. "C major", "A minor"
-        """
-        try:
-            y, sr = librosa.load(
-                audio_path, sr=self.sr, mono=True, duration=duration
-            )
-            return self.detect_key(y, sr)
-        except Exception as e:
-            logger.warning(f"Key-Detection (File) fehlgeschlagen — {audio_path}: {e}")
-            return "Unknown"

@@ -394,7 +394,3 @@ class CLAPAnalyzer:
         self._processor = None
         self._preprocess_stats = None
         import gc; gc.collect()
-
-def analyze_audio_mood(audio_path: Union[str, Path], top_k: int = 5) -> List[str]:
-    analyzer = CLAPAnalyzer()
-    return analyzer.get_mood_tags(audio_path, top_k=top_k)

@@ -78,6 +78,3 @@ class ThreadPoolManager:
     def start(self, worker: Worker):
         """Starts a worker."""
         self.pool.start(worker)
-
-    def active_thread_count(self):
-        return self.pool.activeThreadCount()

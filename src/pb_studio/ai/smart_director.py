@@ -398,19 +398,6 @@ class SmartDirector:
                 if self._active_model == "siglip":
                     self._active_model = None
 
-    def _run_with_vram_budget(self, task: str):
-        """
-        Context manager pattern for VRAM-safe model switching.
-
-        Args:
-            task: "audio" (uses CLAP) or "video" (uses SigLIP)
-        """
-        if task == "audio":
-            self._ensure_clap_loaded()
-        elif task == "video":
-            self._unload_clap()
-            self._load_siglip()
-
     # =========================================================================
     # Audio Analysis
     # =========================================================================
@@ -1496,64 +1483,6 @@ class SmartDirector:
     # =========================================================================
     # Semantic Matching
     # =========================================================================
-
-    def match_mood_to_content(
-        self,
-        mood_tags: List[str],
-        clip_embeddings: np.ndarray
-    ) -> np.ndarray:
-        """
-        Cross-modal matching between audio moods and video embeddings.
-
-        Args:
-            mood_tags: List of mood descriptions
-            clip_embeddings: Array of shape (num_clips, embedding_dim)
-
-        Returns:
-            Match scores of shape (num_moods, num_clips)
-        """
-        if self._siglip is None or not self._siglip.has_text_encoder:
-            logger.warning("SigLIP text encoder not loaded, returning uniform scores")
-            num_moods = len(mood_tags)
-            num_clips = clip_embeddings.shape[0] if len(clip_embeddings.shape) > 1 else 1
-            return np.ones((num_moods, num_clips), dtype=np.float32) / num_clips
-
-        try:
-            # Get text embeddings for mood tags (as visual descriptions)
-            visual_descriptions = [self._mood_to_visual_prompt(mood) for mood in mood_tags]
-
-            # SigLIP.encode_text can handle a list of strings
-            with self._inference_lock:
-                if self._siglip is None:
-                    raise RuntimeError("SigLIP model unexpectedly unloaded")
-                mood_embeddings = self._siglip.encode_text(visual_descriptions)
-
-            if mood_embeddings is None:
-                logger.warning("Failed to encode mood descriptions")
-                num_clips = clip_embeddings.shape[0] if len(clip_embeddings.shape) > 1 else 1
-                return np.ones((len(mood_tags), num_clips), dtype=np.float32) / num_clips
-
-            # Ensure clip_embeddings is 2D
-            if len(clip_embeddings.shape) == 1:
-                clip_embeddings = clip_embeddings.reshape(1, -1)
-
-            # Cosine similarity
-            # Normalize
-            mood_norm = mood_embeddings / (np.linalg.norm(mood_embeddings, axis=1, keepdims=True) + 1e-8)
-            clip_norm = clip_embeddings / (np.linalg.norm(clip_embeddings, axis=1, keepdims=True) + 1e-8)
-
-            # Similarity matrix
-            similarity = np.dot(mood_norm, clip_norm.T)
-
-            # Convert to scores (0-1)
-            scores = (similarity + 1) / 2
-
-            return scores.astype(np.float32)
-
-        except Exception as e:
-            logger.error("Cross-modal matching failed: %s", e)
-            num_clips = clip_embeddings.shape[0] if len(clip_embeddings.shape) > 1 else 1
-            return np.ones((len(mood_tags), num_clips), dtype=np.float32)
 
     def _mood_to_visual_prompt(self, mood: str) -> str:
         """Convert mood tag to visual description for SigLIP matching."""

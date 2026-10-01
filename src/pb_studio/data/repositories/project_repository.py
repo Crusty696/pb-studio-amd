@@ -257,11 +257,3 @@ class ProjectRepository:
         except Exception as e:
             logger.error(f"Delete failed for Project {project_id}: {e}", exc_info=True)
             raise
-
-    def get_default_project(self) -> Optional[Dict]:
-        """Get the default project (ID: 1)."""
-        return self.get_by_id(1)
-
-    def rename_project(self, project_id: int, new_name: str):
-        """Rename a project."""
-        self.update_project(project_id, name=new_name)
