@@ -39,6 +39,17 @@ def test_different_tags_with_shared_word_stay():
     assert merged == ["dunkle kleidung", "dunkle farben", "dunkler wald"]
 
 
+def test_word_order_variants_collapse():
+    # Live 2026-09-30 (qwen3.5-9b): 'arme ausgestreckt' and 'ausgestreckte arme'
+    # both reached the clip.
+    merged = _merge_frame_tags([
+        ["arme ausgestreckt", "nebel"],
+        ["ausgestreckte arme", "wald"],
+    ])
+    assert sum("arme" in t for t in merged) == 1
+    assert "nebel" in merged and "wald" in merged
+
+
 def test_single_frame_keeps_order():
     assert _merge_frame_tags([["x", "y", "z"]]) == ["x", "y", "z"]
 

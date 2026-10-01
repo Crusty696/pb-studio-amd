@@ -376,6 +376,9 @@ def _same_tag_meaning(a: list[str], b: list[str]) -> bool:
     hoernern' are one tag each (qwen3.5-9b, 3 frames, 2026-09-30)."""
     if not a or not b:
         return False
+    # 'arme ausgestreckt'/'ausgestreckte arme': same words, other order.
+    if len(a) >= 2 and sorted(a) == sorted(b):
+        return True
     short, long_ = (a, b) if len(a) <= len(b) else (b, a)
     if len(short) >= 2 and long_[: len(short)] == short:
         return True
