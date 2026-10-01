@@ -202,7 +202,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "2.11.0+cpu",
                 "alias": "GHSA-RRMF-RVHW-RF47",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-09-29",
+                "expires_on": "2026-10-31",
                 "reason": (
                     "Affected torch.jit.script is absent in the shipped repository; "
                     "fresh-target compatibility and runtime tests remain required."
@@ -214,7 +214,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "81.0.0",
                 "alias": "GHSA-H35F-9H28-MQ5C",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-09-29",
+                "expires_on": "2026-10-31",
                 "reason": (
                     "The release target is Windows x64 with wheel-only installation, "
                     "which defeats the macOS sdist precondition."
@@ -226,7 +226,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "5.5.4",
                 "alias": "GHSA-XRQW-3RRV-VX5W",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-09-29",
+                "expires_on": "2026-10-31",
                 "reason": (
                     "The only production save_pretrained call was removed; all "
                     "remaining Transformers loads are local_files_only and no "
@@ -235,11 +235,11 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
             },
         ],
     }
-    # Die Ausnahmen sind am 2026-08-30 neu ausgestellt worden, nachdem die
-    # urspruengliche Frist (2026-08-02 + 30 Tage) auslief. Das 30-Tage-Fenster
+    # Die Ausnahmen sind am 2026-10-01 erneut ausgestellt worden, nachdem die
+    # Frist vom 2026-08-30 (+ 30 Tage = 2026-09-29) auslief. Das 30-Tage-Fenster
     # ist die eigentliche Zusicherung dieser Zeile - eine Verlaengerung darf
     # es nicht stillschweigend dehnen.
-    assert date.fromisoformat("2026-09-29") - date(2026, 8, 30) == timedelta(days=30)
+    assert date.fromisoformat("2026-10-31") - date(2026, 10, 1) == timedelta(days=30)
     assert len(security_gate._load_python_sca_exceptions(SCA_EXCEPTIONS)) == 3
 
     lock = tmp_path / "approved-exceptions.lock"
