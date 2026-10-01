@@ -104,6 +104,7 @@ def test_explicit_kwargs_filter_covers_all_documented_fields():
         "analysis_status",
         "stage_status",
         "stage_errors",
+        "tags",
     }
     missing = expected - found
     extra = found - expected
