@@ -25,7 +25,12 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from verify_subtrack_detection import _load_gt, evaluate_boundaries  # noqa: E402
+from verify_subtrack_detection import (  # noqa: E402
+    _load_gt,
+    evaluate_blend_windows,
+    evaluate_boundaries,
+    load_blend_windows,
+)
 
 from pb_studio.audio import subtrack_detector as sd  # noqa: E402
 
@@ -124,20 +129,31 @@ def run(z, variant: dict) -> list[float]:
 
 
 def evaluate(pairs: list[tuple[str, str]], variants: dict[str, dict]) -> None:
-    data = [(Path(c).stem, np.load(c), _load_gt(Path(g))) for c, g in pairs]
+    data = []
+    for c, g in pairs:
+        tracks = Path(g).with_name(Path(g).name.replace(".boundaries.txt", ".tracks.json"))
+        windows = load_blend_windows(tracks) if tracks.is_file() else None
+        data.append((Path(c).stem, np.load(c), _load_gt(Path(g)), windows))
     for name, var in variants.items():
         f1s = []
+        f1w = []
         line = []
-        for stem, z, gt in data:
+        for stem, z, gt, windows in data:
             b = run(z, var)
             m = evaluate_boundaries(b, gt, 15.0)
             f1s.append(m["f1"])
             err = [round(min(abs(x - g) for x in b)) if b else None for g in gt]
-            line.append(f"{stem}: F1 {m['f1']:.3f} n={len(b)} err={err}")
+            blend = ""
+            if windows is not None:
+                w = evaluate_blend_windows(b, windows, 15.0)
+                f1w.append(w["f1"])
+                blend = f" | Blende F1 {w['f1']:.3f} {w['tp']}/{w['fp']}/{w['fn']}"
+            line.append(f"{stem}: F1 {m['f1']:.3f} {m['tp']}/{m['fp']}/{m['fn']}{blend} n={len(b)} err={err}")
             if var.get("debug"):
                 line.append("      gt    " + " ".join(f"{g:6.0f}" for g in gt))
                 line.append("      found " + " ".join(f"{g:6.0f}" for g in b))
-        print(f"== {name}  mean F1 {np.mean(f1s):.3f}  min {np.min(f1s):.3f}")
+        extra = f"  | Blende mean {np.mean(f1w):.3f} min {np.min(f1w):.3f}" if f1w else ""
+        print(f"== {name}  mean F1 {np.mean(f1s):.3f}  min {np.min(f1s):.3f}{extra}")
         for s in line:
             print("   " + s)
 

@@ -10,7 +10,36 @@ import numpy as np
 import pytest
 
 from pb_studio.audio.subtrack_detector import SubtrackDetector
-from scripts.verify_subtrack_detection import evaluate_boundaries
+from scripts.verify_subtrack_detection import (
+    evaluate_blend_windows,
+    evaluate_boundaries,
+    load_blend_windows,
+)
+
+
+def test_blend_window_rule_counts_anywhere_inside_the_crossfade(tmp_path: Path):
+    """Acceptance rule 2026-10-01 (David): hit = inside [start-tol, end+tol]."""
+    import json
+
+    tracks = {"tracks": [
+        {"order": 0, "mix_start": 0.0, "mix_end": 530.0},
+        {"order": 1, "mix_start": 474.0, "mix_end": 1024.0},
+        {"order": 2, "mix_start": 968.0, "mix_end": 1400.0},
+    ]}
+    path = tmp_path / "mix.tracks.json"
+    path.write_text(json.dumps(tracks), encoding="utf-8")
+    windows = load_blend_windows(path)
+    assert windows == [(474.0, 530.0), (968.0, 1024.0)]
+
+    # 528 s is 26 s after the centre 502 s: wrong for the centre rule,
+    # right for the window rule. 1036 s is still inside end+15.
+    centres = [502.0, 996.0]
+    assert evaluate_boundaries([528.0, 1036.0], centres, 15.0)["tp"] == 0
+    m = evaluate_blend_windows([528.0, 1036.0], windows, 15.0)
+    assert (m["tp"], m["fp"], m["fn"]) == (2, 0, 0)
+    # outside the tolerance, and two hits in one window count once
+    m = evaluate_blend_windows([440.0, 480.0, 500.0], windows, 15.0)
+    assert (m["tp"], m["fp"], m["fn"]) == (1, 2, 1)
 
 
 def _write_wav(path: Path, y: np.ndarray, sr: int = 22050) -> None:

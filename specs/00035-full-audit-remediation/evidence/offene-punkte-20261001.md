@@ -5,6 +5,10 @@ Quellen: `tasks.md`, `qc-report.md`, `evidence/traceability.md`, alle `specs/*/t
 CLAUDE.md §3, Obsidian `10_Projects/PB_studio/log.md`, `_wiki/learnings/*`,
 Bestandsaufnahme der Claude-Code-Session vom 01.10. (03:03 UTC), eigene Gegenprüfung per `git grep`.
 
+> **Nachtrag 2026-10-01 abends:** T003, T014 und T012 erledigt (Davids Entscheide, siehe
+> `clarifications.md`); Spec 00035 hat keine offenen Tasks mehr, `.completed` gesetzt, kein
+> `.qc-passed`. Abschnitt A unten ist der Stand vom Mittag.
+
 ## A. Offene Tasks (Specs)
 
 Nur Spec 00035 hat offene Tasks (alle anderen `specs/*/tasks.md`: 0 offen).

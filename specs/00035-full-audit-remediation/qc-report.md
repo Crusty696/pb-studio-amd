@@ -1,5 +1,11 @@
 # QC Report — PB Studio Full Audit Remediation
 
+## Session 2026-10-01 abends (Cowork, Abschluss T003/T014/T012)
+
+- **T014 abgenommen:** Neulauf `qwen3.5-9b` (LM Studio Vulkan 2.49.0), 12 Kontaktbögen; Davids Urteil „Ja“ zu 919, 924, 944, 954, 969, 974 samt Claude-Einstufung (`ee94f6f`). Tag-Merge-Folgefix (`2a1071b`): Video/Caption-Bündel 198 passed.
+- **T003 abgenommen:** Davids Regel „Wechsel irgendwo in der Überblendung zählt“ im Mess-Skript umgesetzt; 7 Referenzmixe ohne Detektoränderung neu ausgewertet: F1 Mittel 0,806 → 0,901, Minimum 0,556 → 0,737, alle ≥ 0,65. Subtrack/T003/Beatgrid-Tests 39 passed / 1 skipped.
+- **T012:** `.completed` mit `evidence/completion-manifest.json`. Kein `.qc-passed`; GUI-/Live-Abnahmen aus der Traceability bleiben eigene Gates.
+
 ## Session 2026-10-01 nachmittags (Cowork, Aufräumen + Offen-Liste)
 
 - **Offen-Liste** `evidence/offene-punkte-20261001.md` (Tasks, Befunde, Davids Entscheidungen, Learnings).
