@@ -120,7 +120,7 @@ def main():
     tabs = [
         "PROJEKT", "AUDIO", "VIDEO", "KI-REGIE", "TIMELINE", 
         "EXPORT", "HIRN", "SETTINGS", "PERFORMANCE", "MODELLE", "CHAT",
-        "TERMINAL", "INGEST", "ANCHOR"
+        "TERMINAL", "ANCHOR"
     ]
 
     for i, tab_name in enumerate(tabs):

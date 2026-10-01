@@ -29,7 +29,6 @@ TABS = (
     "MODELLE",
     "CHAT",
     "TERMINAL",
-    "INGEST",
     "ANCHOR",
 )
 WM_DPICHANGED = 0x02E0

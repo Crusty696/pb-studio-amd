@@ -188,9 +188,6 @@
                 <TabItem Header="TERMINAL" AutomationProperties.Name="TERMINAL">
                     <views:TerminalView/>
                 </TabItem>
-                <TabItem Header="INGEST" AutomationProperties.Name="INGEST">
-                    <views:MediaIngestView/>
-                </TabItem>
                 <TabItem Header="ANCHOR" AutomationProperties.Name="ANCHOR">
                     <views:AnchorView/>
                 </TabItem>

@@ -11,7 +11,7 @@ def test_main_tabs_have_stable_automation_names():
     expected_tabs = (
         "PROJEKT", "AUDIO", "VIDEO", "KI-REGIE", "TIMELINE", "EXPORT",
         "HIRN", "SETTINGS", "PERFORMANCE", "MODELLE", "CHAT", "TERMINAL",
-        "INGEST", "ANCHOR",
+        "ANCHOR",
     )
     for header in expected_tabs:
         assert (

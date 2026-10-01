@@ -405,7 +405,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                     ? $"{imported} Audio-Dateien importiert, {failed} fehlgeschlagen"
                     : $"{imported} Audio-Dateien erfolgreich importiert";
                 await LoadAudioClipsAsync();
-                // Cross-VM refresh: Director, MediaIngest, ProjectOverview hoeren auf diese Records
+                // Cross-VM refresh: Director, ProjectOverview hoeren auf diese Records
                 WeakReferenceMessenger.Default.Send(new AudioImportedMessage());
                 WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
                 WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());

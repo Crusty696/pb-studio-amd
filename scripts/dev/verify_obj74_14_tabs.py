@@ -30,7 +30,6 @@ EXPECTED_TABS = (
     "MODELLE",
     "CHAT",
     "TERMINAL",
-    "INGEST",
     "ANCHOR",
 )
 WINDOW_TITLE_RE = r".*PB Studio.*"
@@ -322,7 +321,7 @@ def _run(output_dir: Path) -> tuple[dict[str, Any], int]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate and capture all 14 PB Studio tabs from a running window."
+        description="Validate and capture all PB Studio tabs from a running window."
     )
     parser.add_argument(
         "--output-dir",

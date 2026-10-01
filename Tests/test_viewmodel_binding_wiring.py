@@ -92,7 +92,7 @@ def _pascal_case(field_name: str) -> str:
 VIEW_CONTEXTS = {
     "MainWindow.xaml": "MainViewModel",
     **{f"Views/{name}View.xaml": f"{name}ViewModel" for name in (
-        "Anchor", "AudioLibrary", "Brain", "Chat", "Director", "MediaIngest",
+        "Anchor", "AudioLibrary", "Brain", "Chat", "Director",
         "ModelManager", "Production", "ProjectOverview", "Settings", "Terminal",
         "Timeline", "VideoLibrary", "VramTelemetry",
     )},
