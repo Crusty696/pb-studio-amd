@@ -201,10 +201,49 @@ def _publish_status(model: str, provider: str, status: str, percent: float) -> N
 DEFAULT_PROMPT = (
     "Analysiere dieses Video-Frame. Gib 8-12 praegnante Tags zurueck, "
     "kommagetrennt, deutsch. Beginne mit den sichtbaren Personen oder Wesen: "
-    "wie viele, was fuer eine Figur, Kleidung, was sie tun. Danach Ort, "
+    "wie viele (bei mehr als drei nur 'gruppe'), was fuer eine Figur, "
+    "Kleidung, was sie tun. Keine Hautfarbe nennen. Danach Ort, "
     "Licht und Farben, Stimmung. Nenne nur, was eindeutig im Bild zu sehen "
     "ist. Nur die Tags, keine Erklaerung, keine Nummern."
 )
+
+# T014 (2026-10-01, Davids Entscheid): Hautfarbe wird unter farbigem Licht und
+# im Gegenlicht geraten (4 von 5 Fehlern in zwei Pruefrunden). Immer filtern,
+# nicht nur bei schwierigem Licht - das Licht im Frame zuverlaessig zu
+# erkennen waere selbst eine Schaetzung. Der Prompt bittet zusaetzlich darum.
+_SKIN_TONE_RE = re.compile(
+    r"h(?:ä|ae)utig"                                   # dunkelhaeutig, hellhäutige
+    r"|\bhaut(?:farbe|ton|t(?:ö|oe)ne)"                # hautfarbe, hautton
+    r"|\bteint\b|\bskin\b|\bskinned\b"
+    r"|\b(?:dunk\w*|schwarz\w*|hell\w*|wei(?:ß|ss)\w*|braun\w*|gebr(?:ä|ae)unt\w*"
+    r"|blass\w*|oliv\w*|bronze\w*|karamell\w*|ebenholz\w*|rosig\w*)\s+haut\b",
+    re.IGNORECASE,
+)
+
+# Kopfzahlen ueber drei sind meist falsch gezaehlt (T014: 'vier figuren' bei
+# deutlich mehr Figuren, 'vier'/'drei' Frauen im selben Clip).
+_LARGE_COUNT_WORDS = frozenset({
+    "vier", "fünf", "fuenf", "sechs", "sieben", "acht", "neun", "zehn", "elf",
+    "zwölf", "zwoelf", "dutzend", "mehrere", "viele",
+})
+_PERSON_NOUN_PREFIXES = (
+    "frau", "männer", "maenner", "person", "mensch", "figur", "tänzer", "taenzer",
+    "gestalt", "silhouett", "wesen", "mädchen", "maedchen", "kinder", "leute",
+)
+
+
+def _normalize_tag(tag: str) -> str | None:
+    """None for skin-tone tags; 'gruppe von ...' instead of counts above three."""
+    if _SKIN_TONE_RE.search(tag):
+        return None
+    words = tag.split()
+    if (
+        len(words) >= 2
+        and (words[0] in _LARGE_COUNT_WORDS or (words[0].isdigit() and int(words[0]) > 3))
+        and any(w.startswith(_PERSON_NOUN_PREFIXES) for w in words[1:])
+    ):
+        return "gruppe von " + " ".join(words[1:])
+    return tag
 
 _STOPWORDS = frozenset({
     "und", "oder", "die", "der", "das", "ein", "eine", "ist", "sind", "war",
@@ -324,6 +363,10 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         # Mehr-Wort-Tags begrenzen
         if len(cleaned.split()) > 4:
             continue
+        normalized = _normalize_tag(cleaned)
+        if normalized is None or normalized in seen:
+            continue
+        cleaned = normalized
         # Audit 2026-08-07: VLMs geraten bei Tag-Listen in Wortschleifen —
         # live beobachtet 'fetisch, fetischkleidung, fetischmode, fetischlook,
         # fetischtanz, fetischparty, ...' (8 von 10 Tags mit gleichem Stamm).
@@ -339,6 +382,8 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
     if not tags and not prose:
         for word in re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE):
             if len(word) < 3 or word in _STOPWORDS or word in seen:
+                continue
+            if _normalize_tag(word) is None:
                 continue
             # Gleiche Bremse wie oben — sonst ist dieser Pfad ein Schlupfloch.
             stem = word[:_STEM_LEN]

@@ -106,6 +106,30 @@ def test_single_words_sharing_a_stem_stay_separate():
     ]
 
 
+def test_skin_tone_tags_are_never_kept():
+    # David 2026-10-01: guessed under coloured light / backlight (969, 974, 935, 927)
+    out = w._parse_tags(
+        "eine frau, dunkle haut, schwarze haut, helle Haut, dunkelhäutige frau, "
+        "hautfarbe hell, tätowierte haut, schwarze bikini-top, mystischer wald"
+    )
+    assert out == ["eine frau", "tätowierte haut", "schwarze bikini-top", "mystischer wald"]
+
+
+def test_counts_above_three_become_group():
+    out = w._parse_tags("vier figuren, drei frauen, sechs tänzerinnen im kreis, vier säulen")
+    assert out == [
+        "gruppe von figuren", "drei frauen", "gruppe von tänzerinnen im kreis", "vier säulen",
+    ]
+    # the merge still collapses frame-dependent counts of one subject
+    merged = _merge_frame_tags([["gruppe von frauen mit hörnern"], ["drei horntragende frauen"]])
+    assert len(merged) == 1
+
+
+def test_prompt_asks_not_to_describe_skin_tone():
+    assert "Keine Hautfarbe" in w.DEFAULT_PROMPT
+    assert "gruppe" in w.DEFAULT_PROMPT
+
+
 def test_single_frame_keeps_order():
     assert _merge_frame_tags([["x", "y", "z"]]) == ["x", "y", "z"]
 
@@ -115,7 +139,8 @@ def test_comma_list_with_one_long_item_keeps_multiword_tags():
         "fuenf frauen, traditionelle kleidung, tanzend, "
         "schattenfiguren mit hoernern im dichten nebel, wald."
     )
-    assert "traditionelle kleidung" in out and "fuenf frauen" in out
+    # 'fuenf frauen' -> 'gruppe von frauen' since 2026-10-01 (counts above three)
+    assert "traditionelle kleidung" in out and "gruppe von frauen" in out
     assert "kleidung" not in out
 
 

@@ -394,7 +394,7 @@ _NEGATION_WORDS = frozenset({"kein", "keine", "keinen", "keiner", "ohne"})
 _ARTICLES = frozenset({"ein", "eine", "einer", "einen", "einem", "der", "die", "das", "den", "dem"})
 _NUMBER_STEMS = frozenset({
     "zwei", "drei", "vier", "fünf", "fuenf", "sechs", "siebe", "acht", "neun",
-    "zehn", "mehre", "viele",
+    "zehn", "mehre", "viele", "grupp",
 })
 _GENERIC_PERSON_TAGS = frozenset({"person", "personen", "mensch", "menschen", "figur"})
 _PERSON_STEMS = frozenset({

@@ -56,6 +56,17 @@ Kopfzahl, 949 nur noch deutsche Tags (bis auf frei werdende Plätze aus Bild 1),
 rücken weitere Einzelbild-Tags nach (z. B. 964 „dunkle haut“ – inhaltlich unsicher, kein
 Merge-Fehler). Nicht gelöst: „vier figuren“ (944) bleibt falsch, Hautfarbe wird weiter geraten.
 
+## Hautfarbe und Kopfzahlen (2026-10-01, Davids Entscheid „Ja“)
+- Hautfarben-Tags werden **immer** verworfen (Parser `_parse_tags` → `_normalize_tag`), und der
+  Prompt bittet „Keine Hautfarbe nennen“. Nicht bedingt nach Licht: das Licht im Bild sicher zu
+  erkennen wäre selbst eine Schätzung; alle 5 Hautfarben-Fehler beider Prüfrunden lagen bei
+  farbigem Licht/Gegenlicht.
+- Personenzahlen über drei („vier figuren“, „sechs tänzerinnen“) werden zu „gruppe von …“;
+  Zahlen bis drei bleiben, Gegenstände („vier säulen“) bleiben.
+- Nachgerechnet an den 12 Bild-Listen: nur 924 („gruppe von frauen mit hörnern“), 944
+  („gruppe von figuren“) und 964/969/974 (ohne „dunkle haut“, dafür je ein Bild-Detail wie
+  „riesiger pilz im vordergrund“) ändern sich; die anderen 7 Clips unverändert.
+
 ## Menschliche Bewertung (David, 2026-10-01)
 - Gesehen: Kontaktbögen **919, 924, 944, 954, 969, 974** zusammen mit der Claude-Einschätzung
   aus der Tabelle oben (per Handy übermittelt).
