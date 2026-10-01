@@ -2,7 +2,6 @@
 
 import importlib
 import json
-import warnings
 
 import pytest
 
@@ -89,14 +88,10 @@ def test_invalid_or_missing_disk_fallback_returns_empty(
     assert load_ai_config(fallback_path=fallback) == {}
 
 
-def test_brain_vision_and_ollama_shim_preserve_loader_alias():
+def test_brain_and_vision_preserve_loader_alias():
     narrator = importlib.import_module("pb_studio.brain.llm_narrator")
     vision = importlib.import_module("pb_studio.video.lmstudio_vision_wrapper")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        shim = importlib.import_module("pb_studio.video.ollama_vision_wrapper")
 
     assert narrator._load_ai_config is load_ai_config
     assert vision._load_ai_config is load_ai_config
-    assert shim._load_ai_config is load_ai_config
-    assert shim.extract_tags_via_ollama is vision.extract_tags_via_lmstudio
+    assert vision.extract_tags_via_ollama is vision.extract_tags_via_lmstudio
