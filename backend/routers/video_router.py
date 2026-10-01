@@ -349,25 +349,83 @@ def _merge_frame_tags(frame_tags: list[list[str]], limit: int = 10) -> list[str]
         for pos, tag in enumerate(dict.fromkeys(tags)):
             counts[tag] = counts.get(tag, 0) + 1
             first_pos.setdefault(tag, (pos, f))
-    order = sorted(counts, key=lambda t: (-counts[t], first_pos[t]))
+    # T014 (2026-10-01): 'keine personen' from one frame stood next to 'person'
+    # from the others. A negation describes the clip only if every frame says it.
+    n_frames = sum(1 for tags in frame_tags if tags)
+    order = [
+        t for t in sorted(counts, key=lambda t: (-counts[t], first_pos[t]))
+        if not (t.split()[:1] and t.split()[0] in _NEGATION_WORDS and counts[t] < n_frames)
+    ]
     kept: list[str] = []
     for tag in order:
         stems = _tag_stems(tag)
+        bare = _without_articles(tag)
         duplicate_of = next(
-            (i for i, k in enumerate(kept) if _same_tag_meaning(stems, _tag_stems(k))),
+            (
+                i for i, k in enumerate(kept)
+                # 'eine frau'/'frau': equal once articles are dropped. Compared
+                # on whole words - 5-letter stems would also merge
+                # 'wasser'/'wasserfall'.
+                if bare == _without_articles(k)
+                or _same_tag_meaning(stems, _tag_stems(k))
+            ),
             None,
         )
         if duplicate_of is None:
             kept.append(tag)
         elif len(stems) > len(_tag_stems(kept[duplicate_of])):
             kept[duplicate_of] = tag  # keep the more specific wording
-        if len(kept) >= limit:
-            break
-    return kept
+    # 'person' next to 'frau'/'person mit ...' adds nothing.
+    kept = [
+        t for t in kept
+        if not (t in _GENERIC_PERSON_TAGS and any(
+            k != t and set(_tag_stems(k)) & _PERSON_STEMS for k in kept
+        ))
+    ]
+    # Whole frames sometimes come back in English (clip 949). Keep English tags
+    # only when no German tag is left, so a clip is never emptied by this.
+    german = [t for t in kept if not _looks_english(t)]
+    if german:
+        kept = german
+    return kept[:limit]
+
+
+_NEGATION_WORDS = frozenset({"kein", "keine", "keinen", "keiner", "ohne"})
+_ARTICLES = frozenset({"ein", "eine", "einer", "einen", "einem", "der", "die", "das", "den", "dem"})
+_NUMBER_STEMS = frozenset({
+    "zwei", "drei", "vier", "fünf", "fuenf", "sechs", "siebe", "acht", "neun",
+    "zehn", "mehre", "viele",
+})
+_GENERIC_PERSON_TAGS = frozenset({"person", "personen", "mensch", "menschen", "figur"})
+_PERSON_STEMS = frozenset({
+    "frau", "fraue", "mann", "männe", "mädch", "junge", "kind", "kinde",
+    "tänze", "götti", "perso", "paar",
+})
+_ENGLISH_WORDS = frozenset({
+    "the", "and", "with", "of", "glowing", "glow", "green", "purple", "blue",
+    "pink", "red", "yellow", "white", "black", "dark", "light", "lights",
+    "night", "sky", "city", "distant", "large", "small", "big", "plant",
+    "plants", "leaf", "leaves", "garden", "landscape", "woman", "women",
+    "girl", "figure", "figures", "dress", "dresses", "floating", "fairy-like",
+    "forest", "tree", "trees", "water", "foliage", "ethereal", "bioluminescent",
+    "illumination", "artificial", "atmospheric", "lotus-like", "scene",
+    "surface", "hued", "futuristic", "nature",
+})
+
+
+def _without_articles(tag: str) -> str:
+    return " ".join(w for w in tag.lower().split() if w not in _ARTICLES)
+
+
+def _looks_english(tag: str) -> bool:
+    return any(word in _ENGLISH_WORDS for word in tag.lower().split())
 
 
 def _tag_stems(tag: str) -> list[str]:
-    return [word[:5] for word in tag.lower().split() if len(word) > 2]
+    return [
+        word[:5] for word in tag.lower().split()
+        if len(word) > 2 and word not in _ARTICLES
+    ]
 
 
 def _same_tag_meaning(a: list[str], b: list[str]) -> bool:
@@ -379,6 +437,13 @@ def _same_tag_meaning(a: list[str], b: list[str]) -> bool:
     # 'arme ausgestreckt'/'ausgestreckte arme': same words, other order.
     if len(a) >= 2 and sorted(a) == sorted(b):
         return True
+    # 'vier frauen mit hörnern'/'drei horntragende frauen': per-frame head
+    # counts of the same subject (T014 clip 924). Keep one.
+    a_num, b_num = set(a) & _NUMBER_STEMS, set(b) & _NUMBER_STEMS
+    if a_num and b_num:
+        shared = (set(a) - _NUMBER_STEMS) & (set(b) - _NUMBER_STEMS)
+        if any(len(s) >= 4 for s in shared):
+            return True
     short, long_ = (a, b) if len(a) <= len(b) else (b, a)
     if len(short) >= 2 and long_[: len(short)] == short:
         return True

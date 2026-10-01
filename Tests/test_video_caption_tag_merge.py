@@ -50,6 +50,62 @@ def test_word_order_variants_collapse():
     assert "nebel" in merged and "wald" in merged
 
 
+# Real per-frame lists from the T014 re-run 2026-10-01 (qwen3.5-9b, project 10).
+
+def test_negation_only_survives_if_every_frame_agrees():
+    # clip 954: frame 1 empty grotto, frames 2+3 show a person
+    merged = _merge_frame_tags([
+        ["keine personen", "mystische grotte", "wasserfall im hintergrund"],
+        ["person", "zwei beine", "barfuß"],
+        ["person mit federkronenkleidung", "stehend am wasser"],
+    ])
+    assert "keine personen" not in merged
+    assert "mystische grotte" in merged
+    # a negation all frames agree on is a fact about the clip
+    assert "keine personen" in _merge_frame_tags([["keine personen", "wald"], ["keine personen"]])
+
+
+def test_conflicting_counts_collapse_to_one_tag():
+    # clip 924: frame-dependent head counts both reached the clip
+    merged = _merge_frame_tags([
+        ["hornträgerin", "elfenohren"],
+        ["vier frauen mit hörnern", "tanzende pose"],
+        ["drei horntragende frauen", "nebliger wald"],
+    ])
+    assert sum(t.startswith(("vier ", "drei ")) for t in merged) == 1
+
+
+def test_english_tags_dropped_when_german_ones_exist():
+    # clip 949: frames 2 and 3 came back in English
+    merged = _merge_frame_tags([
+        ["leuchtende pflanzen", "große blätter", "nächtliche landschaft"],
+        ["glowing green leaves", "distant city lights", "night scene"],
+        ["glowing plants", "purple sky", "night garden"],
+    ])
+    assert merged == ["leuchtende pflanzen", "große blätter", "nächtliche landschaft"]
+    # an all-English answer is kept rather than leaving the clip without tags
+    assert _merge_frame_tags([["glowing plants", "night garden"]]) == ["glowing plants", "night garden"]
+
+
+def test_article_and_generic_person_variants_collapse():
+    # clip 964: one woman, four tags
+    merged = _merge_frame_tags([
+        ["eine frau", "barfuß", "leuchtende pilze"],
+        ["frau", "person", "leuchtende pilze"],
+        ["frau", "silhouette", "barfuß"],
+    ])
+    assert sum(t in ("frau", "eine frau") for t in merged) == 1
+    assert "person" not in merged
+    assert "silhouette" in merged
+
+
+def test_single_words_sharing_a_stem_stay_separate():
+    # 5-letter stems must not merge different single words.
+    assert _merge_frame_tags([["wasser", "wasserfall", "blume", "blumenwiese"]]) == [
+        "wasser", "wasserfall", "blume", "blumenwiese",
+    ]
+
+
 def test_single_frame_keeps_order():
     assert _merge_frame_tags([["x", "y", "z"]]) == ["x", "y", "z"]
 

@@ -45,6 +45,17 @@
 4. **Hautfarbe unter farbigem Licht / Gegenlicht** wird weiterhin geraten (wie am 30.09.).
 5. Detail-Tags aus späteren Bildern fallen beim Merge zugunsten mehrfach gesehener Stimmungs-Tags raus (Kristall 939, Pilz 969).
 
+## Folgearbeit Tag-Merge (2026-10-01, umgesetzt)
+`_merge_frame_tags` (video_router): Verneinungen („keine personen“) nur, wenn alle Bilder sie
+liefern; Kopfzahl-Varianten („vier …“/„drei …“ mit gleichem Subjekt) zu einem Tag; Artikel
+ignoriert („eine frau“ = „frau“, Vergleich auf ganzen Wörtern); „person“/„mensch“ entfällt neben
+einem konkreteren Personen-Tag; englische Tags entfallen, solange deutsche übrig bleiben.
+Nachgerechnet auf den 12 echten Bild-Listen dieses Laufs: 954 ohne Widerspruch, 924 eine
+Kopfzahl, 949 nur noch deutsche Tags (bis auf frei werdende Plätze aus Bild 1), 964/969/974 ohne
+„eine frau“/„person“-Dubletten; 919/929/934/939/944/959 unverändert. Durch frei gewordene Plätze
+rücken weitere Einzelbild-Tags nach (z. B. 964 „dunkle haut“ – inhaltlich unsicher, kein
+Merge-Fehler). Nicht gelöst: „vier figuren“ (944) bleibt falsch, Hautfarbe wird weiter geraten.
+
 ## Menschliche Bewertung (David, 2026-10-01)
 - Gesehen: Kontaktbögen **919, 924, 944, 954, 969, 974** zusammen mit der Claude-Einschätzung
   aus der Tabelle oben (per Handy übermittelt).
