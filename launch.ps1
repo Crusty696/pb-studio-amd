@@ -120,6 +120,16 @@ $MaxStartupWaitSeconds = 300
 if ($env:PBSTUDIO_BACKEND_START_TIMEOUT -match '^\d+$') {
     $MaxStartupWaitSeconds = [Math]::Min(1800, [Math]::Max(30, [int]$env:PBSTUDIO_BACKEND_START_TIMEOUT))
 }
+# Shutdown: das Backend schreibt nach dem Schliessen des Ports noch den
+# Recovery-Snapshot (gemessen 30-70 s). Nach 10 s beendete der Launcher den
+# Prozessbaum per taskkill /F mitten im Snapshot; RUNTIME_DIRTY blieb stehen
+# und der naechste Start rollte die Daten zurueck (2026-10-01 00:42,
+# 'forrtl: error (200): program aborting due to window-CLOSE event').
+# Ueberschreibbar per PBSTUDIO_BACKEND_STOP_TIMEOUT (Sekunden, 30..1800).
+$BackendStopWaitSeconds = 180
+if ($env:PBSTUDIO_BACKEND_STOP_TIMEOUT -match '^\d+$') {
+    $BackendStopWaitSeconds = [Math]::Min(1800, [Math]::Max(30, [int]$env:PBSTUDIO_BACKEND_STOP_TIMEOUT))
+}
 $startedBackend = $false
 $backendProcess = $null
 $backendWasAlreadyRunning = $false
@@ -723,7 +733,9 @@ if (-not $FrontendOnly -and $startedBackend -and ((Test-BackendHealth) -or ((Get
             -ErrorAction SilentlyContinue | Out-Null
     } catch {}
 
-    if (-not (Wait-ForBackendShutdown -TimeoutSeconds 10 -ExpectedProcess $backendProcess)) {
+    Write-Status "Warte auf Backend-Shutdown inkl. Recovery-Snapshot (max. $BackendStopWaitSeconds s)..."
+    if (-not (Wait-ForBackendShutdown -TimeoutSeconds $BackendStopWaitSeconds -ExpectedProcess $backendProcess)) {
+        Write-Status 'Backend-Shutdown hat das Zeitlimit ueberschritten - erzwinge Ende (RUNTIME_DIRTY kann stehen bleiben).' 'Red'
         if ($backendProcess -and -not $backendProcess.HasExited) {
             Stop-ProcessTree -Process $backendProcess
         }
@@ -742,7 +754,7 @@ if (-not $FrontendOnly -and $startedBackend -and ((Test-BackendHealth) -or ((Get
             -ErrorAction SilentlyContinue | Out-Null
     } catch {}
 
-    if (-not (Wait-ForBackendShutdown -TimeoutSeconds 10)) {
+    if (-not (Wait-ForBackendShutdown -TimeoutSeconds $BackendStopWaitSeconds)) {
         Stop-BackendListeners
         [void](Wait-ForBackendShutdown -TimeoutSeconds 5)
     }
