@@ -69,6 +69,8 @@ public class SSEClient : IDisposable
     /// vollstaendig unsichtbar (Audit 2026-08-05, C-A).
     /// </summary>
     public event EventHandler<PersistErrorEventArgs>? PersistErrorReceived;
+    /// <summary>Backend opened/closed a project outside the WPF (API, chat tool).</summary>
+    public event EventHandler<ProjectChangedEventArgs>? ProjectChangedByBackend;
     public event EventHandler<bool>? ConnectionStateChanged;
     /// <summary>
     /// Spec 00010 T003: Feuert true sobald Backend wieder erreichbar ist; feuert false
@@ -402,6 +404,14 @@ public class SSEClient : IDisposable
                     }
                     break;
 
+                case StreamKind.Progress when eventType == "project_changed":
+                    ProjectChangedByBackend?.Invoke(this, new ProjectChangedEventArgs
+                    {
+                        Action = TryGetString(root, "action"),
+                        Path = TryGetString(root, "path"),
+                    });
+                    break;
+
                 case StreamKind.Progress when eventType == "persist_error":
                     {
                         PersistErrorReceived?.Invoke(this, new PersistErrorEventArgs
@@ -678,6 +688,16 @@ public class LlmStatusEventArgs : EventArgs
     /// </summary>
     public string Status { get; init; } = "";
     public double Percent { get; init; } = 0.0;
+}
+
+/// <summary>
+/// Projektwechsel durch das Backend (SSE <c>project_changed</c>): Action
+/// "opened"/"closed", Path des Projekts (leer bei "closed").
+/// </summary>
+public class ProjectChangedEventArgs : EventArgs
+{
+    public string Action { get; init; } = "";
+    public string Path { get; init; } = "";
 }
 
 /// <summary>

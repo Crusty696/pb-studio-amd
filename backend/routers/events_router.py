@@ -179,6 +179,8 @@ async def progress_stream(request: Request) -> StreamingResponse:
         "gpu_error",
         "llm_status",
         "persist_error",
+        # 2026-10-01: API/chat project open/close must reach the WPF.
+        "project_changed",
     }
     return StreamingResponse(
         _event_stream(request, client_id=client_id, event_filter=progress_events),

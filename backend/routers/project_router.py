@@ -45,8 +45,24 @@ from ..media_path_policy import (
 )
 from ..schemas.common import StatusResponse, validate_timeline
 from ..schemas.project_schemas import ProjectCreate, ProjectOpen, ProjectInfo
+from ..dependencies import publish_event
 
 logger = logging.getLogger(__name__)
+
+async def _announce_project_change(action: str, path: str) -> None:
+    """Tell the WPF that the backend's open project changed.
+
+    Opening or closing through the API or the chat tool project.open left the
+    WPF on its old state: the AUDIO tab stayed empty although the backend had
+    the project with its mix loaded (2026-10-01). Only the WPF's own open
+    emitted ProjectOpenedMessage. Best effort: a lost event must not fail the
+    open/close that already succeeded.
+    """
+    try:
+        await publish_event("project_changed", {"action": action, "path": path})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project_changed-Event nicht gesendet: %s", exc)
+
 router = APIRouter(prefix="/project", tags=["Project"])
 
 _PROJECT_META_FILE = "project.json"
@@ -649,6 +665,7 @@ async def create_project(
             exc,
         )
     logger.info(f"Projekt erstellt: {project_path}")
+    await _announce_project_change("opened", str(project_data.get("path") or project_path))
     return ProjectInfo(**project_data)
 
 
@@ -813,6 +830,7 @@ async def open_project(
                 )
         raise
     logger.info(f"Projekt geöffnet: {project_path}")
+    await _announce_project_change("opened", str(project_data.get("path") or project_path))
     return ProjectInfo(**project_data)
 
 
@@ -994,6 +1012,7 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
                 pending,
             )
     logger.info(f"Projekt geschlossen: {name}")
+    await _announce_project_change("closed", "")
     return StatusResponse(success=True, message=f"Projekt '{name}' geschlossen")
 
 

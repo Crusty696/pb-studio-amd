@@ -97,6 +97,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _sse.GpuStatusReceived += OnGpuStatusReceived;
         _sse.LlmStatusReceived += OnLlmStatusReceived;
         _sse.PersistErrorReceived += OnPersistErrorReceived;
+        _sse.ProjectChangedByBackend += OnProjectChangedByBackend;
         // Spec 00010 T004: Latched-reachability fuer Overlay.
         _sse.BackendReachabilityChanged += OnBackendReachabilityChanged;
         _projects.ProjectChanged += OnProjectChanged;
@@ -212,6 +213,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Backend hat ein Projekt ausserhalb der WPF geoeffnet/geschlossen
+    /// (API, Chat-Tool) — WPF uebernimmt den Stand (2026-10-01).
+    /// </summary>
+    private void OnProjectChangedByBackend(object? sender, ProjectChangedEventArgs e)
+        => _ = _projects.AdoptBackendProjectAsync(e.Action, e.Path);
+
+    /// <summary>
     /// Persistenzfehler sichtbar machen (IRON RULE 10). Zuvor wurde dieser Kanal
     /// zweifach verworfen, sodass ein fehlgeschlagener Speichervorgang fuer den
     /// User wie ein Erfolg aussah (Audit 2026-08-05, C-A).
@@ -302,6 +310,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _sse.GpuStatusReceived -= OnGpuStatusReceived;
         _sse.LlmStatusReceived -= OnLlmStatusReceived;
         _sse.PersistErrorReceived -= OnPersistErrorReceived;
+        _sse.ProjectChangedByBackend -= OnProjectChangedByBackend;
         _sse.BackendReachabilityChanged -= OnBackendReachabilityChanged;
         _projects.ProjectChanged -= OnProjectChanged;
         WeakReferenceMessenger.Default.UnregisterAll(this);
