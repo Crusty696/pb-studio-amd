@@ -1,0 +1,408 @@
+{
+  "verified_utc": "2026-10-13T02:49:36.746928+00:00",
+  "validation_kind": "planning-document structure and traceability only; no product execution",
+  "requirements": 42,
+  "findings": 40,
+  "original_sections": 82,
+  "open_work_packages": 45,
+  "acyclic_dependencies": true,
+  "topological_order": [
+    "T001",
+    "T045",
+    "T002",
+    "T003",
+    "T004",
+    "T005",
+    "T006",
+    "T008",
+    "T007",
+    "T010",
+    "T011",
+    "T009",
+    "T015",
+    "T017",
+    "T012",
+    "T018",
+    "T013",
+    "T019",
+    "T014",
+    "T020",
+    "T016",
+    "T021",
+    "T022",
+    "T043",
+    "T023",
+    "T024",
+    "T025",
+    "T026",
+    "T027",
+    "T031",
+    "T044",
+    "T028",
+    "T029",
+    "T030",
+    "T032",
+    "T033",
+    "T035",
+    "T036",
+    "T037",
+    "T038",
+    "T034",
+    "T039",
+    "T040",
+    "T041",
+    "T042"
+  ],
+  "future_modify_paths_with_creator": [
+    {
+      "task": "T016",
+      "file": "src/pb_studio/jobs/admission.py",
+      "creator": [
+        "T015"
+      ]
+    },
+    {
+      "task": "T027",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": [
+        "T011"
+      ]
+    },
+    {
+      "task": "T030",
+      "file": "src/pb_studio/jobs/derivations.py",
+      "creator": [
+        "T027"
+      ]
+    },
+    {
+      "task": "T041",
+      "file": "src/pb_studio/jobs/scheduler.py",
+      "creator": [
+        "T012"
+      ]
+    },
+    {
+      "task": "T043",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": [
+        "T011"
+      ]
+    }
+  ],
+  "source_hash_changes": [],
+  "spec_bytes": 10115,
+  "confirmed_decisions": [
+    "D01 external Comfy AMD/ROCm; PB DirectML",
+    "D02 PB local scope; external service configuration only in separate ComfyUI",
+    "O01 observed_shared first, managed later qualified",
+    "O02 pause/close/cancel policy",
+    "O03 representative authorized media + Native baseline + untouched Holdout methodology",
+    "O04 additive existing catalog/API direction"
+  ],
+  "open_gates": [
+    "O03 concrete media inventory/authorization/labels/quality and resource values",
+    "O04 concrete SQL/API contract and migration/API-change approvals",
+    "optional managed installation/client cooperation/technical qualification"
+  ],
+  "peer_review_corrections": [
+    "separate Job/Attempt/Import states",
+    "prepared Cancel and persistent Unknown Cancelintent",
+    "late-output quarantine and terminal integrity records",
+    "typed interfaces and ImportCommitResult",
+    "writer intake freeze/drain outside locks",
+    "P3a vs P3b removes semantic gate cycle"
+  ],
+  "files": [
+    {
+      "name": "clarifications.md",
+      "bytes": 4399,
+      "sha256": "40e6a63cc291d073ac164170af5d3df4102005a1aedfc6a859e789917f77ed8b"
+    },
+    {
+      "name": "communication-audit-2026-10-13/findings.json",
+      "bytes": 5902,
+      "sha256": "6b1b3a09af9548e9cc99addf6e0b49a299732ba8290fa94edbed4a76a270bfc0"
+    },
+    {
+      "name": "communication-audit-2026-10-13/report.md",
+      "bytes": 14525,
+      "sha256": "61cf84cd41ae7793ea2c27630065bebaee733d1d7c842264a560374e2e1e213e"
+    },
+    {
+      "name": "communication-audit-2026-10-13/verification.json",
+      "bytes": 2407,
+      "sha256": "08fbd047d447887a7e6b855fea037a1d6ed04acb88d4d304b82e9baf42406c5e"
+    },
+    {
+      "name": "communication-contract.md",
+      "bytes": 24888,
+      "sha256": "d18f305cd8a777a4af238688c4d70850003ad5e71d3dee05cffeee9885873f5d"
+    },
+    {
+      "name": "countercheck-evidence.json",
+      "bytes": 7306,
+      "sha256": "0ab5b9aced0ddac29945c9486e0620fe79f2578f8b07638e1f10a17d818a284d"
+    },
+    {
+      "name": "countercheck-findings.json",
+      "bytes": 9391,
+      "sha256": "d68fa35073c3ca1c66ec6fa8fd7ab91d24a97a6cfc42eb8c403ba97107424f45"
+    },
+    {
+      "name": "countercheck-report.md",
+      "bytes": 13772,
+      "sha256": "3bd6d075a68e5954c529ec5890d1ec40ce57701b7b8e25f06b6aee18cd9db353"
+    },
+    {
+      "name": "decision-validation-2026-10-13.json",
+      "bytes": 2828,
+      "sha256": "79d141ddd1825f63bee9cfad1d714486bcc98a2d6d7e2b65b2d0cbf0d0d3ce1a"
+    },
+    {
+      "name": "domain-contracts.md",
+      "bytes": 21904,
+      "sha256": "857bda28fe440dfa988d5bf3595a3221e452291262100db3752930464f80acb3"
+    },
+    {
+      "name": "full-plan-audit-2026-10-13/baseline-manifest.json",
+      "bytes": 1328,
+      "sha256": "8d8522cc8b58a0f90c5d905c7165b21052c102c8f650f935e13e41592af5f58f"
+    },
+    {
+      "name": "full-plan-audit-2026-10-13/cited-source-hashes.json",
+      "bytes": 7040,
+      "sha256": "569c0d5884f7c9132cdcf326f5eddb0ffea8bcb56412ff71bfab9d0929c9cb65"
+    },
+    {
+      "name": "full-plan-audit-2026-10-13/findings.json",
+      "bytes": 19604,
+      "sha256": "3485a09e48c1bb03c317f83f3ab98688f6547b655cdbb8351b30af17f40e16f3"
+    },
+    {
+      "name": "full-plan-audit-2026-10-13/report.md",
+      "bytes": 18721,
+      "sha256": "76da72b306df92eeb1f50135233f9b68b7a4bd95f4b18bc7fb6035da5112bfe0"
+    },
+    {
+      "name": "full-plan-audit-2026-10-13/revise_documents.py",
+      "bytes": 19808,
+      "sha256": "28d2f1e7ce2d321ded6aee792632328c6ecd89b5a32c65e71706ed79e9b0bb25"
+    },
+    {
+      "name": "full-plan-audit-2026-10-13/verification.json",
+      "bytes": 3370,
+      "sha256": "e49edc5d4574e85f9ec335233a1668c26f8008d80ed03deb4aac22b03b1cfbdb"
+    },
+    {
+      "name": "full-plan-audit-2026-10-13/verify_documents.py",
+      "bytes": 8187,
+      "sha256": "efc122eac2cf4028c8d4ead26bb792c87a8f96029e258077374bdf43bb32c7d0"
+    },
+    {
+      "name": "plan.md",
+      "bytes": 130114,
+      "sha256": "5bd90f688d0f5a9c8f98b31f748b2c536deb73251815c263f9bb9aa22864aa62"
+    },
+    {
+      "name": "review-loop-2026-10-13/apply_round01.py",
+      "bytes": 16370,
+      "sha256": "6e48a43204d15950b9fcaece1041d0a56aa5372d23794e5229a2a006b4d4d6b2"
+    },
+    {
+      "name": "review-loop-2026-10-13/completion-requirements.json",
+      "bytes": 4876,
+      "sha256": "c04a1a754d0c0d92b1936861c65895bb030e7b8bdcb5781e827852d6aea9c70c"
+    },
+    {
+      "name": "review-loop-2026-10-13/contracts.md",
+      "bytes": 8209,
+      "sha256": "1c4b247c86c336fd1d434b2059db540e5d0bbc339ce8eb27bc2fb61079edd190"
+    },
+    {
+      "name": "review-loop-2026-10-13/final-source-hashes.json",
+      "bytes": 7040,
+      "sha256": "5c86786829db5724673aaf85982f2160b037b43e32a09f7ab6019da3a212e011"
+    },
+    {
+      "name": "review-loop-2026-10-13/final-structural.json",
+      "bytes": 3370,
+      "sha256": "4f7e1aa59f52d022f8c926b2f54fa635f0eb3878f4b52353af5f1ab2d79fb3dc"
+    },
+    {
+      "name": "review-loop-2026-10-13/final-verification.json",
+      "bytes": 2284,
+      "sha256": "2e518858f1fe13e47e4e0f6425e34eb153e7163f63368790a8c7241b18bf3089"
+    },
+    {
+      "name": "review-loop-2026-10-13/protocol.md",
+      "bytes": 2129,
+      "sha256": "b93b84b8f1320389ffb1bc3c261b1215138de256653623a87f6df65a175b6ad7"
+    },
+    {
+      "name": "review-loop-2026-10-13/report.md",
+      "bytes": 3917,
+      "sha256": "d4f4a925ac4abfa4865a2808c8b906c50eeaa49f2347947bd623b32331d148a1"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-01-findings.json",
+      "bytes": 2736,
+      "sha256": "0e26f3e45e12ca1369a89eb1d5b1720962d69a5cd3f48763710a5c1fa00546d2"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-01-input.json",
+      "bytes": 1139,
+      "sha256": "d934bd665d4426b300bdbc213d0fe9b38fa728665cd4770c2bb04b6b50b1b15f"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-01-review.md",
+      "bytes": 1552,
+      "sha256": "4f0f3ae8491607cce50882c631c582354a6edd06babeb76552942e49420facef"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-01-source-hashes.json",
+      "bytes": 7040,
+      "sha256": "5c86786829db5724673aaf85982f2160b037b43e32a09f7ab6019da3a212e011"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-01-structural.json",
+      "bytes": 3370,
+      "sha256": "56f8dcf919a8df1116547527ec771a50d0c9f1e8fa4354840a65975bbec16447"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-01-targeted-checks.json",
+      "bytes": 539,
+      "sha256": "3319afe57c187639cec1692011be0041b084aa11cee00e18e6a1b9b422b373b5"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-02-input.json",
+      "bytes": 1292,
+      "sha256": "36b60a5826636c6875baff0478628a9cb01ae3ceabf183d0314256139468d12d"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-02-review.md",
+      "bytes": 1734,
+      "sha256": "a95864c71b4ba390321be2b914483869c9bd5e60aeff494653afe85de6d79d89"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-03-findings.json",
+      "bytes": 360,
+      "sha256": "68acb8e44d4cd249319d26d18745fe13d38ba754a343fefdf7c820775b0a85d6"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-03-input.json",
+      "bytes": 1292,
+      "sha256": "2483918af9452c115dbcc1850df20d01cbcf7dc8b0ba5dbe09387d8b06e97f91"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-03-review.md",
+      "bytes": 623,
+      "sha256": "520056fac011f9e61f819211f225412b322967dd4e04bdd276b9d12bda02bb58"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-04-input.json",
+      "bytes": 1292,
+      "sha256": "54a73f0f2ebbb6db3907a6e5c50b079d5c2553659abb44991e2feede79359c86"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-04-review.md",
+      "bytes": 955,
+      "sha256": "63c1ff208a7fab23de307a789f32eb38c5dbb3bacd2af4b793d5fb94f1d420cf"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-04-source-hashes.json",
+      "bytes": 7040,
+      "sha256": "5c86786829db5724673aaf85982f2160b037b43e32a09f7ab6019da3a212e011"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-04-structural.json",
+      "bytes": 3370,
+      "sha256": "61ce67278911b6a2eca06fa6a8ea75eca7ac387e069381b0c261af7fdd2570b6"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-05-input.json",
+      "bytes": 1292,
+      "sha256": "99a40f6e5f3c8c629519425475530dc2710235f43687e0c68c44c64c66f7d3a8"
+    },
+    {
+      "name": "review-loop-2026-10-13/round-05-review.md",
+      "bytes": 1556,
+      "sha256": "c9535ec92f9ed78ba7fe9e71d0e79c94c08dbd011eae6fbf52fcb27031e92141"
+    },
+    {
+      "name": "review-loop-2026-10-13/skill-confirmation.md",
+      "bytes": 3211,
+      "sha256": "239592a8cdd843998f6c38f21878ee526c6755a683215283b50512117221f449"
+    },
+    {
+      "name": "review-loop-2026-10-13/status.json",
+      "bytes": 1349,
+      "sha256": "f2f5920607f2347e049d912d4588d2c02011842353e198b7d30bb9d137f20236"
+    },
+    {
+      "name": "review-loop-2026-10-13/verification-skill.json",
+      "bytes": 553,
+      "sha256": "c511309668a4d63c4157def16b81c5672e07bb4e65b137102fbc61a40559aff0"
+    },
+    {
+      "name": "review-loop-2026-10-13/verify_final.py",
+      "bytes": 3625,
+      "sha256": "19ab71336d663c77e6c2673578d23f76038f7db05dd8b40665d1b625a819daa3"
+    },
+    {
+      "name": "spec.md",
+      "bytes": 10115,
+      "sha256": "eedc23c940f154ab72dd1b9f341869c56dd79c2601a2d3635dae3cfe1a4dce40"
+    },
+    {
+      "name": "tasks.md",
+      "bytes": 181127,
+      "sha256": "b759cd3bd9fbc8e84f1bf21df0b9380becc0d8948bda4b9745943c8e04bba608"
+    },
+    {
+      "name": "traceability.md",
+      "bytes": 49399,
+      "sha256": "6c2a583017251c801ef47ccbc653f3a18f6067d1ce83c651c2cb0c175c1ca041"
+    },
+    {
+      "name": "work-packages.json",
+      "bytes": 79953,
+      "sha256": "ca8d88d9a148a745a5cdd7702b09a0f63727628ff7ee59d42534a84b7e690c1e"
+    }
+  ],
+  "source_hashes_checked": 254,
+  "additional_countercheck_findings": 19,
+  "baseline_counterchecks_executed": 12,
+  "corrected_counterchecks_passed": 12,
+  "targeted_additional_document_checks": {
+    "local_import_reconciliation_has_no_remote_attempt_prerequisite": true,
+    "obsolete_after_catalog_preserves_logical_job_status": true,
+    "pause_policy_confirmed": true,
+    "policy_assurance_is_explicit": true,
+    "batch_storage_precedes_consumer": true,
+    "generated_workflow_bundles": true
+  },
+  "task_dependency_index_and_blocks_match": true,
+  "existing_document_links_checked": 22,
+  "broken_document_links": [],
+  "current_decision_validation": "decision-validation-2026-10-13.json",
+  "current_communication_validation": "communication-audit-2026-10-13/verification.json",
+  "communication_findings": 14,
+  "planned_wire_acceptance_cases": 32,
+  "executed_wire_acceptance_cases": 0,
+  "current_full_plan_validation": "full-plan-audit-2026-10-13/verification.json",
+  "additional_full_plan_findings": 18,
+  "full_plan_document_checks_passed": 32,
+  "full_plan_specialist_agents": 9,
+  "full_plan_independent_agents": 1,
+  "executed_full_plan_product_acceptance_cases": 0,
+  "current_loop_validation": "review-loop-2026-10-13/final-verification.json",
+  "loop_rounds": 5,
+  "loop_findings_corrected": 7,
+  "consecutive_full_clean_rounds": 2,
+  "loop_document_checks_passed": 49,
+  "independent_skill_confirmation": "review-loop-2026-10-13/skill-confirmation.md",
+  "independent_skill_verdict": "PASS — DOCUMENT REVIEW ONLY",
+  "snapshot_status": "historical preimplementation planning checks; not current source or task-completion state",
+  "subsequent_implementation_evidence": "wave-a/evidence-manifest.json"
+}

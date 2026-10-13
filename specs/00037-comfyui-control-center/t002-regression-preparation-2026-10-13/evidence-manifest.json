@@ -1,0 +1,15 @@
+{
+  "scope": "regression_preparation_only",
+  "files": {
+    "t002-regression-preparation-2026-10-13\\document-validation.json": "a02987e426046e5681c926292a07f98aca06ecb741c6c9b8dfe878b632c9c0ae",
+    "t002-regression-preparation-2026-10-13\\independent-review.md": "a492f6d211c2370e062ba038fd9a594812c25bc47684774d6ff7bd3c7e2ee323",
+    "t002-regression-preparation-2026-10-13\\quality-profile-draft.json": "8abf2c81242874e4698c4b01241a48e680799d9567b2ed9364ccc8b7b776d08c",
+    "t002-regression-preparation-2026-10-13\\regression-cases.json": "cf69cd23dfbfcba61563f8ff2b23e4ddb25f35547841ebe7471edc3dad533432",
+    "t002-regression-preparation-2026-10-13\\regression-protocol.md": "9d0a06985a14a716bad5ec242190ec17d7df88b3ea8dcc512c2acee479d4e465",
+    "t002-regression-preparation-2026-10-13\\result-template.json": "099e1e2bf600ff44d8100c4777cfd7b55284d0a30f55bb3e32c114115524fd40",
+    "reference-manifest.json": "d1c09f1ade58f800f722fb1f39c3c6dd6183ce7785ea47eab4374c9bba487265",
+    "benchmark-spec.md": "04c8b26e2e964ce34045feec970e9cb8cfef889eb356ad26c3cd30cd054935a1",
+    "t002-reference-preparation-2026-10-13\\holdout-reservations.json": "2e3c36ac5c8917b84d1d0e5db42e3409f0d780a04101639c555452fb6231ca19",
+    "t002-reference-preparation-2026-10-13\\reference-preparation-report.md": "ca9134c05c5f4089ca808111209830db3592d88222e41b86f345d4b19196ef6f"
+  }
+}

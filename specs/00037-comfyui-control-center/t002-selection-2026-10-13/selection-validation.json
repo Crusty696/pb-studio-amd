@@ -1,0 +1,38 @@
+{
+  "utc": "2026-10-13T16:06:23.934649+00:00",
+  "versions": {
+    "ffmpeg": "ffmpeg version 6.1.1-essentials_build-www.gyan.dev Copyright (c) 2000-2023 the FFmpeg developers",
+    "ffprobe": "ffprobe version 6.1.1-essentials_build-www.gyan.dev Copyright (c) 2007-2023 the FFmpeg developers"
+  },
+  "assertions": "PASS:424 probes,9 unique selected hashes,6 decode+PTS,3 bounded CPUaudio,9 before-after hashes,424 statchecks,validation/holdout empty,T002open",
+  "gpu_runs": 0,
+  "generation_runs": 0,
+  "product_tests": "NOT RUN; only selection evidence checked",
+  "files": {
+    "t002-selection-2026-10-13\\audio-family-check.json": "16731a6068f8b0802db3825a50bfc59b73cda6cbdd19ce45d0919e6e739a8302",
+    "t002-selection-2026-10-13\\independent-review.md": "c6ce915addd417e4826299a9ad8d3b6461062fa142e0b35814e0f1a6e3617ed8",
+    "t002-selection-2026-10-13\\inventory.json": "54d8600394eb3622f023aa1394d81ef37bd0fe24e713b3c2be8c9ace53fcde6a",
+    "t002-selection-2026-10-13\\inventory_readonly.py": "0a376eb50a8339ae2addbd5017a3c97edc759dbbde9f178375dfa3a872147f45",
+    "t002-selection-2026-10-13\\original-integrity.json": "651001be5260d60d94b128be8395cdbd0e4a5802e62bd7b0838e08abb2188dd8",
+    "t002-selection-2026-10-13\\overview-0.jpg": "eb6376d38edaf7e916b78f4e1ee211d7b91c37884d273e5eeda3c317ab73edd0",
+    "t002-selection-2026-10-13\\overview-1.jpg": "abd7b047197f85f6d1733be0942e845878b24ec944a1665ea15fa1395817de67",
+    "t002-selection-2026-10-13\\overview-2.jpg": "773d3229a056ed807df2f992bcb4f80b77b43c99eca9c0d057c92a7d29788eba",
+    "t002-selection-2026-10-13\\overview-3.jpg": "1b5f2939005e8dbc255ce5df399c119ecbc7cc6ef8b46003556cf17dae11a4e2",
+    "t002-selection-2026-10-13\\overview-4.jpg": "013f0873c234765061cfbcb4c69792696782fc0aa60eee8841a72d4227760b6f",
+    "t002-selection-2026-10-13\\overview-5.jpg": "06ea18a4f5efda1064a5d9c7548b36d7a0314df040890d64900b693f3522171e",
+    "t002-selection-2026-10-13\\sample_video_readonly.py": "326fbc8843ac72c0971a97cafeeb268d0872af3824d0afca6e8c5de566b2a40e",
+    "t002-selection-2026-10-13\\selected-verification.json": "257eb4cf071ff4c963b3f339ca255cf66472c21bbc10aa27d08ff7e4827bd2f2",
+    "t002-selection-2026-10-13\\selection-report.md": "f8f2059745967f5177d417fb27cbb5694566e7e3190a7e307656952da84d9a01",
+    "t002-selection-2026-10-13\\V01-frames.jpg": "989db7c7674e12d55e0532a9997b59ffcf26c97d82aaf318a9f2c679c4d3340e",
+    "t002-selection-2026-10-13\\V02-frames.jpg": "0482dcd60802212f529261cf927d605644530b31a7ab70faf802715b16c69a3e",
+    "t002-selection-2026-10-13\\V03-frames.jpg": "f4c598f7b220f534c02d60bd94468b7630925c12ada123d6ca3cd93fc9cab6f3",
+    "t002-selection-2026-10-13\\V04-frames.jpg": "06387736b660286abc2d75a6dfb6a4bea145c661f28750ed557badfda2286a5b",
+    "t002-selection-2026-10-13\\V05-frames.jpg": "0362a3b521ae7a5a2daf5ce77852ce5506b822b16da122f9b585d8c256ae65f7",
+    "t002-selection-2026-10-13\\V06-frames.jpg": "e1d7db121a7faa39eded46a3cea9f26f37d0164728661ab3e72f857fc94cf5a2",
+    "t002-selection-2026-10-13\\verify_selection_readonly.py": "af0bc8c9cc8ab7a939059e30a80bf7571f2bf5634b2719c14cfc8d7fd7a9f113",
+    "t002-selection-2026-10-13\\video-family-check.json": "d2c1d083355b242a94999bc78948064ed524d6e2a643b1d383ab04cce699943d",
+    "t002-selection-2026-10-13\\video-samples.json": "4dfbd5cf4a34d2add33fac0a1b711668e927d1917effb1081e8ebd94b2f42d50",
+    "reference-manifest.json": "28f2d017935c0da75e46ee1c4dd7dfb4761b9bca9de33729d7985393587bb7f8"
+  },
+  "post_review_correction": "V02 source video range [0,30s), distinct from30.016s audio/container"
+}

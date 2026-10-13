@@ -1,0 +1,69 @@
+{
+  "executed_utc": "2026-10-13T01:42:41.419185+00:00",
+  "source": "C:\\Users\\david\\ComfyUI-Installs\\ComfyUI\\ComfyUI\\comfy_execution\\jobs.py",
+  "source_sha256": "cee1191aa6ed913fde8b0556db9afa4f95135bdd910956b8d4bf921a81452085",
+  "method": "AST extraction of unchanged JobStatus and validate_job_id plus exact status-selection branch from normalize_history_item; no application imports, no server or workflow execution",
+  "limits": "Status branch excludes output parsing and route transport. Passed means existing source behavior reproduced, not correct integrated product. Missing/unknown maps to completed and motivates CM09.",
+  "checks": [
+    {
+      "case": "validate_job_id:canonical",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "case": "validate_job_id:uppercase",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "case": "validate_job_id:no_hyphens",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "case": "validate_job_id:invalid",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "case": "validate_job_id:null",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "case": "exact_status_branch:missing_or_null",
+      "actual": "completed",
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "case": "exact_status_branch:unknown",
+      "actual": "completed",
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "case": "exact_status_branch:success",
+      "actual": "completed",
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "case": "exact_status_branch:error",
+      "actual": "failed",
+      "expected": "failed",
+      "passed": true
+    },
+    {
+      "case": "exact_status_branch:interrupted",
+      "actual": "cancelled",
+      "expected": "cancelled",
+      "passed": true
+    }
+  ]
+}

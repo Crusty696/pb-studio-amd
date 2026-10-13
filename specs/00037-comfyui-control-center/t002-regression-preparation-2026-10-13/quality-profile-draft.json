@@ -1,0 +1,38 @@
+{
+  "status": "DRAFT_NO_QUALITY_QUALIFICATION",
+  "revision": 1,
+  "source_ids": [
+    "V01",
+    "V02",
+    "V03",
+    "V04",
+    "V05",
+    "V06",
+    "A01",
+    "A02",
+    "A03"
+  ],
+  "source_manifest": "../reference-manifest.json",
+  "scope": "technical and semantic regression preparation; no independence claim",
+  "metric_bounds": {
+    "beat_matching_tolerance_seconds": null,
+    "downbeat_matching_tolerance_seconds": null,
+    "scene_boundary_tolerance_seconds": null,
+    "allowed_quality_regression": null,
+    "max_runtime_seconds": null,
+    "qualified_vram_mb": null,
+    "qualified_ram_mb": null,
+    "max_temp_disk_bytes": null
+  },
+  "hard_reference_rules": [
+    "source_hash_bound",
+    "unknown_not_zero",
+    "missing_required_evidence_not_pass",
+    "no_duplicate_weighting",
+    "no_human_reference_from_model_self_grade",
+    "no_generation_or_gpu_without_separate_authorization"
+  ],
+  "human_reference_status": "pending",
+  "native_baseline_status": "not_run",
+  "holdout_status": "explicitly_deferred"
+}

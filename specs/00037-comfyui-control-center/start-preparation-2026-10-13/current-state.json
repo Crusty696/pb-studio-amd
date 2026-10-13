@@ -1,0 +1,27 @@
+{
+  "captured_utc": "2026-10-13T04:17:19.700290+00:00",
+  "kind": "read-only preparation; no product execution",
+  "pb_head": "e51e798cc05cd6ec4f42a9e69ee3e9284dc5bcdb",
+  "pb_branch": "codex/full-audit-remediation",
+  "git_status": " M .claude/settings.local.json\n M CHANGELOG.md\n M CLAUDE.md\n M PBStudio.UI/Services/SSEClient.cs\n M PBStudio.UI/Services/TerminalLoggerProvider.cs\n?? LOG-AUFZEICHNUNG.bat\n?? PBStudio.UI.Tests/SessionEventLoggingTests.cs\n?? Tests/test_record_app_session.py\n?? docs/MANUELLE_ABNAHME.md\n?? docs/comfyui-plan-review-2026-10-12/\n?? docs/review-2026-10-04/\n?? scripts/record_app_session.py\n?? specs/00036-manual-acceptance-logging/\n?? specs/00037-comfyui-control-center/\n",
+  "sources": {
+    "count": 254,
+    "mismatches": []
+  },
+  "communication_sources": {
+    "count": 13,
+    "mismatches": []
+  },
+  "normative_documents": {
+    "count": 9,
+    "mismatches": []
+  },
+  "comfy_head": "3c1b7a17fdf239d35ce98cc777756f572d089795",
+  "observed_http": {
+    "comfy_system_stats": "200; 0.39.2, Python3.13.12, torch2.12.0+rocm7.14.0; AMD RX7800XT reported",
+    "comfy_queue": "200; running1 pending0; snapshot only; ownership unknown; no intervention",
+    "pb_8765_health": "connection refused WinError10061; not proof no PB elsewhere"
+  },
+  "recovery_marker": "LOCALAPPDATA/PB_Studio/recovery-control/v1/RUNTIME_DIRTY exists; cause and current recovery consistency unverified",
+  "product_actions": "none; no imports of backend/main, no startup/build/test/migration/GPU/queue mutation"
+}

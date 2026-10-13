@@ -1,0 +1,16 @@
+{
+  "proof": "literal contractual guards, not runtime or semantic completeness",
+  "checks": {
+    "L01_job_wait_transition": true,
+    "L01_artifact_wait_not_quarantine": true,
+    "L01_analysis_stays_parked": true,
+    "L01_explicit_continuation_route": true,
+    "L02_reshot_dependency": true,
+    "L03_conditional_managed_gate": true,
+    "L04_mandatory_guide_owner": true,
+    "L05_activation_CAS_signature": true,
+    "L06_unknown_to_rejected": true,
+    "L06_empty_history_not_rejection": true
+  },
+  "passed": 10
+}

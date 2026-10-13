@@ -1,0 +1,182 @@
+{
+  "baseline_hashes": {
+    "plan.md": "216b22ecda29e4d691bbf3ba2ee2ba5353fd38bb6fd8f76a18b93fcd18c55c91",
+    "planning-validation.json": "1136183dec8047db9daec9c7d888e4761a6ca7230796e5aeae6f1326f93d2362",
+    "spec.md": "cf065a6a30ee53dde0225284907c7269ef2d5a6a5256684a1c5877504a2b2919",
+    "tasks.md": "26e5461412193096f81c4b0e0107458fbc36ff4fa67a6b819e8e120ef53a5253",
+    "traceability.md": "ca77c640482499cedec82908fd9bd7b17731cddffd8ebeef26dfc466951289fa",
+    "work-packages.json": "2de9cdf2f596be58e9bdacdec37cc39be7cf872be53f6527f75e878134a24355"
+  },
+  "executed_baseline_counterchecks": [
+    {
+      "counterexample": "available_partial to needs_decision edge",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "no-vector analysis direct completion edge",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "provider-confirmed external cancel direct edge",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T019 persists AnalysisRun before Import",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T020 AnalysisRun repository predecessor",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T022 owns main router registration",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T025 owns DI state service registration",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T027 exports executable APIbundle",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T032 exports executable APIbundle",
+      "baseline_result": false,
+      "expected_baseline": false,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "same ID-set permits swapped media identity",
+      "baseline_result": true,
+      "expected_baseline": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "completed receipt physical position stale after compaction",
+      "baseline_result": true,
+      "expected_baseline": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "terminal retry API conflicts with no same-job new Attempt",
+      "baseline_result": true,
+      "expected_baseline": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    }
+  ],
+  "no_product_execution": true,
+  "verified_utc": "2026-10-12T21:53:17.935454+00:00",
+  "executed_corrected_counterchecks": [
+    {
+      "counterexample": "available_partial to needs_decision edge",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "no-vector analysis direct completion edge",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "provider-confirmed external cancel direct edge",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T019 persists AnalysisRun before Import",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T020 AnalysisRun repository predecessor",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T022 owns main router registration",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T025 owns DI state service registration",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T027 exports executable APIbundle",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "T032 exports executable APIbundle",
+      "corrected_result": true,
+      "expected_corrected": true,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "same ID-set permits swapped media identity",
+      "corrected_result": false,
+      "expected_corrected": false,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "completed receipt physical position stale after compaction",
+      "corrected_result": false,
+      "expected_corrected": false,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    },
+    {
+      "counterexample": "terminal retry API conflicts with no same-job new Attempt",
+      "corrected_result": false,
+      "expected_corrected": false,
+      "passed": true,
+      "proof_level": "document predicate / in-memory abstraction, not product execution"
+    }
+  ],
+  "targeted_additional_document_checks": {
+    "local_import_reconciliation_has_no_remote_attempt_prerequisite": true,
+    "obsolete_after_catalog_preserves_logical_job_status": true,
+    "pause_is_open_O02_proposal": true,
+    "policy_assurance_is_explicit": true,
+    "batch_storage_precedes_consumer": true,
+    "generated_workflow_bundles": true
+  },
+  "source_hashes_checked": 254,
+  "source_hash_changes": []
+}

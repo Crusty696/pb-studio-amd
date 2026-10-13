@@ -3,6 +3,25 @@
 
 ---
 
+## 2026-10-13 - T002 read-only CPU media probe (Spec 00037)
+
+- Nine selected regression sources passed isolated PB Studio path/metadata/frame/audio-chunk function checks without GPU acceleration. All nine original SHA-256 hashes were unchanged afterward. A03 M4A required the Librosa/audioread fallback and raised a deprecation warning. This is bounded CPU evidence, not an app import or Native quality baseline; T002 and the independent holdout remain open. Evidence: specs/00037-comfyui-control-center/t002-cpu-check-2026-10-13/cpu-check-report.md.
+
+## 2026-10-13 - ComfyUI Wave B (Spec 00037)
+
+- Added immutable workflow bundles, bounded parameter/output contracts and an explicit caller-owned JSON registry with persistent CAS, idempotency and restore-generation fencing API. Added offline local policy verification and backend SSE log redaction.
+- Verified 109 isolated tests plus 47 subtests, 163 Python files compiled and independent source review. No live ComfyUI/GPU/generation/install/migration/app startup. No qualified runtime profile or product registry integration. Evidence and limits: specs/00037-comfyui-control-center/wave-b/qc-report.md.
+
+## 2026-10-13 - ComfyUI Wave A (Spec 00037)
+
+- Added disabled-by-default validated ComfyUI settings and a bounded read-only async discovery library. Loopback-only endpoints, source-candidate capability profiles, explicit unknown model/runtime identities, local socket ownership and frame contracts; no generation or startup integration.
+- Verified 53 tests plus 20 subtests, 155 Python files compiled, and one real GET /system_stats through the new adapter. No GPU, migration, installation, live inventory scan or existing-job mutation. Existing config/recovery/DB and unrelated dirty files preserved. Scope and limits: specs/00037-comfyui-control-center/wave-a/qc-report.md.
+
+## 2026-10-03 - Manual acceptance logging (Spec 00036)
+
+- Added German manual checklist `docs/MANUELLE_ABNAHME.md` and independent double-click `LOG-AUFZEICHNUNG.bat`: emitted WPF/backend/stdout/stderr/native/launcher lines are collected live into one unique `logs/sessions/manual_*.log`, with source/time labels, flushing, recreation/rotation warnings and common credential redaction. No app/project control; no exhaustive tracing claim.
+- WPF now logs received SSE payload diagnostics before UI throttling. Native negative test revealed quoted JSON credential keys were not masked; fixed shared redactor, including owner-capability assignments. Native Release suite 86/86; targeted Python recorder/terminal/SSE 16/16; three finite wrapper runs exit 0; deployed Release build 0 warnings/errors. Manual new WPF session pending; no release marker.
+
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
 - 2026-09-30/10-01 (Claude) recovery: a second backend (second window, driver, pytest on the real root) read the running backend's RUNTIME_DIRTY as a crash, started a restore and left an APPLYING journal; the next start rolled back. On 2026-09-30 00:54 this reset `data/pb_studio.db` to the 2026-09-24 generation (lost `gui_qc_20260925`, 572 media; `test` of 09-28, 396 media; both still in generation `20260929T224820…` and `data/backups/t013_pre_20260930/`, not restored pending David's decision). Fix `a380a13`: exclusive per-root process lock in `ensure_recovery_ready`/`mark_runtime_dirty` (live: second backend refused, journal unchanged); `Tests/conftest.py` isolates `LOCALAPPDATA`.

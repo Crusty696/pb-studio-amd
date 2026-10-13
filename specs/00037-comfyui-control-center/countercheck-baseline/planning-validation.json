@@ -1,0 +1,126 @@
+{
+  "verified_utc": "2026-10-12T20:16:04.134327+00:00",
+  "validation_kind": "planning-document structure and traceability only; no product execution",
+  "requirements": 42,
+  "findings": 40,
+  "original_sections": 82,
+  "open_work_packages": 45,
+  "acyclic_dependencies": true,
+  "topological_order": [
+    "T001",
+    "T002",
+    "T003",
+    "T004",
+    "T005",
+    "T006",
+    "T007",
+    "T008",
+    "T010",
+    "T011",
+    "T009",
+    "T015",
+    "T012",
+    "T013",
+    "T014",
+    "T016",
+    "T017",
+    "T018",
+    "T019",
+    "T020",
+    "T021",
+    "T022",
+    "T023",
+    "T024",
+    "T025",
+    "T026",
+    "T027",
+    "T028",
+    "T029",
+    "T030",
+    "T031",
+    "T032",
+    "T033",
+    "T034",
+    "T035",
+    "T036",
+    "T037",
+    "T038",
+    "T039",
+    "T043",
+    "T040",
+    "T041",
+    "T042",
+    "T044",
+    "T045"
+  ],
+  "future_modify_paths_with_creator": [
+    {
+      "task": "T016",
+      "file": "src/pb_studio/jobs/admission.py",
+      "creator": "T015"
+    },
+    {
+      "task": "T027",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": "T011"
+    },
+    {
+      "task": "T041",
+      "file": "src/pb_studio/jobs/scheduler.py",
+      "creator": "T012"
+    },
+    {
+      "task": "T043",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": "T011"
+    }
+  ],
+  "source_hash_changes": [],
+  "spec_bytes": 9946,
+  "confirmed_decisions": [
+    "D01 external ComfyUI AMD/ROCm, PB internal ONNX DirectML",
+    "D02 local first, cloud separate explicit approval"
+  ],
+  "open_gates": [
+    "O01",
+    "O02",
+    "O03",
+    "O04",
+    "O05 future cloud only"
+  ],
+  "peer_review_corrections": [
+    "separate Job/Attempt/Import states",
+    "prepared Cancel and persistent Unknown Cancelintent",
+    "late-output quarantine and terminal integrity records",
+    "typed interfaces and ImportCommitResult",
+    "writer intake freeze/drain outside locks",
+    "P3a vs P3b removes semantic gate cycle"
+  ],
+  "files": [
+    {
+      "name": "plan.md",
+      "bytes": 109704,
+      "sha256": "216b22ecda29e4d691bbf3ba2ee2ba5353fd38bb6fd8f76a18b93fcd18c55c91"
+    },
+    {
+      "name": "spec.md",
+      "bytes": 9946,
+      "sha256": "cf065a6a30ee53dde0225284907c7269ef2d5a6a5256684a1c5877504a2b2919"
+    },
+    {
+      "name": "tasks.md",
+      "bytes": 128370,
+      "sha256": "26e5461412193096f81c4b0e0107458fbc36ff4fa67a6b819e8e120ef53a5253"
+    },
+    {
+      "name": "traceability.md",
+      "bytes": 44891,
+      "sha256": "ca77c640482499cedec82908fd9bd7b17731cddffd8ebeef26dfc466951289fa"
+    },
+    {
+      "name": "work-packages.json",
+      "bytes": 52070,
+      "sha256": "2de9cdf2f596be58e9bdacdec37cc39be7cf872be53f6527f75e878134a24355"
+    }
+  ]
+}

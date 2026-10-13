@@ -1,0 +1,76 @@
+{
+  "status": "PREPARED_NO_INDEPENDENT_EVENTS",
+  "coordinate_system": "seconds from original full-source start; first review window60..90; no automatic +60 unless incoming times explicitly window-relative",
+  "events": [],
+  "source_windows": [
+    {
+      "source_id": "A01",
+      "path": "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Progressive Psy Summer Dream mix  by Crusty Free download.wav",
+      "source_sha256": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+      "selected_range_seconds": [
+        60,
+        180
+      ],
+      "initial_human_review_window_seconds": [
+        60,
+        90
+      ],
+      "purpose": "short initial annotation window, not asserted beat/drop/transition coverage"
+    },
+    {
+      "source_id": "A02",
+      "path": "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Crusty -Klangkraft-21nai2022.wav",
+      "source_sha256": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+      "selected_range_seconds": [
+        60,
+        180
+      ],
+      "initial_human_review_window_seconds": [
+        60,
+        90
+      ],
+      "purpose": "short initial annotation window, not asserted beat/drop/transition coverage"
+    },
+    {
+      "source_id": "A03",
+      "path": "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Podcast-04.m4a",
+      "source_sha256": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f",
+      "selected_range_seconds": [
+        60,
+        180
+      ],
+      "initial_human_review_window_seconds": [
+        60,
+        90
+      ],
+      "purpose": "short initial annotation window, not asserted beat/drop/transition coverage"
+    }
+  ],
+  "event_fields": [
+    "source_id",
+    "source_sha256",
+    "label_kind",
+    "criterion",
+    "source_time_seconds",
+    "source_interval_start",
+    "source_interval_end",
+    "uncertainty_seconds",
+    "annotator",
+    "review_status",
+    "annotation_origin"
+  ],
+  "label_definitions": {
+    "beat": "audible periodic beat event; half/doubletempo ambiguity explicitly recorded",
+    "downbeat": "first beat of independently identified bar; do not assume every fourth algorithmic beat",
+    "section_boundary": "musically annotated section transition with explicit definition",
+    "track_blend_interval": "interval of track overlap; separate optional dominance point",
+    "track_dominance_point": "point from which new track leads, not automatically crossfade midpoint"
+  },
+  "rules": [
+    "No inferred beat times from PB or old algorithmic reports as ground truth",
+    "No invented missing labels; unknown is explicit",
+    "Events must be finite and within exact source duration; time uncertainty separate",
+    "Record repeated/missing/ambiguous beats and annotation coverage",
+    "Keep evaluation outside production brain feedback/training"
+  ]
+}

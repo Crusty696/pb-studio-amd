@@ -1,0 +1,949 @@
+{
+  "name_groups": [
+    {
+      "heuristic_title": "enchanted_neon_forest_rave",
+      "members": [
+        0,
+        1
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_forest_rave",
+      "members": [
+        2,
+        3
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_forest_encounter",
+      "members": [
+        4,
+        5
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_techno_rave",
+      "members": [
+        6,
+        7,
+        8,
+        9
+      ]
+    },
+    {
+      "heuristic_title": "neon_forest_rave",
+      "members": [
+        10,
+        113,
+        114,
+        115,
+        116
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_jungle_path",
+      "members": [
+        11,
+        12,
+        13,
+        14
+      ]
+    },
+    {
+      "heuristic_title": "neon_jungle_dreamscape",
+      "members": [
+        15,
+        16,
+        17,
+        18
+      ]
+    },
+    {
+      "heuristic_title": "enchanting_forest_dance",
+      "members": [
+        19,
+        20
+      ]
+    },
+    {
+      "heuristic_title": "mystical_rainforest_dance",
+      "members": [
+        21,
+        22,
+        23,
+        24,
+        41,
+        42,
+        43,
+        44
+      ]
+    },
+    {
+      "heuristic_title": "mystical_jungle_dance",
+      "members": [
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        45,
+        46,
+        47,
+        48,
+        230,
+        231,
+        232,
+        233,
+        269,
+        270,
+        271,
+        272,
+        332,
+        333,
+        334,
+        410,
+        411,
+        412,
+        413
+      ]
+    },
+    {
+      "heuristic_title": "ethereal_jungle_dance",
+      "members": [
+        37,
+        38,
+        39,
+        40
+      ]
+    },
+    {
+      "heuristic_title": "jungle_crystal_dance",
+      "members": [
+        49,
+        50,
+        51,
+        52
+      ]
+    },
+    {
+      "heuristic_title": "mystical_jungle_rave",
+      "members": [
+        53,
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "heuristic_title": "mystical_temple_dance",
+      "members": [
+        57,
+        58,
+        59,
+        60
+      ]
+    },
+    {
+      "heuristic_title": "gothic_dance_ritual",
+      "members": [
+        61,
+        62,
+        63,
+        64
+      ]
+    },
+    {
+      "heuristic_title": "cyber_gothic_portal",
+      "members": [
+        65,
+        66,
+        67,
+        68
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_stone_circle",
+      "members": [
+        69,
+        70,
+        71,
+        72
+      ]
+    },
+    {
+      "heuristic_title": "techno_gothic_portal_arrival",
+      "members": [
+        73,
+        74,
+        75,
+        76
+      ]
+    },
+    {
+      "heuristic_title": "crystal_grotto_dance",
+      "members": [
+        77,
+        78,
+        79,
+        80
+      ]
+    },
+    {
+      "heuristic_title": "mystical_mirror_dance",
+      "members": [
+        81,
+        82,
+        83,
+        84
+      ]
+    },
+    {
+      "heuristic_title": "mystical_waterfall_dance",
+      "members": [
+        85,
+        86,
+        87,
+        88
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_cavern_dance",
+      "members": [
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96
+      ]
+    },
+    {
+      "heuristic_title": "mystical_forest_dance",
+      "members": [
+        97,
+        98,
+        99,
+        100,
+        127,
+        128,
+        129,
+        130,
+        316,
+        317,
+        318,
+        319,
+        335,
+        336,
+        337,
+        338
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_flame_dance",
+      "members": [
+        101,
+        102,
+        103,
+        104
+      ]
+    },
+    {
+      "heuristic_title": "dark_ritual_dance",
+      "members": [
+        105,
+        106,
+        107,
+        108
+      ]
+    },
+    {
+      "heuristic_title": "mystical_forest_rave",
+      "members": [
+        109,
+        110,
+        111,
+        112
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_neon_ruins",
+      "members": [
+        117,
+        118,
+        119,
+        120
+      ]
+    },
+    {
+      "heuristic_title": "neon_dance_ritual",
+      "members": [
+        121,
+        122
+      ]
+    },
+    {
+      "heuristic_title": "mystical_neon_dance",
+      "members": [
+        123,
+        124,
+        125,
+        126
+      ]
+    },
+    {
+      "heuristic_title": "mystical_demon_dance",
+      "members": [
+        131,
+        132,
+        133,
+        134
+      ]
+    },
+    {
+      "heuristic_title": "neon_storm_dance",
+      "members": [
+        135,
+        136,
+        137,
+        138
+      ]
+    },
+    {
+      "heuristic_title": "mystical_glade_dance",
+      "members": [
+        139,
+        140,
+        141,
+        142
+      ]
+    },
+    {
+      "heuristic_title": "neon_reflections_dance",
+      "members": [
+        143,
+        144,
+        145,
+        146
+      ]
+    },
+    {
+      "heuristic_title": "mystical_gothic_ascent",
+      "members": [
+        147,
+        148,
+        149,
+        150
+      ]
+    },
+    {
+      "heuristic_title": "neon_shadows_dance",
+      "members": [
+        151,
+        152,
+        153,
+        154
+      ]
+    },
+    {
+      "heuristic_title": "mystical_tunnel_dance",
+      "members": [
+        155,
+        156,
+        157,
+        158
+      ]
+    },
+    {
+      "heuristic_title": "bioluminescent_jungle_festival",
+      "members": [
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_dancefloor_loop",
+      "members": [
+        167,
+        168,
+        169,
+        170
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_fairy_dance",
+      "members": [
+        171,
+        172,
+        173,
+        174
+      ]
+    },
+    {
+      "heuristic_title": "moonlit_mirror_dance",
+      "members": [
+        175,
+        176,
+        177,
+        178
+      ]
+    },
+    {
+      "heuristic_title": "mystical_dance_in_mirrors",
+      "members": [
+        179,
+        180,
+        181,
+        182
+      ]
+    },
+    {
+      "heuristic_title": "ethereal_light_bridge",
+      "members": [
+        183,
+        184,
+        185,
+        186
+      ]
+    },
+    {
+      "heuristic_title": "hash:be0c935780bc435db655093a8a942700b358212df6ca2e5a948cbb9d50339f82",
+      "members": [
+        187,
+        312
+      ]
+    },
+    {
+      "heuristic_title": "hash:4e6041c89a0a2cd19b3ed59bf1b7fe6a6218ae9bdd8db0919cb5ccd51d7a2917",
+      "members": [
+        188,
+        313
+      ]
+    },
+    {
+      "heuristic_title": "hash:f646f456543173653827099e4955216480e32d72ac2b4e943fa8ef47480ece0d",
+      "members": [
+        189,
+        314
+      ]
+    },
+    {
+      "heuristic_title": "hash:a6a47dc25df5323388701fc171f40729711f33a7e077ea64b599ef12cae19d52",
+      "members": [
+        190,
+        315
+      ]
+    },
+    {
+      "heuristic_title": "hash:0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+      "members": [
+        191,
+        201
+      ]
+    },
+    {
+      "heuristic_title": "hash:c637ae72f98e776b4cc00e9e2a52be76230d092e43ec6257d831150ef3e29982",
+      "members": [
+        193,
+        194
+      ]
+    },
+    {
+      "heuristic_title": "hash:e388e2c2026c6fa649457ddafd4374efa85b290f193961e52d3eba6793928450",
+      "members": [
+        196,
+        205
+      ]
+    },
+    {
+      "heuristic_title": "hash:aba05ca2fa3937f6997c6d5f0df4c2c302d11cfd1c4b25ca78515e863ddf456e",
+      "members": [
+        203,
+        211
+      ]
+    },
+    {
+      "heuristic_title": "goddess_in_mystical_jungle",
+      "members": [
+        212,
+        213,
+        414,
+        415
+      ]
+    },
+    {
+      "heuristic_title": "mystical_jungle_journey",
+      "members": [
+        214,
+        215,
+        216,
+        217,
+        242,
+        243,
+        244,
+        245,
+        288,
+        289,
+        290,
+        291,
+        304,
+        305,
+        306,
+        307,
+        394,
+        395,
+        396,
+        397
+      ]
+    },
+    {
+      "heuristic_title": "gothic_goddess_journey",
+      "members": [
+        218,
+        219,
+        220,
+        221,
+        398,
+        399,
+        400,
+        401
+      ]
+    },
+    {
+      "heuristic_title": "gothic_tribal_goddess_odyssey",
+      "members": [
+        222,
+        223,
+        224,
+        225
+      ]
+    },
+    {
+      "heuristic_title": "mystical_goddess_journey",
+      "members": [
+        226,
+        227,
+        228,
+        229
+      ]
+    },
+    {
+      "heuristic_title": "goddess's_mystical_journey",
+      "members": [
+        234,
+        235,
+        236,
+        237,
+        382,
+        383,
+        384,
+        385
+      ]
+    },
+    {
+      "heuristic_title": "goddess's_mesmerizing_journey",
+      "members": [
+        238,
+        239,
+        240,
+        241
+      ]
+    },
+    {
+      "heuristic_title": "gothic_tribal_enchantment",
+      "members": [
+        246,
+        247,
+        248,
+        249
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_jungle_goddess",
+      "members": [
+        250,
+        251,
+        252,
+        253
+      ]
+    },
+    {
+      "heuristic_title": "moonlit_tribal_dance",
+      "members": [
+        254,
+        255,
+        256
+      ]
+    },
+    {
+      "heuristic_title": "goddess_jungle_journey",
+      "members": [
+        257,
+        258,
+        259,
+        260
+      ]
+    },
+    {
+      "heuristic_title": "moonlit_jungle_goddess",
+      "members": [
+        261,
+        262,
+        263,
+        264,
+        285,
+        286,
+        287
+      ]
+    },
+    {
+      "heuristic_title": "tribal_goddess_journey",
+      "members": [
+        265,
+        266,
+        267,
+        268,
+        402,
+        403,
+        404,
+        405
+      ]
+    },
+    {
+      "heuristic_title": "gothic_jungle_goddess",
+      "members": [
+        273,
+        274,
+        275,
+        276,
+        300,
+        301,
+        302,
+        303,
+        378,
+        379,
+        380,
+        381
+      ]
+    },
+    {
+      "heuristic_title": "moonlit_tribal_goddess",
+      "members": [
+        277,
+        278,
+        279,
+        280
+      ]
+    },
+    {
+      "heuristic_title": "barefoot_tribal_goddess",
+      "members": [
+        281,
+        282,
+        283,
+        284
+      ]
+    },
+    {
+      "heuristic_title": "mystical_jungle_goddess",
+      "members": [
+        292,
+        293,
+        294,
+        295,
+        356,
+        357,
+        358,
+        359,
+        366,
+        367,
+        368
+      ]
+    },
+    {
+      "heuristic_title": "gothic_tribal_goddess",
+      "members": [
+        296,
+        297,
+        298,
+        299
+      ]
+    },
+    {
+      "heuristic_title": "magical_jungle_goddess",
+      "members": [
+        308,
+        309,
+        310,
+        311
+      ]
+    },
+    {
+      "heuristic_title": "mystical_chamber_dance",
+      "members": [
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328
+      ]
+    },
+    {
+      "heuristic_title": "gothic_forest_dance",
+      "members": [
+        330,
+        331,
+        341,
+        342,
+        343,
+        344
+      ]
+    },
+    {
+      "heuristic_title": "mystical_dance_dreamscape",
+      "members": [
+        339,
+        340
+      ]
+    },
+    {
+      "heuristic_title": "enchanted_jungle_dance",
+      "members": [
+        345,
+        346,
+        347,
+        348
+      ]
+    },
+    {
+      "heuristic_title": "gothic_dance_magic",
+      "members": [
+        349,
+        350,
+        351
+      ]
+    },
+    {
+      "heuristic_title": "goddess_dance_in_jungle",
+      "members": [
+        352,
+        353,
+        354,
+        355
+      ]
+    },
+    {
+      "heuristic_title": "goddess_of_luminous_wonders",
+      "members": [
+        361,
+        362,
+        363
+      ]
+    },
+    {
+      "heuristic_title": "goddess_dance_monolith",
+      "members": [
+        364,
+        365
+      ]
+    },
+    {
+      "heuristic_title": "mystical_forest_goddess",
+      "members": [
+        369,
+        370,
+        371
+      ]
+    },
+    {
+      "heuristic_title": "mystical_forest_journey",
+      "members": [
+        372,
+        373
+      ]
+    },
+    {
+      "heuristic_title": "gothic_tribal_journey",
+      "members": [
+        374,
+        375,
+        376,
+        377
+      ]
+    },
+    {
+      "heuristic_title": "goddess_in_mystic_jungle",
+      "members": [
+        386,
+        387,
+        388,
+        389
+      ]
+    },
+    {
+      "heuristic_title": "gothic_tribal_goddess_journey",
+      "members": [
+        390,
+        391,
+        392,
+        393
+      ]
+    },
+    {
+      "heuristic_title": "gothic_goddess_dance",
+      "members": [
+        406,
+        407,
+        408,
+        409
+      ]
+    }
+  ],
+  "near_middle_frames": [
+    {
+      "a": 193,
+      "b": 194,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 193,
+      "b": 198,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 194,
+      "b": 198,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 193,
+      "b": 200,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 194,
+      "b": 200,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 198,
+      "b": 200,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 191,
+      "b": 201,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 196,
+      "b": 205,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 193,
+      "b": 208,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 194,
+      "b": 208,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 198,
+      "b": 208,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 200,
+      "b": 208,
+      "distance": 0,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 199,
+      "b": 210,
+      "distance": 2,
+      "identical_file": false,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 203,
+      "b": 211,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 187,
+      "b": 312,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 188,
+      "b": 313,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 189,
+      "b": 314,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    },
+    {
+      "a": 190,
+      "b": 315,
+      "distance": 0,
+      "identical_file": true,
+      "interpretation": "single-middle-frame similarity warning, not proven shared source"
+    }
+  ],
+  "scope": "Filename title is family hint only. Exact file SHA proves duplicates; single-frame dhash cannot prove independence or temporal equality."
+}

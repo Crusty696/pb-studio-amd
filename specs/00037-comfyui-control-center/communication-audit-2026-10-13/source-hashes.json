@@ -1,0 +1,66 @@
+{
+  "captured_utc": "2026-10-13T01:33:31.992202+00:00",
+  "baseline_sha256": {
+    "plan.md": "62c0c80cc7a6a219bc39aa6c4bd8e07607737242a15d79b0766644281dfa3bc3",
+    "spec.md": "589263dffde1517489ca8cfe1fde79b2b471a5be749ec9f36b2faa837ff76453",
+    "tasks.md": "5a50a0fb12c7835c622fff36b74968314f4435b060000f3b9daedffca657ae2c",
+    "traceability.md": "aeb149b88ad25eacd8ad438a4aadf73126631fde9c3a66dd61b041ef94f88f5e",
+    "work-packages.json": "3999e7ff944de90ee813fbd6966e3110d749d9ae17673e021291718ce17781a5",
+    "planning-validation.json": "908f84e76557e96403de08e0babe5be201cd5283f7367ea8cac5825ce9d0ff2c",
+    "clarifications.md": "40e6a63cc291d073ac164170af5d3df4102005a1aedfc6a859e789917f77ed8b"
+  },
+  "source_files": [
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\backend\\main.py",
+      "sha256": "efe0cabf99bc2a6865bd375aef0f1508cde110ee0559f74dc43f1a339761fae8"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\backend\\dependencies.py",
+      "sha256": "4fcd0ac8383d4d062f657683690a3de6a5f5156853a4c93f332ee26cc995cf3e"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\backend\\routers\\events_router.py",
+      "sha256": "617fe7c5242256a148567639c925f441ab049826e257150305455318e43e7f84"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\PBStudio.UI\\App.xaml.cs",
+      "sha256": "51b347d7a5f1063ffea4356477f0a1b424aa0020fa16ecf8cf2e9d3c09c444fd"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\PBStudio.UI\\Services\\ApiClient.cs",
+      "sha256": "b984eb117d441a1aa508b610bb8468bd9612c37d673d70a4d28716a7e5c87ce4"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\PBStudio.UI\\Services\\IApiClient.cs",
+      "sha256": "6957fb57a573b0e136b306704bb81700c3c52a95945946db15d3dcd89362282b"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\PBStudio.UI\\Services\\SSEClient.cs",
+      "sha256": "dbb04d9f45d0a6cc3a7c2adc38cdc892d4c46b09149114569290c65732a01389"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\PBStudio.UI\\Services\\PythonBridgeService.cs",
+      "sha256": "a9752f219ad0df9aa11c3fb4611f7c8a08651497cc61af81ffcca3394d86b278"
+    },
+    {
+      "path": "C:\\Users\\david\\ComfyUI-Installs\\ComfyUI\\ComfyUI\\server.py",
+      "sha256": "7dc4ca3bd801a64da1fe7c2d1af81da61999f6b96dd96637d456e0562e8ce40b"
+    },
+    {
+      "path": "C:\\Users\\david\\ComfyUI-Installs\\ComfyUI\\ComfyUI\\execution.py",
+      "sha256": "65f0a4ec361649cbd50869ef20c0f590b6931206cb07e3066b646e81a1a1a201"
+    },
+    {
+      "path": "C:\\Users\\david\\ComfyUI-Installs\\ComfyUI\\ComfyUI\\main.py",
+      "sha256": "c3eb9175ad667127d61c8bb68d07a5e6542f0490851dc73176f73bd6d0320cb1"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\PBStudio.UI\\MainWindow.xaml.cs",
+      "sha256": "3529ed72d69a25bfce2ecda16086ddd98dc52173e1e5a8bd5f5daa538f485317"
+    },
+    {
+      "path": "C:\\Users\\david\\ComfyUI-Installs\\ComfyUI\\ComfyUI\\comfy_execution\\jobs.py",
+      "sha256": "cee1191aa6ed913fde8b0556db9afa4f95135bdd910956b8d4bf921a81452085"
+    }
+  ]
+}

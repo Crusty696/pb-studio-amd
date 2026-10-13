@@ -1,0 +1,81 @@
+[
+  {
+    "id": "L01",
+    "severity": "high",
+    "title": "Bewusstes Warten auf Import oder Analyse fehlt",
+    "baseline_evidence": "plan.md:597-605,642-655,707-713",
+    "tasks": [
+      "T010",
+      "T011",
+      "T019",
+      "T021",
+      "T022",
+      "T024",
+      "T025",
+      "T026"
+    ],
+    "acceptance": "Vier Autoimport/Autoanalyse-Kombinationen, Restart und spätere Freigaben; keine ungewollte Arbeit, keine Dauerschleife, kein neuer Generierungsattempt.",
+    "status": "plan corrected; next full review pending"
+  },
+  {
+    "id": "L02",
+    "severity": "medium",
+    "title": "Reshot-Endabnahme ohne T030-Vorgänger",
+    "baseline_evidence": "tasks.md:T040; domain-contracts.md:FP17",
+    "tasks": [
+      "T040"
+    ],
+    "acceptance": "T030 liegt vor T040; reale Reshotübernahme erst nach qualifiziertem Reshotproducer.",
+    "status": "plan corrected; next full review pending"
+  },
+  {
+    "id": "L03",
+    "severity": "high",
+    "title": "Unbeaufsichtigtes G8 ohne Managedgate",
+    "baseline_evidence": "clarifications.md:7; plan.md:736-737; tasks.md:T041",
+    "tasks": [
+      "T041"
+    ],
+    "acceptance": "Shared-Nachweis bleibt beaufsichtigt; unbeaufsichtigter Claim ohne qualifiziertes T016 wird gesperrt.",
+    "status": "plan corrected; next full review pending"
+  },
+  {
+    "id": "L04",
+    "severity": "medium",
+    "title": "Pflicht-Developer-Guide besitzt optionalen Owner",
+    "baseline_evidence": "Originalauftrag §69/70; tasks.md:T044/T045",
+    "tasks": [
+      "T044",
+      "T045"
+    ],
+    "acceptance": "Alle sechs Pflichtdokumente ohne gewählten Wizard vorhanden und phasenbezogen geprüft.",
+    "status": "plan corrected; next full review pending"
+  },
+  {
+    "id": "L05",
+    "severity": "medium",
+    "title": "Mutable Workflowaktivierung ohne CAS-Identität",
+    "baseline_evidence": "plan.md:232,493,548",
+    "tasks": [
+      "T005",
+      "T022",
+      "T024"
+    ],
+    "acceptance": "Zwei konkurrierende Toggle, verlorene Antwort, identische Wiederholung, Reopen: stale409; Bundlehash unverändert.",
+    "status": "plan corrected; next full review pending"
+  },
+  {
+    "id": "L06",
+    "severity": "medium",
+    "title": "Unknown kann belegte Nichtannahme nicht auflösen",
+    "baseline_evidence": "plan.md:582,617-620,632; communication-contract.md:41",
+    "tasks": [
+      "T010",
+      "T012",
+      "T013",
+      "T014"
+    ],
+    "acceptance": "Nur gebundenes autoritatives Rejectreceipt oder bewiesener Nicht-Send löst Unknown; leere History/Proxyfehler/fremder Beleg/Acceptkonflikt erlauben keinen Retry.",
+    "status": "plan corrected; next full review pending"
+  }
+]

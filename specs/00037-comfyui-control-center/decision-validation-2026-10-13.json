@@ -1,0 +1,52 @@
+{
+  "verified_utc": "2026-10-13T01:28:13.442746+00:00",
+  "proof_level": "planning document assertions and small in-memory abstractions only; no product execution",
+  "confirmed_decisions": [
+    "D01 external Comfy AMD/ROCm; PB DirectML",
+    "D02 PB local scope; external service configuration only in separate ComfyUI",
+    "O01 observed_shared first, managed later qualified",
+    "O02 pause/close/cancel policy",
+    "O03 representative authorized media + Native baseline + untouched Holdout methodology",
+    "O04 additive existing catalog/API direction"
+  ],
+  "remaining_detail_gates": [
+    "O03 concrete media inventory/authorization/labels/quality and resource values",
+    "O04 concrete SQL/API contract and migration/API-change approvals",
+    "optional managed installation/client cooperation/technical qualification"
+  ],
+  "cloud_followup_gate_present": false,
+  "no_implementation_authorized": true,
+  "requirements": 42,
+  "original_findings": 40,
+  "original_sections": 82,
+  "open_tasks": 45,
+  "countercheck_findings": 19,
+  "acyclic_dependencies": true,
+  "source_hashes_checked": 254,
+  "source_hash_changes": [],
+  "original_attachment_sha256": "4a1f436e6b1825f79623c93ab2d33918e1d6a69f8b66455ef99be776c7a7e6d6",
+  "corrected_audit_contracts_rechecked": 12,
+  "targeted_document_checks": {
+    "local_import_reconciliation_has_no_remote_attempt_prerequisite": true,
+    "obsolete_after_catalog_preserves_logical_job_status": true,
+    "pause_policy_confirmed": true,
+    "policy_assurance_is_explicit": true,
+    "batch_storage_precedes_consumer": true,
+    "generated_workflow_bundles": true
+  },
+  "links_checked": 13,
+  "spec_bytes": 10030,
+  "historical_evidence": "countercheck-evidence.json retains 2026-10-12 audit assertions; this record supplies current decision status",
+  "decision_revision_baseline_hashes": {
+    "countercheck-evidence.json": "0ab5b9aced0ddac29945c9486e0620fe79f2578f8b07638e1f10a17d818a284d",
+    "countercheck-findings.json": "b4684a3941f7308284ddd53cc72fdd22afbf79442a716ed1e212ecec68910bee",
+    "countercheck-report.md": "342f9c21c659b362a32db3bb5b30aad50afb7b4f20e79b7cc50d2a50681359c7",
+    "decisions.md": "41fd111ee50eff9c5c94f4046566049d9a83749a8f6c6cbed01f3598d0d3632b",
+    "plan.md": "57ecf583482e9861c6252229ea561a6228aed7cd77cd8ab6842e4aca40900283",
+    "planning-validation.json": "2d7220b40644159f44857d50d944e96682dbd4decc819b4a3ca7ff1a32eb57c5",
+    "spec.md": "c632d0fb9e25de369533c8442f4af7c42517b55b2ee0511e579872b6b168f30d",
+    "tasks.md": "e740d1bd6cb1af1130ef51f7c4a60745882a5dc39e4b6ab95ccca65d35fe577c",
+    "traceability.md": "061714eb88c6fab3f756dea35b2cd3e84666ebb37ac80faf72a9d78443b68dad",
+    "work-packages.json": "744bfab01cbd93a7bf50ae2366e80c5038883714baea0145609231ba96c1dd08"
+  }
+}

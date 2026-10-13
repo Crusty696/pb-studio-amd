@@ -1,0 +1,14 @@
+{
+  "utc": "2026-10-13T04:22:14.360931+00:00",
+  "files": {
+    "src/pb_studio/config_manager.py": "3501ab180c42182f538b03f3b45aeb2fe50c61c2a34f65f1bcf2eec7c944ebaf",
+    "config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "PBStudio.UI/Services/SSEClient.cs": "dbb04d9f45d0a6cc3a7c2adc38cdc892d4c46b09149114569290c65732a01389",
+    "PBStudio.UI/Services/TerminalLoggerProvider.cs": "9f6aee3784ffaf0e57967ae8bf472965126824dd16651673814b50598934c38b",
+    ".claude/settings.local.json": "7be5b030f294efc2136631eae801b1c0c794bc9ca83b1a43ad6136bf11324d7e",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\journal.json": "0508b7ea2737c39f39cde52fd79835c8d7695f9804fb4175c2bd389c1e381bc2",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\CURRENT": "e7a937bdbd116b337963c3d87f4f603da2710b79c809be9994830afc975f3963",
+    "data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a"
+  }
+}

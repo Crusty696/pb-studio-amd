@@ -1,0 +1,32 @@
+{
+  "utc": "2026-10-13T14:59:27.050882+00:00",
+  "scope": "Wave B offline T005/T006 and scoped T045; no live execution",
+  "files": {
+    "src\\pb_studio\\comfyui\\capabilities.py": "39c098cdb916ab4e73586afc55d7fea176a3292d675466836e23049d7a511644",
+    "src\\pb_studio\\comfyui\\client.py": "3478a03f1a4d654ec41a2677b18ab0eada47c951d07a1777f1cf411de5b0c774",
+    "src\\pb_studio\\comfyui\\log_redaction.py": "0c5e771f8debc180f9ec54fc688389ce3445dcc902fd69d2e69e9f7a127df4ea",
+    "src\\pb_studio\\comfyui\\result_parser.py": "25f2d6755485a6cfd945876e6df7de4940cda45b40b87e10f297fd2b481dc958",
+    "src\\pb_studio\\comfyui\\schemas.py": "a4d5046aa0b2bced9924523e1797e0cdc0341671f87e601accc149a2579da5c9",
+    "src\\pb_studio\\comfyui\\workflow_parameters.py": "002881ee9d60188bcdc887c85d6a8181315734d2581a1d4da591b715d4550130",
+    "src\\pb_studio\\comfyui\\workflow_policy.py": "b4af882e581462f48d7281868b6f9708cfba1828239cf0e01ec3cd554e77a2ab",
+    "src\\pb_studio\\comfyui\\workflow_registry.py": "f2a638950bb6c8a96a95da4736cf6da918a1896e91a88730c6113a2ad0a634be",
+    "src\\pb_studio\\comfyui\\workflow_schemas.py": "743cceb67980929da34b90fe82a28a4b71abb871cdf978e68f4d3fa9caefeeeb",
+    "src\\pb_studio\\comfyui\\__init__.py": "04bcdc822873b1839e4043e5cdcca5f8ea31cb9be69f8958edd00b4d484680dc",
+    "backend\\dependencies.py": "ff9024201a3cc60a598dc569a13fd4b23a0d1afe81fc6b691883a70036c8225f",
+    "Tests\\test_comfyui_capabilities.py": "4a9dc84473bff6e11e39fe3881d7116adad72d915a599af81eaeac88f95920f9",
+    "Tests\\test_comfyui_config.py": "86fadcb9754b0b854831a9459f34bc1bd7a2b5174f7521dd71610f91778ba248",
+    "Tests\\test_comfyui_connection.py": "7732605ff4c38590096e4789a8909e83478b0694795a1573775b415659aa4674",
+    "Tests\\test_comfyui_workflow_bundle.py": "38a993f29e7b8fc439bcf5fa871e1f9c76260d9e2d3627c9f7f936b972470268",
+    "Tests\\test_comfyui_workflow_policy.py": "200d1f920c6d40a6113f85ba47a9d56acb270e382365580e24adbcd267c7bbde",
+    "specs\\00037-comfyui-control-center\\wave-b\\independent-review.md": "4b33f5b190502fa544bebd9361d9a52be0a986c6b91b7c656701dd20999584d3",
+    "specs\\00037-comfyui-control-center\\wave-b\\plan.md": "7cbe98123399903bd66abb5fd0cb6b23c33861040439c0308b907228f7ca2a36",
+    "specs\\00037-comfyui-control-center\\wave-b\\progress.md": "b9e1fea2e68c0264a06ef0a43ba98de82ea0df42f25eb8b8960a7ec3ee24a341",
+    "specs\\00037-comfyui-control-center\\wave-b\\qc-report.md": "b89e869048bbe8205489dced6fe63b576b00c5a76e0dd6ffd862ececf764e0de",
+    "specs\\00037-comfyui-control-center\\wave-b\\spec.md": "6a090dd8800007e0f37e626545e4f77bf32159fbdf0ca1327ed16a305e3b9ed7",
+    "specs\\00037-comfyui-control-center\\wave-b\\tasks.md": "2b9b75adf8b854371678255fba9eb9e7feab8fb38989c588f5a88007b0c69db9",
+    "specs\\00037-comfyui-control-center\\wave-b\\tests.xml": "90f7bcd4d39a4167f4c15095aabb970039096854eaa10456c9855aeb4397f9ee",
+    "specs\\00037-comfyui-control-center\\wave-b\\source-verification.json": "abde97d90fea772503e49f6395496095c8427b3114a310cdfd1b485ff2905a12",
+    "specs\\00037-comfyui-control-center\\wave-b\\.completed": "06b6ca1490658d2f206e058eaf153acc2084097c0b9602b7b3df6142bd3db9ea",
+    "specs\\00037-comfyui-control-center\\wave-b\\.qc-passed": "e13365eda0cfaa5c125bb8e535ad5ab0bb5307569057715629ae6d1cf2033241"
+  }
+}

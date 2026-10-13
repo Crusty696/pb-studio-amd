@@ -1,0 +1,194 @@
+[
+  {
+    "path": "src/pb_studio/services/pacing_service.py",
+    "sha256": "dbd0c20d3de2e784c93f45850d9bad3f3a0869c2d883664f790f63c3e15f7371"
+  },
+  {
+    "path": "src/pb_studio/pacing/advanced_pacing_engine.py",
+    "sha256": "842de0a3e67e1bf070d9ad8090236c1411edfa8148b43e4b6a49c41d8e77ae29"
+  },
+  {
+    "path": "backend/routers/audio_router.py",
+    "sha256": "c03587565b998305b2ae20fbc131dd7bb0a899e4629f484fb7b00b0db5bee748"
+  },
+  {
+    "path": "backend/routers/audio_router.py",
+    "sha256": "c03587565b998305b2ae20fbc131dd7bb0a899e4629f484fb7b00b0db5bee748"
+  },
+  {
+    "path": "backend/routers/pacing_router.py",
+    "sha256": "21c2e487b6f8699793ca14dfb2562fa08a19397e092a66242ed02834174551e7"
+  },
+  {
+    "path": "backend/schemas/pacing_schemas.py",
+    "sha256": "a822fb3c5b5a5a8f145d8a3ad617928269f52fe86f8d848004de5a91011aa1f8"
+  },
+  {
+    "path": "backend/routers/pacing_router.py",
+    "sha256": "21c2e487b6f8699793ca14dfb2562fa08a19397e092a66242ed02834174551e7"
+  },
+  {
+    "path": "backend/app_state.py",
+    "sha256": "6de94ffbb9071429e5820170898e81bc93d1dca920e74353d63d58071063d11b"
+  },
+  {
+    "path": "backend/routers/project_router.py",
+    "sha256": "6f13c86765a7fdacfc31164e875c2a6cf3ad91b71bb97f1eb78f2e949c9f4702"
+  },
+  {
+    "path": "src/pb_studio/services/pacing_service.py",
+    "sha256": "dbd0c20d3de2e784c93f45850d9bad3f3a0869c2d883664f790f63c3e15f7371"
+  },
+  {
+    "path": "src/pb_studio/services/pacing_service.py",
+    "sha256": "dbd0c20d3de2e784c93f45850d9bad3f3a0869c2d883664f790f63c3e15f7371"
+  },
+  {
+    "path": "PBStudio.UI/ViewModels/DirectorViewModel.cs",
+    "sha256": "1fddb214a1185a43a5bab8c9eaa8ab5a84f6d3ab748e41dbe3a9466967c59be8"
+  },
+  {
+    "path": "backend/routers/pacing_router.py",
+    "sha256": "21c2e487b6f8699793ca14dfb2562fa08a19397e092a66242ed02834174551e7"
+  },
+  {
+    "path": "src/pb_studio/brain/post_processor.py",
+    "sha256": "6e10df222d7de26cc4745fba518a8c4f2fc6ba8736930519a4aa1a53c77f720d"
+  },
+  {
+    "path": "src/pb_studio/brain/loader_cache.py",
+    "sha256": "54849f10d0996bc2b3fc22cc7777092ae04760b14b8f5a7cd1382f08d145c900"
+  },
+  {
+    "path": "src/pb_studio/brain/cross_modal_projector.py",
+    "sha256": "fbbcd4ea763cfe205f9033f010353bd4925a39c93ede6be31796a43d36c6be14"
+  },
+  {
+    "path": "backend/routers/video_router.py",
+    "sha256": "35949e4d833ec18e09f00df039da43ac4237b9e18c66d9baca72414f9a351d9c"
+  },
+  {
+    "path": "backend/recovery_bootstrap.py",
+    "sha256": "d7e21208039475be13bdc358ba9930260f2e8a574bf2f1aaec9d154373c9faf7"
+  },
+  {
+    "path": "backend/recovery_bootstrap.py",
+    "sha256": "d7e21208039475be13bdc358ba9930260f2e8a574bf2f1aaec9d154373c9faf7"
+  },
+  {
+    "path": "src/pb_studio/storage/recovery_generation.py",
+    "sha256": "7d9fec134aecdb3b092bf7c8ff5f63db560291ee242592f2e4e1ef51ebf754f2"
+  },
+  {
+    "path": "src/pb_studio/data/database_core.py",
+    "sha256": "189b80ea4fc27bbcdfc522ab35358384f18a08c899899c9953fa29112b2a5239"
+  },
+  {
+    "path": "src/pb_studio/data/repositories/project_repository.py",
+    "sha256": "4938db8b6d174338c6c629aabb27e6f1213f3b9d1538b530740a66c05a695f2b"
+  },
+  {
+    "path": "backend/routers/project_router.py",
+    "sha256": "6f13c86765a7fdacfc31164e875c2a6cf3ad91b71bb97f1eb78f2e949c9f4702"
+  },
+  {
+    "path": "src/pb_studio/storage/recovery_adapters.py",
+    "sha256": "b53192e29276c8c3ed437b20a1ae228e7aaf1d58d1f010e122183f83afef503c"
+  },
+  {
+    "path": "backend/dependencies.py",
+    "sha256": "4fcd0ac8383d4d062f657683690a3de6a5f5156853a4c93f332ee26cc995cf3e"
+  },
+  {
+    "path": "backend/routers/pacing_router.py",
+    "sha256": "21c2e487b6f8699793ca14dfb2562fa08a19397e092a66242ed02834174551e7"
+  },
+  {
+    "path": "backend/routers/render_router.py",
+    "sha256": "c26dc9d9f33f4e408913ec190ba6588a0311da843471e967f542239a2706fafa"
+  },
+  {
+    "path": "backend/dependencies.py",
+    "sha256": "4fcd0ac8383d4d062f657683690a3de6a5f5156853a4c93f332ee26cc995cf3e"
+  },
+  {
+    "path": "backend/dependencies.py",
+    "sha256": "4fcd0ac8383d4d062f657683690a3de6a5f5156853a4c93f332ee26cc995cf3e"
+  },
+  {
+    "path": "backend/routers/render_router.py",
+    "sha256": "c26dc9d9f33f4e408913ec190ba6588a0311da843471e967f542239a2706fafa"
+  },
+  {
+    "path": "backend/routers/pacing_router.py",
+    "sha256": "21c2e487b6f8699793ca14dfb2562fa08a19397e092a66242ed02834174551e7"
+  },
+  {
+    "path": "backend/dependencies.py",
+    "sha256": "4fcd0ac8383d4d062f657683690a3de6a5f5156853a4c93f332ee26cc995cf3e"
+  },
+  {
+    "path": "src/pb_studio/core/vram_budget_manager.py",
+    "sha256": "214bfc38f6933692117271a16af5cbf9cb5a7ab3f5cf49d2c28b39aec3858d9f"
+  },
+  {
+    "path": "src/pb_studio/core/vram_budget_manager.py",
+    "sha256": "214bfc38f6933692117271a16af5cbf9cb5a7ab3f5cf49d2c28b39aec3858d9f"
+  },
+  {
+    "path": "src/pb_studio/rendering/render_service.py",
+    "sha256": "70b9813ce086654cefb9314683e55d2858954dfcaf655e6e06afc5004d13b050"
+  },
+  {
+    "path": "src/pb_studio/rendering/preview_renderer.py",
+    "sha256": "61a89dc64cb352c579d42bedb4def6cc8b10112566353d86acf34c441cb8e49d"
+  },
+  {
+    "path": "specs/00037-comfyui-control-center/communication-contract.md",
+    "sha256": "91a2272fcd650a54cd3a664b064cfeee7e93eecfac9b0a9889abd818735763e8"
+  },
+  {
+    "path": "src/pb_studio/config_manager.py",
+    "sha256": "3501ab180c42182f538b03f3b45aeb2fe50c61c2a34f65f1bcf2eec7c944ebaf"
+  },
+  {
+    "path": "src/pb_studio/config_manager.py",
+    "sha256": "3501ab180c42182f538b03f3b45aeb2fe50c61c2a34f65f1bcf2eec7c944ebaf"
+  },
+  {
+    "path": "src/pb_studio/brain/brain_service.py",
+    "sha256": "2683d8c6aef47e27eb64aaaeaa491679d5427c0ccc76f5e894c9e1d2ca2a00d8"
+  },
+  {
+    "path": "backend/routers/brain_router.py",
+    "sha256": "d87a9cac97516e48c12d2891493539837b594df34749c9d62c541ed8921bf8d8"
+  },
+  {
+    "path": "src/pb_studio/brain/feedback_logger.py",
+    "sha256": "f530c21cabd903643e37b28ae042af6355a7f8fd820d65965dd85482c6cf1314"
+  },
+  {
+    "path": "src/pb_studio/brain/projector_trainer.py",
+    "sha256": "81111a25531d3b166db8c8eea3ff67f7401f0557b83ad77a0a3d7e9fbfd0be33"
+  },
+  {
+    "path": "PBStudio.UI/Views/TimelineView.xaml.cs",
+    "sha256": "f951c40ed448bd3533a0cf451dea4e0b4537d45a58ae581ae85afd9e826ef706"
+  },
+  {
+    "path": "PBStudio.UI/Helpers/TimelineSeekCalculator.cs",
+    "sha256": "973022de2322fdf55295a10614f6a8c6a54805e5765dd2eac9f729e71f1911e4"
+  },
+  {
+    "path": "PBStudio.UI/ViewModels/TimelineViewModel.cs",
+    "sha256": "287a5f7bd0b786cae1772b75b695d00fecc8806d114f35931a0e0887dfbaa5fa"
+  },
+  {
+    "path": "backend/routers/pacing_router.py",
+    "sha256": "21c2e487b6f8699793ca14dfb2562fa08a19397e092a66242ed02834174551e7"
+  },
+  {
+    "path": "specs/00037-comfyui-control-center/full-plan-audit-2026-10-13/baseline/tasks.md",
+    "sha256": "0ad1c0afe15f30f760575c32953889bbd80c8bd2fc25d7031b04f5fb9552fad9"
+  }
+]

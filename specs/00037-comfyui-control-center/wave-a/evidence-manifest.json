@@ -1,0 +1,74 @@
+{
+  "utc": "2026-10-13T04:31:43.213142+00:00",
+  "scope": "Wave A only",
+  "files": [
+    {
+      "path": "src\\pb_studio\\comfyui\\capabilities.py",
+      "sha256": "39c098cdb916ab4e73586afc55d7fea176a3292d675466836e23049d7a511644"
+    },
+    {
+      "path": "src\\pb_studio\\comfyui\\client.py",
+      "sha256": "3478a03f1a4d654ec41a2677b18ab0eada47c951d07a1777f1cf411de5b0c774"
+    },
+    {
+      "path": "src\\pb_studio\\comfyui\\schemas.py",
+      "sha256": "a4d5046aa0b2bced9924523e1797e0cdc0341671f87e601accc149a2579da5c9"
+    },
+    {
+      "path": "src\\pb_studio\\comfyui\\__init__.py",
+      "sha256": "04bcdc822873b1839e4043e5cdcca5f8ea31cb9be69f8958edd00b4d484680dc"
+    },
+    {
+      "path": "src\\pb_studio\\config_manager.py",
+      "sha256": "4f066a86700082c023be906ad116c993e480187b34bf4b50f33a661691d5cf4c"
+    },
+    {
+      "path": "Tests\\test_comfyui_capabilities.py",
+      "sha256": "4a9dc84473bff6e11e39fe3881d7116adad72d915a599af81eaeac88f95920f9"
+    },
+    {
+      "path": "Tests\\test_comfyui_config.py",
+      "sha256": "86fadcb9754b0b854831a9459f34bc1bd7a2b5174f7521dd71610f91778ba248"
+    },
+    {
+      "path": "Tests\\test_comfyui_connection.py",
+      "sha256": "7732605ff4c38590096e4789a8909e83478b0694795a1573775b415659aa4674"
+    },
+    {
+      "path": "docs\\comfyui\\architecture.md",
+      "sha256": "6aaabdf609fb3930da375d78185fe637a74a4cd3650451df7771bbb10d17a5d5"
+    },
+    {
+      "path": "docs\\comfyui\\developer-guide.md",
+      "sha256": "822e703ab2a1ddecf0d6a6469dae274e5034d9ce3c77464e5ced7356746cb5ec"
+    },
+    {
+      "path": "docs\\comfyui\\troubleshooting.md",
+      "sha256": "51b02ed28850afeb738bae760db8ba549d401d3837e5abd08f488bc974100349"
+    },
+    {
+      "path": "docs\\comfyui\\workflow-format.md",
+      "sha256": "671b4b8906b61f47ea3a34ba93f722970d480d4852295a826bbc2d61ccef5462"
+    },
+    {
+      "path": "specs\\00037-comfyui-control-center\\wave-a\\tests.xml",
+      "sha256": "32e3c7728345801948bbf3d53c870d2ab4d836408c5f7c42a05bb5ef49e312f6"
+    },
+    {
+      "path": "specs\\00037-comfyui-control-center\\wave-a\\live-discovery.json",
+      "sha256": "a897e5b2e45b802f01c82c5a75f374e3a6bc5ea892593e4cbd1cef62646ee119"
+    },
+    {
+      "path": "specs\\00037-comfyui-control-center\\wave-a\\source-verification.json",
+      "sha256": "1a04c47a87c9caae4aea29dba7925b71e57c8227bdc822860424122ced6edc79"
+    },
+    {
+      "path": "specs\\00037-comfyui-control-center\\wave-a\\qc-report.md",
+      "sha256": "ab0d0d40e1b9583402d77a13fccacb8dec8274e891821133eaf4574849ae4e81"
+    },
+    {
+      "path": "specs\\00037-comfyui-control-center\\wave-a\\independent-review.md",
+      "sha256": "d181959ccde3e5b7aa1ed0a59cc9897a3cdc8cd15809664d35afccb5659814d6"
+    }
+  ]
+}

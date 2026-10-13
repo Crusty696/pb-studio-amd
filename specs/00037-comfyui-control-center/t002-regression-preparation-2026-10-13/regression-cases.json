@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "preparation_not_test_runner",
+  "user_decision": {
+    "date": "2026-10-13",
+    "source": "direct_user",
+    "prior_usage_and_family_origin": "user_does_not_remember_exactly",
+    "current_use": "regression_test_media",
+    "independent_holdout": "explicitly_deferred_open",
+    "generation_allowed": false,
+    "gpu_runs_allowed": false,
+    "meaning": "Continue preparation without repeatedly requiring unknown origin facts; no claim of independent generalization."
+  },
+  "cases": [
+    {
+      "case_id": "R01",
+      "title": "Quellbindung",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "expected": "Absolute source path and full SHA256 match pinned manifest; any mismatch stops the affected comparison.",
+      "execution_class": "READ_ONLY_CPU",
+      "status": "EXISTING_SELECTION_EVIDENCE",
+      "existing_evidence": "t002-selection-2026-10-13/original-integrity.json"
+    },
+    {
+      "case_id": "R02",
+      "title": "Video-Decodierung",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06"
+      ],
+      "expected": "Full selected video stream decodes; decoded frame counts300 each exceptV02=720; zero decode errors. Compare to current pinned source, not a generic fps assumption.",
+      "execution_class": "READ_ONLY_CPU",
+      "status": "EXISTING_SELECTION_EVIDENCE",
+      "existing_evidence": "t002-selection-2026-10-13/selected-verification.json"
+    },
+    {
+      "case_id": "R03",
+      "title": "Zeitbasis",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06"
+      ],
+      "expected": "Every decoded frame has monotonically increasing PTS. V02 video range[0,30s), audio/container30.016s separately; never extend video range from container.",
+      "execution_class": "READ_ONLY_CPU",
+      "status": "EXISTING_SELECTION_EVIDENCE",
+      "existing_evidence": "t002-selection-2026-10-13/selected-verification.json"
+    },
+    {
+      "case_id": "R04",
+      "title": "Audioformate",
+      "source_ids": [
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "expected": "Source range[60,180s) decodes to960000 finite mono8kHz probe samples. Source44.1kHzPCM16/48kHzfloatPCM/44.1kHzAAC remain separately identified. This probe proves neither loudness nor beat correctness.",
+      "execution_class": "READ_ONLY_CPU",
+      "status": "EXISTING_SELECTION_EVIDENCE",
+      "existing_evidence": "t002-selection-2026-10-13/selected-verification.json"
+    },
+    {
+      "case_id": "R05",
+      "title": "Dubletten",
+      "source_ids": [
+        "V02"
+      ],
+      "expected": "V02 and gemini_generated_video_741eaffa.mp4 share one exact byte identity; no duplicate sample weight or split leakage. Other7duplicate pairs remain grouped in full inventory.",
+      "execution_class": "DOCUMENT_CHECK",
+      "status": "EXISTING_SELECTION_EVIDENCE",
+      "existing_evidence": "t002-selection-2026-10-13/inventory.json"
+    },
+    {
+      "case_id": "R06",
+      "title": "Referenzframes",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06"
+      ],
+      "expected": "Source SHA, stream, exact frame index and retained image SHA agree; V02 frame360 at15s, others frame150 at5s. AI draft is never silently promoted to human reference.",
+      "execution_class": "DOCUMENT_CHECK",
+      "status": "EXISTING_REFERENCE_EVIDENCE",
+      "existing_evidence": "t002-reference-preparation-2026-10-13/reference-frames.json"
+    },
+    {
+      "case_id": "R07",
+      "title": "Unbekannte Farbe",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06"
+      ],
+      "expected": "Missing color primaries/transfer/matrix/range remain unknown; do not claim color/SDR qualification or silently invent metadata. Future validator behavior requires its own implementation test.",
+      "execution_class": "FUTURE_CONTRACT_CHECK",
+      "status": "PLANNED_NOT_RUN",
+      "existing_evidence": null
+    },
+    {
+      "case_id": "R08",
+      "title": "Bildinhalt",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06"
+      ],
+      "expected": "Human reviewer marks exact-frame facts correct/incorrect/uncertain before scoring later PB output; report omissions and hallucinations separately. Unreviewed draft cannot produce PASS.",
+      "execution_class": "HUMAN_REVIEW",
+      "status": "PENDING_HUMAN_LABELS",
+      "existing_evidence": null
+    },
+    {
+      "case_id": "R09",
+      "title": "Musikalische Referenz",
+      "source_ids": [
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "expected": "Annotate source60..90s initially; beat/downbeat/section/blend/dominance distinct, uncertainty explicit. No old app predictions used as answer key. Extend only to actual annotated events.",
+      "execution_class": "HUMAN_LISTENING",
+      "status": "PENDING_HUMAN_LABELS",
+      "existing_evidence": null
+    },
+    {
+      "case_id": "R10",
+      "title": "Nativeanalyse-Vergleich",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "expected": "Pinned input/profile/model/config; compare candidate with newly measured native output and independently reviewed references. Changes in counts alone do not establish improvement.",
+      "execution_class": "SEPARATE_NATIVE_RUN",
+      "status": "NOT_AUTHORIZED",
+      "existing_evidence": null
+    },
+    {
+      "case_id": "R11",
+      "title": "Messmodi und Ressourcen",
+      "source_ids": [
+        "V01",
+        "V02",
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "expected": "fresh-cold/fresh-warm/result-cache-reuse separate; stage times, sensor coverage, foreign load, RAM/disk, bookkeeping vs sampledGPUmaximum separate. Unknown sensor not zero.",
+      "execution_class": "SEPARATE_NATIVE_OR_PILOT_RUN",
+      "status": "NOT_AUTHORIZED",
+      "existing_evidence": null
+    },
+    {
+      "case_id": "R12",
+      "title": "Evaluationsisolation",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "expected": "Ratings only run-owned evaluation files; no product brain feedback/training. Frozen brain/projector identity required for future Director comparisons. This document is not executed product-isolation proof.",
+      "execution_class": "FUTURE_INTEGRATION_CHECK",
+      "status": "PLANNED_NOT_RUN",
+      "existing_evidence": null
+    }
+  ]
+}

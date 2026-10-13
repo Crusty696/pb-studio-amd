@@ -1,0 +1,76 @@
+{
+  "verified_utc": "2026-10-13T01:44:15.142616+00:00",
+  "proof_level": "document consistency and source hashes; isolated source checks separately identified; no end-to-end product execution",
+  "communication_findings": 14,
+  "planned_wire_acceptance_cases": 32,
+  "executed_wire_acceptance_cases": 0,
+  "isolated_source_checks_executed": 10,
+  "read_only_http_probes": 6,
+  "successful_http_probes": 0,
+  "requirements": 42,
+  "original_findings": 40,
+  "original_sections": 82,
+  "open_tasks": 45,
+  "acyclic_dependencies": true,
+  "document_links_checked": 22,
+  "spec_bytes": 10115,
+  "original_pb_source_hashes_checked": 254,
+  "source_hash_changes": [],
+  "additional_source_hashes_checked": 13,
+  "reviewers": [
+    "wire_comfy",
+    "wire_pb",
+    "wire_adversary"
+  ],
+  "peer_recheck_corrections": [
+    "exact Q2 enums",
+    "UploadReceipt.name vs output.filename",
+    "Closing before OnExit",
+    "job/batch entity identity",
+    "query/abort CloseIntent and guarded freeze release"
+  ],
+  "product_implemented": false,
+  "gwire_passed": false,
+  "files": [
+    {
+      "name": "plan.md",
+      "sha256": "f70f4f5f640ae6c95fc217f8839a1a0b60eb22e4bcd04ef0f593f5bfb0369d05",
+      "bytes": 121356
+    },
+    {
+      "name": "spec.md",
+      "sha256": "eedc23c940f154ab72dd1b9f341869c56dd79c2601a2d3635dae3cfe1a4dce40",
+      "bytes": 10115
+    },
+    {
+      "name": "tasks.md",
+      "sha256": "0ad1c0afe15f30f760575c32953889bbd80c8bd2fc25d7031b04f5fb9552fad9",
+      "bytes": 145839
+    },
+    {
+      "name": "traceability.md",
+      "sha256": "38a692f80fd984052fff7fdce2f50cfa531a7b1bd1a84b852d834efc502155f3",
+      "bytes": 45660
+    },
+    {
+      "name": "work-packages.json",
+      "sha256": "eea786d8174fbab75a243518fd4ce43229933061c8fb38daf514b6df8135240a",
+      "bytes": 61014
+    },
+    {
+      "name": "communication-contract.md",
+      "sha256": "31b01333c719fa8d293353d21690530d4bcbb8aee57393baa794b9ddc867a0c2",
+      "bytes": 23765
+    },
+    {
+      "name": "communication-audit-2026-10-13/report.md",
+      "sha256": "61cf84cd41ae7793ea2c27630065bebaee733d1d7c842264a560374e2e1e213e",
+      "bytes": 14525
+    },
+    {
+      "name": "communication-audit-2026-10-13/findings.json",
+      "sha256": "6b1b3a09af9548e9cc99addf6e0b49a299732ba8290fa94edbed4a76a270bfc0",
+      "bytes": 5902
+    }
+  ]
+}

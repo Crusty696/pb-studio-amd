@@ -1,0 +1,9 @@
+{
+  "compiled_files": 163,
+  "compile_errors": 0,
+  "changed_baseline_paths": [
+    "backend\\dependencies.py",
+    "src\\pb_studio\\comfyui\\workflow_schemas.py"
+  ],
+  "note": "workflow_schemas.py initial draft already existed at baseline capture; belongs to current Wave B. backend/dependencies.py planned Wave B edit. All other baseline entries must match."
+}

@@ -103,6 +103,11 @@ release-assets/
 .tmp_*.py
 gui_screenshots/
 
+# T002 private video frame previews remain local; public evidence keeps metadata only.
+/specs/00037-comfyui-control-center/t002-selection-2026-10-13/*.jpg
+/specs/00037-comfyui-control-center/t002-reference-preparation-2026-10-13/*.jpg
+/specs/00037-comfyui-control-center/t002-reference-preparation-2026-10-13/*.png
+
 # Git worktrees
 .worktrees/
 .pytest_tmp2/

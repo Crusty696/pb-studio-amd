@@ -1,0 +1,44 @@
+[
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:8188/system_stats",
+    "captured_utc": "2026-10-13T01:32:42.657615+00:00",
+    "error_type": "URLError",
+    "error": "<urlopen error [WinError 10061] Es konnte keine Verbindung hergestellt werden, da der Zielcomputer die Verbindung verweigerte>"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:8188/features",
+    "captured_utc": "2026-10-13T01:32:42.658615+00:00",
+    "error_type": "URLError",
+    "error": "<urlopen error [WinError 10061] Es konnte keine Verbindung hergestellt werden, da der Zielcomputer die Verbindung verweigerte>"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:8188/queue",
+    "captured_utc": "2026-10-13T01:32:42.676632+00:00",
+    "error_type": "URLError",
+    "error": "<urlopen error [WinError 10061] Es konnte keine Verbindung hergestellt werden, da der Zielcomputer die Verbindung verweigerte>"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:8188/api/jobs?limit=1",
+    "captured_utc": "2026-10-13T01:32:42.681641+00:00",
+    "error_type": "URLError",
+    "error": "<urlopen error [WinError 10061] Es konnte keine Verbindung hergestellt werden, da der Zielcomputer die Verbindung verweigerte>"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:8765/health",
+    "captured_utc": "2026-10-13T01:32:42.690650+00:00",
+    "error_type": "URLError",
+    "error": "<urlopen error [WinError 10061] Es konnte keine Verbindung hergestellt werden, da der Zielcomputer die Verbindung verweigerte>"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:8765/openapi.json",
+    "captured_utc": "2026-10-13T01:32:42.690650+00:00",
+    "error_type": "URLError",
+    "error": "<urlopen error [WinError 10061] Es konnte keine Verbindung hergestellt werden, da der Zielcomputer die Verbindung verweigerte>"
+  }
+]

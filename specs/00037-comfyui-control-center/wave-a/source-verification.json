@@ -1,0 +1,9 @@
+{
+  "utc": "2026-10-13T04:30:23.385681+00:00",
+  "compile_files": 155,
+  "compile_errors": [],
+  "protected_file_changes": [],
+  "review_source_drift": [
+    "src\\pb_studio\\config_manager.py"
+  ]
+}

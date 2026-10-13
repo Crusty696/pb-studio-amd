@@ -1,0 +1,47 @@
+{
+  "status": "completed_document_review",
+  "goal": "Vollreview bis keine verbleibenden Befunde, gesonderte Skillverifikation",
+  "rounds": [
+    {
+      "round": 1,
+      "complete": true,
+      "new_findings": 6,
+      "verdict": "NOT CLEAN",
+      "corrections": "document corrections confirmed in subsequent full rounds and independent final review"
+    },
+    {
+      "round": 2,
+      "complete": true,
+      "domain_review": "no new findings; all9 input hashes confirmed",
+      "architecture_review": "complete, no findings",
+      "delivery_review": "complete, no findings",
+      "new_findings": 0,
+      "verdict": "CLEAN"
+    },
+    {
+      "round": 3,
+      "complete": true,
+      "verdict": "NOT CLEAN",
+      "reviewer_scopes": "rotated",
+      "new_findings": 1
+    },
+    {
+      "round": 4,
+      "complete": true,
+      "verdict": "CLEAN",
+      "new_findings": 0
+    },
+    {
+      "round": 5,
+      "complete": true,
+      "verdict": "CLEAN",
+      "reviewer_scopes": "rotated",
+      "new_findings": 0
+    }
+  ],
+  "consecutive_complete_clean_rounds": 2,
+  "special_skill": "superpowers:verification-before-completion",
+  "special_skill_final_verdict": "PASS — DOCUMENT REVIEW ONLY",
+  "implementation": "not authorized",
+  "special_skill_evidence": "skill-confirmation.md"
+}
