@@ -385,6 +385,10 @@ public class SSEClient : IDisposable
 
     private bool TryProcessEvent(StreamKind streamKind, string eventType, string jsonData)
     {
+        // Persist received task/state events before UI throttling. Never log raw
+        // payloads: the shared redactor removes credentials and local paths.
+        _logger.LogDebug("SSE-Ereignis: Stream={Stream}; Event={Event}; Data={Data}",
+            streamKind, TerminalLogRedactor.Redact(eventType), TerminalLogRedactor.Redact(jsonData));
         try
         {
             using var json = JsonDocument.Parse(jsonData);
