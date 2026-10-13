@@ -25,6 +25,7 @@ KEY_CLASSIFICATION: Dict[str, str] = {
     "ai.provider": "next_job",
     "ai.task_preferences": "next_job",
     "ui": "live",
+    "comfyui": "next_job",
     "app_name": "restart_required",
     "version": "restart_required",
     "paths.db_path": "restart_required",
@@ -74,6 +75,15 @@ class ConfigManager:
         "ai": {
             "task_overrides": {},
             "task_provider_overrides": {}
+        },
+        "comfyui": {
+            "enabled": False,
+            "endpoint_url": "http://127.0.0.1:8188",
+            "endpoint_id": "local-comfyui",
+            "profile_revision": "unqualified",
+            "control_timeout_seconds": 10.0,
+            "transfer_timeout_seconds": 120.0,
+            "max_response_bytes": 8_388_608,
         },
         "ui": {}
     }
@@ -147,10 +157,20 @@ class ConfigManager:
             "hardware": dict,
             "ai": dict,
             "ui": dict,
+            "comfyui": dict,
         }
         for section, expected_type in known_sections.items():
             if section in data and not isinstance(data[section], expected_type):
                 return False, f"Sektion '{section}' muss Typ {expected_type.__name__} sein"
+
+        if "comfyui" in data:
+            from pb_studio.comfyui.schemas import ComfyConnectionSettings
+
+            try:
+                ComfyConnectionSettings.model_validate(data["comfyui"])
+            except ValueError:
+                # Do not echo URLs or secret-bearing invalid input into logs.
+                return False, "Sektion comfyui enthält ungültige Verbindungseinstellungen"
 
         ai_data = data.get("ai")
         if isinstance(ai_data, dict):
@@ -447,10 +467,36 @@ class ConfigManager:
 
     def set(self, key: str, value: Any):
         with self._config_lock:
+            if key == "comfyui":
+                valid, reason = self.validate_config_dict({key: value})
+                if not valid:
+                    raise ValueError(reason)
+                previous = copy.deepcopy(self._config.get(key))
+                present = key in self._config
+                self._config[key] = copy.deepcopy(value)
+                try:
+                    self.save_config()
+                except Exception:
+                    if present:
+                        self._config[key] = previous
+                    else:
+                        self._config.pop(key, None)
+                    raise
+                return
             self._config[key] = copy.deepcopy(value)
             self.save_config()
 
     # Typed helpers
+    @property
+    def comfyui_settings(self):
+        """Return validated settings without opening connections or writing config."""
+        from pb_studio.comfyui.schemas import ComfyConnectionSettings
+
+        with self._config_lock:
+            return ComfyConnectionSettings.model_validate(
+                copy.deepcopy(self._config.get("comfyui", {}))
+            )
+
     @property
     def ffmpeg_path(self) -> str:
         configured = self.resolve_path(self._config["paths"]["ffmpeg_bin"])

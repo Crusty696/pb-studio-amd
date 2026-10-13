@@ -11,6 +11,8 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any, Optional
 
+from pb_studio.comfyui.log_redaction import redact_log_value
+
 from .config import config
 from .app_state import AppState, get_app_state  # noqa: F401 — re-export für Router
 
@@ -515,7 +517,7 @@ async def publish_log(message: str, *, level: str = "info", detail: str | None =
         payload["detail"] = detail
     if source:
         payload["source"] = source
-    await publish_event("log", payload)
+    await publish_event("log", redact_log_value(payload))
 
 
 class SSELogHandler(logging.Handler):
@@ -545,6 +547,6 @@ class SSELogHandler(logging.Handler):
             # work goes through asyncio.to_thread), where get_running_loop() raises
             # RuntimeError -> loop=None -> every worker-thread log was silently
             # dropped from the SSE live-log.
-            publish_event_threadsafe("log", payload)
+            publish_event_threadsafe("log", redact_log_value(payload))
         except Exception:
             pass
