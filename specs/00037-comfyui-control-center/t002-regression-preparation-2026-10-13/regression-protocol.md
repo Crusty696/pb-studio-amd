@@ -57,3 +57,5 @@ T002 bleibt insgesamt offen. Die unbekannte Clipvergangenheit blockiert die Regr
 ## Nachtrag 2026-10-13: begrenzte CPU-Funktionsprüfung
 
 Nach dem obigen Vorbereitungsstand bestanden alle neun ausgewählten Quellen die isolierte Pfad-, Metadaten-, Frame- beziehungsweise Audiochunk-Prüfung mit PB-Studio-Funktionskörpern. Alle Original-SHA-256 blieben gleich. A03 M4A nutzte einen Librosa/audioread-Fallback mit Deprecation-Warnung. [Prüfbericht](../t002-cpu-check-2026-10-13/cpu-check-report.md). Die zwölf hier definierten Regressionsfälle wurden dadurch nicht als vollständige Produkt-/Qualitätsfälle ausgeführt; ihre Ergebnisvorlage bleibt `NOT_RUN`.
+
+**Gegenprüfung 19.10.2026:** Der begrenzte PB-CPU-Lauf wurde für alle neun Quellen erneut erfolgreich ausgeführt. V02-Dublette und sechs lokale Referenzbild-Hashes wurden erneut bestätigt. Vollständiger Decode/PTS bleibt Beleg vom 13.10.2026; fachliche Fälle und Nativebaseline bleiben offen. [Technischer Gegenprüfbericht](technical-countercheck-2026-10-19.md).

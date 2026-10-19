@@ -3,6 +3,10 @@
 
 ---
 
+## 2026-10-19 - T002 technical countercheck (Spec 00037)
+
+- Re-ran the bounded PB Studio CPU functions on all nine pinned regression sources; all nine passed and original SHA-256 hashes still match. Rechecked the V02 exact duplicate and six local-only reference-image hashes. A03 still uses the Librosa/audioread fallback with a deprecation warning. Full decode/PTS evidence remains dated 2026-10-13; human labels, Native baseline and independent holdout remain open. Evidence: specs/00037-comfyui-control-center/t002-regression-preparation-2026-10-13/technical-countercheck-2026-10-19.md.
+
 ## 2026-10-13 - T002 read-only CPU media probe (Spec 00037)
 
 - Nine selected regression sources passed isolated PB Studio path/metadata/frame/audio-chunk function checks without GPU acceleration. All nine original SHA-256 hashes were unchanged afterward. A03 M4A required the Librosa/audioread fallback and raised a deprecation warning. This is bounded CPU evidence, not an app import or Native quality baseline; T002 and the independent holdout remain open. Evidence: specs/00037-comfyui-control-center/t002-cpu-check-2026-10-13/cpu-check-report.md.
