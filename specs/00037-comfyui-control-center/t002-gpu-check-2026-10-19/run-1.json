@@ -1,0 +1,294 @@
+{
+  "authorization": "GPU analysis only; no generation; originals and existing jobs unchanged",
+  "results": {
+    "A01": {
+      "schema_version": 1,
+      "created_utc": "2026-10-19T16:29:14.270874+00:00",
+      "source_name": "Progressive Psy Summer Dream mix  by Crusty Free download.wav",
+      "duration_seconds": 30.0,
+      "source_duration_seconds": 3299.456507936508,
+      "source_offset_seconds": 60,
+      "excerpt_requested_seconds": 30,
+      "media_mode": "bounded scratch WAV fixture",
+      "persistence": "sqlite3 :memory: fixture repository; actual AppState save/reload",
+      "scope": "actual ASGI audio router, no backend.main lifespan or WPF",
+      "disabled": [
+        "unrelated CLAP/Brain embedding persistence"
+      ],
+      "musical_accuracy": "not assessed; no human beat-one annotation",
+      "runs": [
+        {
+          "run": 1,
+          "seconds": 9.848995200009085,
+          "analysis_status": "completed",
+          "duration_seconds": 30.0,
+          "whole_fixture_duration_preserved": true,
+          "beat_count": 68,
+          "downbeat_count": 37,
+          "bpm": 136.36363636363652,
+          "legacy_bpm": 135.9991776315789,
+          "legacy_beat_count": 67,
+          "model_revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+          "beat_sha256": "141efd01ea6e2528eeb923233ff14bb3160c0adf57f0442f31ce54902203fa36",
+          "downbeat_sha256": "adf416d3aa5aecd22982e90a53044b54c9ad379129707409485567ab634cfe08",
+          "checkpoint_count": 2,
+          "completed_beat_checkpoint_count": 2,
+          "checkpoint_consistent": true,
+          "reload_api_consistent": true,
+          "downbeat_only_trigger_count": 37,
+          "pacing_exact_downbeats": true
+        },
+        {
+          "run": 2,
+          "seconds": 4.701465699996334,
+          "analysis_status": "completed",
+          "duration_seconds": 30.0,
+          "whole_fixture_duration_preserved": true,
+          "beat_count": 68,
+          "downbeat_count": 37,
+          "bpm": 136.36363636363652,
+          "legacy_bpm": 135.9991776315789,
+          "legacy_beat_count": 67,
+          "model_revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+          "beat_sha256": "141efd01ea6e2528eeb923233ff14bb3160c0adf57f0442f31ce54902203fa36",
+          "downbeat_sha256": "adf416d3aa5aecd22982e90a53044b54c9ad379129707409485567ab634cfe08",
+          "checkpoint_count": 2,
+          "completed_beat_checkpoint_count": 2,
+          "checkpoint_consistent": true,
+          "reload_api_consistent": true,
+          "downbeat_only_trigger_count": 37,
+          "pacing_exact_downbeats": true
+        }
+      ],
+      "deterministic": true,
+      "source_stat_unchanged": true,
+      "production_database_constructed": false,
+      "technical_contract_passed": true,
+      "fixture_integrity": "ok",
+      "original_sha256_before": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+      "original_sha256_after": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3"
+    },
+    "A02": {
+      "schema_version": 1,
+      "created_utc": "2026-10-19T16:30:02.324731+00:00",
+      "source_name": "Crusty -Klangkraft-21nai2022.wav",
+      "duration_seconds": 30.0,
+      "source_duration_seconds": 6335.027,
+      "source_offset_seconds": 60,
+      "excerpt_requested_seconds": 30,
+      "media_mode": "bounded scratch WAV fixture",
+      "persistence": "sqlite3 :memory: fixture repository; actual AppState save/reload",
+      "scope": "actual ASGI audio router, no backend.main lifespan or WPF",
+      "disabled": [
+        "unrelated CLAP/Brain embedding persistence"
+      ],
+      "musical_accuracy": "not assessed; no human beat-one annotation",
+      "runs": [
+        {
+          "run": 1,
+          "seconds": 3.220018699998036,
+          "analysis_status": "completed",
+          "duration_seconds": 30.0,
+          "whole_fixture_duration_preserved": true,
+          "beat_count": 73,
+          "downbeat_count": 20,
+          "bpm": 136.36363636363652,
+          "legacy_bpm": 135.9991776315789,
+          "legacy_beat_count": 36,
+          "model_revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+          "beat_sha256": "888f179e81b3c9671817b152d1a360791d38685ec8d9f532bb46df1a2a96fbb2",
+          "downbeat_sha256": "92e9efaaba9badb79c22205d01934cfea123dad0a44ea1746b61c78d5b4ac1f2",
+          "checkpoint_count": 2,
+          "completed_beat_checkpoint_count": 2,
+          "checkpoint_consistent": true,
+          "reload_api_consistent": true,
+          "downbeat_only_trigger_count": 20,
+          "pacing_exact_downbeats": true
+        },
+        {
+          "run": 2,
+          "seconds": 2.5139297999849077,
+          "analysis_status": "completed",
+          "duration_seconds": 30.0,
+          "whole_fixture_duration_preserved": true,
+          "beat_count": 73,
+          "downbeat_count": 20,
+          "bpm": 136.36363636363652,
+          "legacy_bpm": 135.9991776315789,
+          "legacy_beat_count": 36,
+          "model_revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+          "beat_sha256": "888f179e81b3c9671817b152d1a360791d38685ec8d9f532bb46df1a2a96fbb2",
+          "downbeat_sha256": "92e9efaaba9badb79c22205d01934cfea123dad0a44ea1746b61c78d5b4ac1f2",
+          "checkpoint_count": 2,
+          "completed_beat_checkpoint_count": 2,
+          "checkpoint_consistent": true,
+          "reload_api_consistent": true,
+          "downbeat_only_trigger_count": 20,
+          "pacing_exact_downbeats": true
+        }
+      ],
+      "deterministic": true,
+      "source_stat_unchanged": true,
+      "production_database_constructed": false,
+      "technical_contract_passed": true,
+      "fixture_integrity": "ok",
+      "original_sha256_before": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+      "original_sha256_after": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3"
+    }
+  },
+  "adapter": {
+    "device_id": 1,
+    "luid": "0x00000000_0x0001289a",
+    "name": "AMD Radeon RX 7800 XT",
+    "vendor_id": 4098,
+    "device_id_pci": 29822,
+    "dedicated_vram_bytes": 16963137536,
+    "shared_system_memory_bytes": 33459044352,
+    "is_software": false,
+    "is_discrete": true,
+    "high_performance_preferred": true,
+    "selection_policy": "highest_vram_amd",
+    "selection_reason": "AMD hardware adapter with highest dedicated VRAM"
+  },
+  "preflight_stats": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x0001289a",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 28.0,
+    "gpu_memory_used": 4.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 94.38999938964844,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16172.7,
+        "D3D Dedicated Memory Used": 4.61,
+        "D3D Shared Memory Used": 28.29,
+        "D3D Shared Memory Free": 31880.74,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 4.0,
+        "GPU Memory Free": 16364.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 0.0,
+        "D3D Copy": 0.0,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 11.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 152.0
+      },
+      "temperature": {
+        "GPU Core": 28.0,
+        "GPU Memory": 48.0,
+        "GPU Hot Spot": 36.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.06
+      }
+    }
+  },
+  "postflight_stats": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x0001289a",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 29.0,
+    "gpu_memory_used": 14.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 78.70999908447266,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16163.0,
+        "D3D Dedicated Memory Used": 14.31,
+        "D3D Shared Memory Used": 31.76,
+        "D3D Shared Memory Free": 31877.27,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 14.0,
+        "GPU Memory Free": 16354.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 11.66,
+        "D3D Copy": 5.85,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 6.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 4.0
+      },
+      "temperature": {
+        "GPU Core": 29.0,
+        "GPU Memory": 48.0,
+        "GPU Hot Spot": 37.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.05
+      }
+    }
+  },
+  "protected_before": {
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_after": {
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_unchanged": true
+}

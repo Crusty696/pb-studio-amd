@@ -1,6 +1,6 @@
 {
   "status": "DRAFT_NO_QUALITY_QUALIFICATION",
-  "revision": 1,
+  "revision": 2,
   "source_ids": [
     "V01",
     "V02",
@@ -32,7 +32,10 @@
     "no_human_reference_from_model_self_grade",
     "no_generation_or_gpu_without_separate_authorization"
   ],
-  "human_reference_status": "pending",
-  "native_baseline_status": "not_run",
-  "holdout_status": "explicitly_deferred"
+  "human_reference_status": "six_guided_image_descriptions_and_three_listening_reviews_recorded_precise_timing_labels_pending",
+  "native_baseline_status": "partial_bounded_gpu_audio_route_and_video_motion_checked_quality_pending",
+  "holdout_status": "explicitly_deferred",
+  "human_image_review_receipt": "../t002-human-review-2026-10-19/bildbewertungen.json",
+  "human_audio_review_receipt": "../t002-human-review-2026-10-19/musikbewertungen.json",
+  "gpu_check_receipt": "../t002-gpu-check-2026-10-19/gpu-check-report.md"
 }

@@ -94,3 +94,13 @@ Jetzt: jede Produktimplementierung, App-/Workflowstart, Modell-/Nodeinstallation
 ## Acceptance and Traceability
 
 Planlieferung: alle 40 Findings und 82 Originalabschnitte auf Requirements/Tasks/Tests abgebildet; Dependencies azyklisch; alle Tasks offen; bestätigte Entscheidungen korrekt. Produktabnahme erst nach tatsächlicher Umsetzung und Gates in plan.md. tasks.md definiert Arbeitspakete; traceability.md ordnet F01–F40 und Originalabschnitte zu.
+
+
+## Freigabe 2026-10-19: T002 BeatNet-Kompatibilitaet
+
+Nutzer autorisiert gezielte Behebung des nachgewiesenen offline/DBN-NumPy-Fehlers und Regression mit A01–A03. Originale, laufende Auftraege, Recovery und produktive Daten unveraendert; keine Generierung/Installation. Musikalische Taktqualitaet bleibt separat offen.
+
+
+## Freigabe 2026-10-19: T002 Dateizustand
+
+Wiederverwendete BeatNet-Instanzen fuer getrennte Dateianalysen (online/offline/realtime) muessen gleiche Ergebnisse wie frische Instanzen liefern, auch A-B-A. Mikrofon-stream behaelt seinen fortlaufenden Zustand. Laufende Auftraege unveraendert. Originale, Recovery, Produktdaten und Pakete geschuetzt; keine Generierung.

@@ -1,0 +1,93 @@
+{
+  "revision": 1,
+  "status": "SIX_GUIDED_HUMAN_IMAGE_REVIEWS_RECORDED",
+  "origin": "direct_user_chat",
+  "review_protocol": "guided, not blinded: earlier AI drafts and assistant prompts were visible in the conversation",
+  "limits": [
+    "No independent holdout qualification",
+    "No automatic model-output accuracy score",
+    "No full-clip motion or temporal quality proof",
+    "Normalized categorization is assistant interpretation; raw user descriptions retained",
+    "Audio reviews remain pending"
+  ],
+  "records": [
+    {
+      "source_id": "V01",
+      "source_sha256": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+      "frame_image_sha256": "6b5411062d8228c95d3c2288e55b22a9ab0db24f8b2c322b16a34d16eb5d9c74",
+      "source_time_seconds": 5.0,
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "original_user_description": "Ich sehe eine menschenähnliche Figur in einem dunklen Wald mit leuchtenden geometrischen Formen. Bäume  waldboden  bioluminiszents ein frau die wahrscheindlich am  tanzen oder laufen ist Weitere Details erkenne ich nicht sicher.",
+      "normalized_visible_observations": "Menschenähnliche Figur; dunkler Wald; Bäume; Waldboden; leuchtende geometrische Formen.",
+      "user_interpretations": "Biolumineszentes Leuchten; vermutlich Frau; möglicherweise Tanzen oder Laufen.",
+      "uncertainty": "Weitere Details unsicher; Bewegung aus Einzelbild nicht bestätigt.",
+      "clip_motion_review_status": "NOT_CONFIRMED"
+    },
+    {
+      "source_id": "V02",
+      "source_sha256": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+      "frame_image_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "original_user_description": "Ich sehe eine Steinmauer die nach einem Maya oder Azteken Tempel aussiehr  mit einer rechteckigen Tor das sich öffnet und in das Sich schlangen artige Pflanzen oder wesen  eindringen wollen die Violette aufläuchtende biolumiszierende  stellen hat  und das ganze ist in einem Dschungel  violett leuchtenden Formen. Ob eine Figur zu sehen ist, erkenne ich nicht sicher.",
+      "normalized_visible_observations": "Steinmauer; rechteckiges Tor; Dschungelumgebung; schlangenartige Formen mit violett leuchtenden Stellen.",
+      "user_interpretations": "Maya-/Azteken-Tempelstil; Pflanzen oder Wesen; biolumineszente Stellen; Tor öffnet sich, Formen wollen eindringen.",
+      "uncertainty": "Figur sichtbar: unsicher; kulturelle Einordnung nicht verifiziert; Öffnen/Eindringen aus Einzelbild nicht bestätigt.",
+      "clip_motion_review_status": "NOT_CONFIRMED"
+    },
+    {
+      "source_id": "V03",
+      "source_sha256": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+      "frame_image_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "original_user_description": "Ich sehe zwei menschenähnliche weibliche Figuren die sich bewegen  tanzen oder eine  zeremonie abhalten vor einem Wasserfall, mit Nebel und einer Wasserfläche. Weitere Details erkenne ich nicht sicher.",
+      "normalized_visible_observations": "Zwei menschenähnliche Figuren; Wasserfall; Nebel; Wasserfläche.",
+      "user_interpretations": "Weiblich wirkende Figuren; Tanzen oder Zeremonie.",
+      "uncertainty": "Weitere Details unsicher; Bewegung und Zeremonie nicht aus Einzelbild bestätigt.",
+      "clip_motion_review_status": "NOT_CONFIRMED"
+    },
+    {
+      "source_id": "V04",
+      "source_sha256": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+      "frame_image_sha256": "1c1ad3a99d35dcbe4b3fa5bcbcc3e59b219502fd9ec30a8ebaf8913ea63d41b2",
+      "source_time_seconds": 5.0,
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "original_user_description": "Ich sehe eine menschenähnliche Figur vor einer Steinmauer, einen Steinboden  das ganze sieht wie ein  Altar  oder Platz für rituale oder Zeremonien aus und mehrere Fackeln. Es ist dunkel. Weitere Details erkenne ich nicht sicher.",
+      "normalized_visible_observations": "Menschenähnliche Figur; Steinmauer; Steinboden; mehrere Fackeln; dunkle Beleuchtung.",
+      "user_interpretations": "Altar oder Platz für Rituale/Zeremonien.",
+      "uncertainty": "Weitere Details unsicher; tatsächliche Nutzung des Ortes unbestätigt.",
+      "clip_motion_review_status": "NOT_CONFIRMED"
+    },
+    {
+      "source_id": "V05",
+      "source_sha256": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+      "frame_image_sha256": "010fd896ab7bbccab7711635ce0e7ddf8f29ade2515763ab3b616a7408bebda4",
+      "source_time_seconds": 5.0,
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "original_user_description": "Ich sehe dunkle Wolken und mehrere helle normale und  Plasma Blitze ein Gewitter sturm . unten steht eine Figuren . Weitere Details sind unklar.",
+      "normalized_visible_observations": "Dunkle Wolken; mehrere helle Blitze; eine Figur unten.",
+      "user_interpretations": "Gewittersturm; teilweise plasmaartig wirkende Blitze.",
+      "uncertainty": "Weitere Details unklar; Plasma ist visuelle Einordnung, kein physikalischer Nachweis.",
+      "clip_motion_review_status": "NOT_CONFIRMED"
+    },
+    {
+      "source_id": "V06",
+      "source_sha256": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+      "frame_image_sha256": "6542bbafb087179015c1ddb7ca394dcdb382a310e6d099d370357a0e11fd8f5c",
+      "source_time_seconds": 5.0,
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "original_user_description": "Ich sehe einen hellen Mond, dunkle weibliche Figuren die Tanzen und eine Wasserfläche mit farbigen leuchtenden Spiegelungen. Die genaue Figurenzahl ist unklar  6 oder 7 figuren.",
+      "normalized_visible_observations": "Heller Mond; dunkle Figuren; Wasserfläche mit farbigen leuchtenden Spiegelungen.",
+      "user_interpretations": "Weiblich wirkende Figuren; Tanzen; geschätzt sechs oder sieben Figuren.",
+      "uncertainty": "Exakte Figurenzahl ausdrücklich unklar (6 oder 7 als Schätzung); Tanzen nicht aus Einzelbild bestätigt.",
+      "clip_motion_review_status": "NOT_CONFIRMED"
+    }
+  ]
+}

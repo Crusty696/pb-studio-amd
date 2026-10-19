@@ -1,0 +1,20 @@
+{
+  "repo_head": "2a1d9a31dd87189013af944d57b08b234513da7d",
+  "dirty_worktree": true,
+  "execution_scripts": [
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\scratch\\t002-gpu-20261019-182910\\run_probe.py",
+      "sha256": "d1ff9026f3fe21b3d5be17bf38d6f31957e83c7aef2744733811db8d2f5f0210"
+    },
+    {
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\scratch\\t002-gpu-20261019-183050\\run_probe.py",
+      "sha256": "34bd91e010388a9e27357031047b2a260c97f171c82cd88a8174ab79927ff0a1"
+    }
+  ],
+  "product_probe_sha256": "6b3db12274db29b9514b572884f3f60f847349a6ce6a3b688bce3670e875c10a",
+  "raft_model_sha256": "2357ac663fade8717165504f150cfb32a81e94d9d4528190508ed4cd525e5358",
+  "authorization": "User explicitly allowed GPU analysis; no generation, installation, recovery reset or existing-job mutation",
+  "initial_probe": "scratch/t002-gpu-20261019-182858: harness erroneously expected telemetry status ok instead of actual ready; stopped before inference; corrected in fresh run directory",
+  "source_integrity": "All 9 full SHA-256 match before/after and pinned manifest",
+  "technical_runs": 18
+}

@@ -1,0 +1,97 @@
+{
+  "model_inference_executed": false,
+  "postprocessing_cases": 80,
+  "postprocessing_all_equal_except_documented_empty_beats": true,
+  "chunk_tests": [
+    {
+      "frames": 1,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 2,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 5,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 7,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 30,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 100,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 1487,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 1488,
+      "exact": true,
+      "windows": 1
+    },
+    {
+      "frames": 1489,
+      "exact": true,
+      "windows": 2
+    },
+    {
+      "frames": 1490,
+      "exact": true,
+      "windows": 2
+    },
+    {
+      "frames": 1494,
+      "exact": true,
+      "windows": 2
+    },
+    {
+      "frames": 1499,
+      "exact": true,
+      "windows": 2
+    },
+    {
+      "frames": 1500,
+      "exact": true,
+      "windows": 2
+    },
+    {
+      "frames": 1501,
+      "exact": true,
+      "windows": 2
+    },
+    {
+      "frames": 2976,
+      "exact": true,
+      "windows": 2
+    },
+    {
+      "frames": 3000,
+      "exact": true,
+      "windows": 3
+    },
+    {
+      "frames": 3100,
+      "exact": true,
+      "windows": 3
+    },
+    {
+      "frames": 6001,
+      "exact": true,
+      "windows": 5
+    }
+  ]
+}

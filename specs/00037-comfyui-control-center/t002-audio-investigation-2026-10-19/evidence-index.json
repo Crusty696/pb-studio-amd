@@ -1,0 +1,14 @@
+{
+  "evidence_sha256": {
+    "beatnet-dbn-traceback.txt": "4b61ad68f2e131a951d254020fa7f7575153f7e43e0db8dbd4cdf23b6bfeecfd",
+    "beatnet-fixture-countercheck.json": "c2599af6244c64e487878443d0099acddce9af509a7e39a99a62535d937a4da0",
+    "beatnet-score-selection.json": "334ebd851382de7a57fdd284defea009f810785e243832b3e74d731ba448b144",
+    "context-experiment.json": "89ad0dc6452a53d0f7e5dd0fc35741d5ba8f36428e8717ca1dd07a520cb60620",
+    "frontend-graph-evidence.json": "8336545f638f3522977901089555c1aab2b1aa14da64bc7a12a62b2457bddd6d",
+    "investigation.md": "b957e608f43563513b66d2d51fb6907cf72ddb1833464122ec454d5dee82270a",
+    "reference-differential.json": "3dbaf242e4d44873d2f38e15d30abce087ffc8fcf6bf8219c99f2cf1868647cc"
+  },
+  "diagnostic_harness_sha256": "284fdc5e82ab14470948f4c3b06ed277883ad3cbdccfe26becaa775469e3464b",
+  "product_code_modified": false,
+  "installed_packages_modified": false
+}

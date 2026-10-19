@@ -1,0 +1,99 @@
+{
+  "revision": 3,
+  "records": [
+    {
+      "source_id": "A01",
+      "source_sha256": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+      "source_window_seconds": [
+        60,
+        90
+      ],
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "origin": "direct_user_chat_guided_listening",
+      "original_user_answers": [
+        "Ja, ich höre einen klaren, regelmäßigen Beat und kann gut mitklopfen.",
+        "Kein deutlicher Wechsel in diesem Abschnitt.",
+        "Keine Störungen gehört."
+      ],
+      "beat_clearly_audible": true,
+      "distinct_change_heard": false,
+      "disturbance_heard": false,
+      "precise_beat_timestamps": null,
+      "limits": [
+        "Subjective listening observation limited to source seconds 60–90",
+        "No exact BPM, downbeat, key or beat-timing reference",
+        "No objective absence-of-defects proof or whole-file assessment"
+      ]
+    },
+    {
+      "source_id": "A02",
+      "source_sha256": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+      "source_window_seconds": [
+        60,
+        90
+      ],
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "origin": "direct_user_chat_guided_listening",
+      "original_user_answers": [
+        "Ja, ich höre einen klaren, regelmäßigen Beat und kann gut mitklopfen.",
+        "ja bei 1:10 ca bis 1:20  ca",
+        "Ich höre dort eine Veränderung, kann aber nicht sicher sagen, was genau. Notiere den Bereich 01:10 bis 01:20 als unsicher und mach mit der nächsten Frage weiter. stimmen und weniger bass leise stellen",
+        "A02: Keine Störungen gehört. Speichere die Bewertung mit dem unsicheren Wechsel zwischen 01:10 und 01:20 und mach mit A03 weiter."
+      ],
+      "beat_clearly_audible": true,
+      "distinct_change_heard": true,
+      "change_observation": {
+        "source_interval_seconds": [
+          70,
+          80
+        ],
+        "time_basis": "seconds from original source start",
+        "boundary_precision": "approximate",
+        "classification": "uncertain",
+        "reported_details": [
+          "Stimmen",
+          "weniger Bass",
+          "leisere Stellen"
+        ],
+        "uncertainty_seconds": null
+      },
+      "disturbance_heard": false,
+      "precise_beat_timestamps": null,
+      "limits": [
+        "Subjective listening observation limited to source seconds 60–90",
+        "Change interval approximate; no exact section boundary, drop, breakdown or track transition confirmed",
+        "No exact BPM, downbeat, key or beat-timing reference",
+        "No objective absence-of-defects proof or whole-file assessment"
+      ]
+    },
+    {
+      "source_id": "A03",
+      "source_sha256": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f",
+      "source_window_seconds": [
+        60,
+        90
+      ],
+      "reviewer": "David",
+      "review_date": "2026-10-19",
+      "origin": "direct_user_chat_guided_listening",
+      "original_user_answers": [
+        "Ja, ich höre einen klaren, regelmäßigen Beat und kann gut mitklopfen.",
+        "Kein deutlicher Wechsel in diesem Abschnitt.",
+        "Keine Störungen gehört."
+      ],
+      "beat_clearly_audible": true,
+      "distinct_change_heard": false,
+      "disturbance_heard": false,
+      "precise_beat_timestamps": null,
+      "limits": [
+        "Subjective listening observation limited to source seconds 60–90",
+        "No exact BPM, downbeat, key or beat-timing reference",
+        "No objective absence-of-defects proof or whole-file assessment"
+      ]
+    }
+  ],
+  "pending_source_ids": [],
+  "status": "THREE_GUIDED_LISTENING_REVIEWS_RECORDED_NOT_PRECISE_TIMING_LABELS"
+}

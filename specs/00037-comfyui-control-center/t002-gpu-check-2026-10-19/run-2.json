@@ -1,0 +1,442 @@
+{
+  "authorization": "GPU analysis only; no generation; originals and existing jobs unchanged",
+  "results": {
+    "A03": {
+      "schema_version": 1,
+      "created_utc": "2026-10-19T16:30:59.045398+00:00",
+      "source_name": "A03-60-90.wav",
+      "duration_seconds": 30.0,
+      "source_duration_seconds": 30.0,
+      "source_offset_seconds": 0.0,
+      "excerpt_requested_seconds": null,
+      "media_mode": "whole original file read-only",
+      "persistence": "sqlite3 :memory: fixture repository; actual AppState save/reload",
+      "scope": "actual ASGI audio router, no backend.main lifespan or WPF",
+      "disabled": [
+        "unrelated CLAP/Brain embedding persistence"
+      ],
+      "musical_accuracy": "not assessed; no human beat-one annotation",
+      "runs": [
+        {
+          "run": 1,
+          "seconds": 7.164687300013611,
+          "analysis_status": "completed",
+          "duration_seconds": 30.0,
+          "whole_fixture_duration_preserved": true,
+          "beat_count": 68,
+          "downbeat_count": 40,
+          "bpm": 136.36363636363623,
+          "legacy_bpm": 135.9991776315789,
+          "legacy_beat_count": 68,
+          "model_revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+          "beat_sha256": "8da7825755a41abf7861c6c84448eebade428ddb9cf98b594a54dfb37f6b09da",
+          "downbeat_sha256": "abb020d55fe9ec0432e70e2f5674b70e26d6dd7dd4991e57e25654692747c234",
+          "checkpoint_count": 2,
+          "completed_beat_checkpoint_count": 2,
+          "checkpoint_consistent": true,
+          "reload_api_consistent": true,
+          "downbeat_only_trigger_count": 40,
+          "pacing_exact_downbeats": true
+        },
+        {
+          "run": 2,
+          "seconds": 5.58297789999051,
+          "analysis_status": "completed",
+          "duration_seconds": 30.0,
+          "whole_fixture_duration_preserved": true,
+          "beat_count": 68,
+          "downbeat_count": 40,
+          "bpm": 136.36363636363623,
+          "legacy_bpm": 135.9991776315789,
+          "legacy_beat_count": 68,
+          "model_revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+          "beat_sha256": "8da7825755a41abf7861c6c84448eebade428ddb9cf98b594a54dfb37f6b09da",
+          "downbeat_sha256": "abb020d55fe9ec0432e70e2f5674b70e26d6dd7dd4991e57e25654692747c234",
+          "checkpoint_count": 2,
+          "completed_beat_checkpoint_count": 2,
+          "checkpoint_consistent": true,
+          "reload_api_consistent": true,
+          "downbeat_only_trigger_count": 40,
+          "pacing_exact_downbeats": true
+        }
+      ],
+      "deterministic": true,
+      "source_stat_unchanged": true,
+      "production_database_constructed": false,
+      "technical_contract_passed": true,
+      "fixture_integrity": "ok",
+      "original_source_id": "A03",
+      "original_window_seconds": [
+        60,
+        90
+      ],
+      "original_sha256_before": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f",
+      "original_sha256_after": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f"
+    },
+    "V01": {
+      "source_sha256_before": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+      "source_sha256_after": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+      "requested_frame_index": 150,
+      "fps": 30.0,
+      "requested_source_time": 5.0,
+      "frame_pair_spacing_seconds": 0.03333333333333333,
+      "provider": "DmlExecutionProvider",
+      "runs": [
+        {
+          "seconds": 1.3313782000041101,
+          "metrics": {
+            "mean_magnitude": 1.5359480381011963,
+            "max_magnitude": 6.712469100952148,
+            "std_magnitude": 1.2363178730010986,
+            "p95_magnitude": 4.091524147987365,
+            "motion_coverage": 49.722511574074076,
+            "dominant_direction": 35.66618728637695
+          }
+        },
+        {
+          "seconds": 0.03298950000316836,
+          "metrics": {
+            "mean_magnitude": 1.5359480381011963,
+            "max_magnitude": 6.712469100952148,
+            "std_magnitude": 1.2363178730010986,
+            "p95_magnitude": 4.091524147987365,
+            "motion_coverage": 49.722511574074076,
+            "dominant_direction": 35.66618728637695
+          }
+        }
+      ],
+      "repeat_identical": true,
+      "scope": "component motion only; no captions, embeddings, full clip or GUI acceptance"
+    },
+    "V02": {
+      "source_sha256_before": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+      "source_sha256_after": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+      "requested_frame_index": 360,
+      "fps": 24.0,
+      "requested_source_time": 15.0,
+      "frame_pair_spacing_seconds": 0.041666666666666664,
+      "provider": "DmlExecutionProvider",
+      "runs": [
+        {
+          "seconds": 0.05636889999732375,
+          "metrics": {
+            "mean_magnitude": 3.1843748092651367,
+            "max_magnitude": 9.138126373291016,
+            "std_magnitude": 1.3587876558303833,
+            "p95_magnitude": 5.692047214508056,
+            "motion_coverage": 96.16742621527777,
+            "dominant_direction": -26.64866828918457
+          }
+        },
+        {
+          "seconds": 0.049873000010848045,
+          "metrics": {
+            "mean_magnitude": 3.1843748092651367,
+            "max_magnitude": 9.138126373291016,
+            "std_magnitude": 1.3587876558303833,
+            "p95_magnitude": 5.692047214508056,
+            "motion_coverage": 96.16742621527777,
+            "dominant_direction": -26.64866828918457
+          }
+        }
+      ],
+      "repeat_identical": true,
+      "scope": "component motion only; no captions, embeddings, full clip or GUI acceptance"
+    },
+    "V03": {
+      "source_sha256_before": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+      "source_sha256_after": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+      "requested_frame_index": 150,
+      "fps": 30.0,
+      "requested_source_time": 5.0,
+      "frame_pair_spacing_seconds": 0.03333333333333333,
+      "provider": "DmlExecutionProvider",
+      "runs": [
+        {
+          "seconds": 0.04119160000118427,
+          "metrics": {
+            "mean_magnitude": 1.6742664575576782,
+            "max_magnitude": 6.32162618637085,
+            "std_magnitude": 1.7969061136245728,
+            "p95_magnitude": 4.8965908765792845,
+            "motion_coverage": 41.99063231850117,
+            "dominant_direction": 93.71980285644531
+          }
+        },
+        {
+          "seconds": 0.038876500009791926,
+          "metrics": {
+            "mean_magnitude": 1.6742664575576782,
+            "max_magnitude": 6.32162618637085,
+            "std_magnitude": 1.7969061136245728,
+            "p95_magnitude": 4.8965908765792845,
+            "motion_coverage": 41.99063231850117,
+            "dominant_direction": 93.71980285644531
+          }
+        }
+      ],
+      "repeat_identical": true,
+      "scope": "component motion only; no captions, embeddings, full clip or GUI acceptance"
+    },
+    "V04": {
+      "source_sha256_before": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+      "source_sha256_after": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+      "requested_frame_index": 150,
+      "fps": 30.0,
+      "requested_source_time": 5.0,
+      "frame_pair_spacing_seconds": 0.03333333333333333,
+      "provider": "DmlExecutionProvider",
+      "runs": [
+        {
+          "seconds": 0.04191729999729432,
+          "metrics": {
+            "mean_magnitude": 1.485580325126648,
+            "max_magnitude": 4.777133464813232,
+            "std_magnitude": 0.5324999094009399,
+            "p95_magnitude": 2.1919203281402586,
+            "motion_coverage": 83.57947892271663,
+            "dominant_direction": -162.23495483398438
+          }
+        },
+        {
+          "seconds": 0.03766669999458827,
+          "metrics": {
+            "mean_magnitude": 1.485580325126648,
+            "max_magnitude": 4.777133464813232,
+            "std_magnitude": 0.5324999094009399,
+            "p95_magnitude": 2.1919203281402586,
+            "motion_coverage": 83.57947892271663,
+            "dominant_direction": -162.23495483398438
+          }
+        }
+      ],
+      "repeat_identical": true,
+      "scope": "component motion only; no captions, embeddings, full clip or GUI acceptance"
+    },
+    "V05": {
+      "source_sha256_before": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+      "source_sha256_after": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+      "requested_frame_index": 150,
+      "fps": 30.0,
+      "requested_source_time": 5.0,
+      "frame_pair_spacing_seconds": 0.03333333333333333,
+      "provider": "DmlExecutionProvider",
+      "runs": [
+        {
+          "seconds": 0.047274400014430285,
+          "metrics": {
+            "mean_magnitude": 14.49510669708252,
+            "max_magnitude": 48.8111457824707,
+            "std_magnitude": 9.903484344482422,
+            "p95_magnitude": 34.25034275054931,
+            "motion_coverage": 99.06420765027323,
+            "dominant_direction": -49.599483489990234
+          }
+        },
+        {
+          "seconds": 0.04266690000076778,
+          "metrics": {
+            "mean_magnitude": 14.49510669708252,
+            "max_magnitude": 48.8111457824707,
+            "std_magnitude": 9.903484344482422,
+            "p95_magnitude": 34.25034275054931,
+            "motion_coverage": 99.06420765027323,
+            "dominant_direction": -49.599483489990234
+          }
+        }
+      ],
+      "repeat_identical": true,
+      "scope": "component motion only; no captions, embeddings, full clip or GUI acceptance"
+    },
+    "V06": {
+      "source_sha256_before": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+      "source_sha256_after": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+      "requested_frame_index": 150,
+      "fps": 30.0,
+      "requested_source_time": 5.0,
+      "frame_pair_spacing_seconds": 0.03333333333333333,
+      "provider": "DmlExecutionProvider",
+      "runs": [
+        {
+          "seconds": 0.04842599999392405,
+          "metrics": {
+            "mean_magnitude": 0.45847710967063904,
+            "max_magnitude": 2.730938196182251,
+            "std_magnitude": 0.48450130224227905,
+            "p95_magnitude": 1.6616106510162352,
+            "motion_coverage": 11.270979703356753,
+            "dominant_direction": 145.67869567871094
+          }
+        },
+        {
+          "seconds": 0.03984610000043176,
+          "metrics": {
+            "mean_magnitude": 0.45847710967063904,
+            "max_magnitude": 2.730938196182251,
+            "std_magnitude": 0.48450130224227905,
+            "p95_magnitude": 1.6616106510162352,
+            "motion_coverage": 11.270979703356753,
+            "dominant_direction": 145.67869567871094
+          }
+        }
+      ],
+      "repeat_identical": true,
+      "scope": "component motion only; no captions, embeddings, full clip or GUI acceptance"
+    }
+  },
+  "adapter": {
+    "device_id": 1,
+    "luid": "0x00000000_0x0001289a",
+    "name": "AMD Radeon RX 7800 XT",
+    "vendor_id": 4098,
+    "device_id_pci": 29822,
+    "dedicated_vram_bytes": 16963137536,
+    "shared_system_memory_bytes": 33459044352,
+    "is_software": false,
+    "is_discrete": true,
+    "high_performance_preferred": true,
+    "selection_policy": "highest_vram_amd",
+    "selection_reason": "AMD hardware adapter with highest dedicated VRAM"
+  },
+  "preflight_stats": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x0001289a",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 28.0,
+    "gpu_memory_used": 4.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 100.0,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16172.7,
+        "D3D Dedicated Memory Used": 4.61,
+        "D3D Shared Memory Used": 28.29,
+        "D3D Shared Memory Free": 31880.74,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 4.0,
+        "GPU Memory Free": 16364.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 0.0,
+        "D3D Copy": 0.0,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 7.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 52.0
+      },
+      "temperature": {
+        "GPU Core": 28.0,
+        "GPU Memory": 48.0,
+        "GPU Hot Spot": 36.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.06
+      }
+    }
+  },
+  "postflight_stats": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x0001289a",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 16.0,
+    "gpu_temp": 29.0,
+    "gpu_memory_used": 22.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 96.11000061035156,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16155.29,
+        "D3D Dedicated Memory Used": 22.02,
+        "D3D Shared Memory Used": 34.77,
+        "D3D Shared Memory Free": 31874.27,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 22.0,
+        "GPU Memory Free": 16346.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 9.38,
+        "D3D Copy": 6.63,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 16.0,
+        "GPU Memory": 4.0
+      },
+      "power": {
+        "GPU Package": 51.0
+      },
+      "clock": {
+        "GPU Core": 884.0,
+        "GPU Memory": 873.0
+      },
+      "temperature": {
+        "GPU Core": 29.0,
+        "GPU Memory": 48.0,
+        "GPU Hot Spot": 37.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.46
+      }
+    }
+  },
+  "protected_before": {
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_after": {
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_unchanged": true
+}

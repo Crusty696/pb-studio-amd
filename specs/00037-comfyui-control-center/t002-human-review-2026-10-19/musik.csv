@@ -1,4 +1,4 @@
 ﻿id,source_sha256,hoerfenster_originalzeit,beat_klar_ja_nein_unsicher,wechsel_originalzeit_oder_keiner,wechsel_beschreibung,stoerung_originalzeit_oder_keine,zeit_unsicherheit,bewerter,datum,status
-A01,ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3,01:00-01:30,,,,,,,,UNBEWERTET
-A02,7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3,01:00-01:30,,,,,,,,UNBEWERTET
-A03,41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f,01:00-01:30,,,,,,,,UNBEWERTET
+A01,ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3,01:00-01:30,ja,Kein deutlicher Wechsel im Hörfenster,Kein deutlicher Wechsel gehört,Keine Störungen gehört,Keine präzisen Ereigniszeitpunkte erfasst,David (direkte Chatantwort),2026-10-19,MENSCHLICHE_HOERBEWERTUNG_ERFASST
+A02,7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3,01:00-01:30,ja,01:10–01:20 ungefähr; unsicher,"Stimmen, weniger Bass und leisere Stellen; genaue Art des Wechsels unsicher",Keine Störungen gehört,Bereichsgrenzen ungefähr; keine präzise Grenze oder numerische Zeittoleranz bestätigt,David (direkte Chatantwort),2026-10-19,MENSCHLICHE_HOERBEWERTUNG_ERFASST
+A03,41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f,01:00-01:30,ja,Kein deutlicher Wechsel im Hörfenster,Kein deutlicher Wechsel gehört,Keine Störungen gehört,Keine präzisen Ereigniszeitpunkte erfasst,David (direkte Chatantwort),2026-10-19,MENSCHLICHE_HOERBEWERTUNG_ERFASST

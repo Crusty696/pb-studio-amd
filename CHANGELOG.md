@@ -3,6 +3,22 @@
 
 ---
 
+## 2026-10-19 - BeatNet reused-instance state isolation
+
+- 19.10.2026: Zustandsreset je Dateianalyse fuer online/offline/realtime umgesetzt; Mikrofon-stream bleibt fortlaufend. Gemeinsamer Lock schuetzt Reset/Inferenz/Cleanup; PF-Decoder wird aus frischem Snapshot restauriert, RNG bleibt unangetastet. 63 gezielte Tests und CPU-A01–A03 Shared-Instance-Matrix bestanden; alle fuenf BeatDetector-A01/A02/A03/A01-A01-Vergleiche entsprechen frischen Referenzen. Review ohne Blocker. Eine fruehe Testausfuehrung ohne APPDATA-Isolation beruehrte Brain-Store-SHM/WAL; embedding_cache.db meldete sich bei read-only quick_check als malformed, kein Vorherhash vorhanden und keine Reparatur vorgenommen. Folgepruefungen isoliert. Beleg: specs/00037-comfyui-control-center/t002-beatnet-state-fix-2026-10-19/qc-report.md. Kein GUI-Neustart, Build, GPU-Lauf oder Generierung; Gesamt-T002 offen.
+
+## 2026-10-19 - BeatNet DBN compatibility fix
+
+- 19.10.2026: BeatNet-DBN-NumPy-Kompatibilitaetsfix in beiden Python-Aufrufern umgesetzt (lokaler Adapter, keine Packageaenderung). Nach Stromausfall/Neustart 18:54:22 erneut 54 Tests bestanden; A01–A03 je drei echte CPU-Analysen ohne Fallback, frische Wiederholungen identisch. Originale/Recovery/DB/Config/Library-Hashes gleich. Unabhaengiges Review mit16 Decodervergleichen ohne Blocker. Separater LSTM-Zustandsbefund bei Instanzwiederverwendung bleibt offen, ebenso musikalische Taktqualitaet/T002/WPF-Abnahme. T046/T047 abgeschlossen. Beleg: specs/00037-comfyui-control-center/t002-beatnet-fix-2026-10-19/qc-report.md. Quellen frisch ausgefuehrt; kein Produktneustart/EXE-Build, keine Generierung. Lokal, noch nicht committed.
+
+## 2026-10-19 - T002 audio root-cause investigation
+
+- 19.10.2026: T002 Ursachenanalyse mit drei Spezialagenten. BeatNet offline/DBN-Abbruch in madmom ragged np.asarray reproduziert; isolierte Score-Auswahl-Gegenprobe erfolgreich (A03 68 Beats/34 Downbeats, Zweiermetrum). Beat-This-Rohlogits liefern bereits viele Downbeat-Spitzen; 90-s-Kontext beseitigt A01/A03-Auffälligkeit nicht. Frontend/80 Postprocess-Fälle/18 Chunklängen referenzkonform; Verbraucher prüfen keine musikalische Taktgüte. Produktcode/Pakete unverändert, Original-/Recovery-/DB-Hashes gleich. Beleg: specs/00037-comfyui-control-center/t002-audio-investigation-2026-10-19/investigation.md. T002/Qualitätsabnahme offen; lokal, nicht committed.
+
+## 2026-10-19 - T002 bounded GPU checks
+
+- 19.10.2026: T002 GPU-Teilprüfung freigegeben und ausgeführt: A01–A03 je 30 s zweimal über native Beat-This-Audioroute; V01–V06 je ein Bildpaar zweimal mit RAFT/DirectML. 18 Läufe, identische Wiederholungen; Original-SHA-256, Recovery-Marker, Konfiguration und DB/WAL/SHM unverändert. BeatNet-Fehler und auffällige Downbeat-Anzahlen A01/A03 offen. Keine Generierung, kein Produktstart, keine Migration. T002/Qualitätsbaseline/GUI-Abnahme offen. Beleg: specs/00037-comfyui-control-center/t002-gpu-check-2026-10-19/gpu-check-report.md. Lokal dokumentiert, nicht committed.
+
 ## 2026-10-19 - T002 technical countercheck (Spec 00037)
 
 - Prepared a human-review guide with direct local source/frame links, six blank picture rows and three blank audio rows (01:00–01:30). Human observations precede model-output review; rough listening notes are not precise beat labels. No new analysis, GPU or generation run. Guide: specs/00037-comfyui-control-center/t002-human-review-2026-10-19/BEWERTUNG.md.

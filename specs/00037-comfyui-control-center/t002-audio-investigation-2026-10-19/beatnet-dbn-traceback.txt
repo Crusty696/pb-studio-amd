@@ -1,0 +1,19 @@
+%PB_STUDIO_ROOT%\src\pb_studio\audio\beat_detector.py:64: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources  # noqa: F401
+{"versions": {"numpy": "1.26.4", "torch": "2.11.0+cpu", "librosa": "0.11.0", "BeatNet": "1.1.1", "madmom": "0.16.1"}, "available": true}
+fixture %PB_STUDIO_ROOT%\scratch\t002-gpu-20261019-183050\A03-60-90.wav True
+init True
+Traceback (most recent call last):
+  File "%PB_STUDIO_ROOT%\scratch\t002-beatnet-investigation\reproduce_dbn.py", line 11, in <module>
+    out=d._estimator.process(str(f)); print('success',out.shape)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "%PB_STUDIO_ROOT%\.venv\Lib\site-packages\BeatNet\BeatNet.py", line 144, in process
+    output = self.estimator(preds)  # Using DBN offline inference to infer beat/downbeats
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "%PB_STUDIO_ROOT%\.venv\Lib\site-packages\madmom\processors.py", line 120, in __call__
+    return self.process(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "%PB_STUDIO_ROOT%\.venv\Lib\site-packages\madmom\features\downbeats.py", line 287, in process
+    best = np.argmax(np.asarray(results)[:, 1])
+                     ^^^^^^^^^^^^^^^^^^^
+ValueError: setting an array element with a sequence. The requested array has an inhomogeneous shape after 2 dimensions. The detected shape was (3, 2) + inhomogeneous part.

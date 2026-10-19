@@ -61,3 +61,29 @@ T002 bleibt insgesamt offen. Die unbekannte Clipvergangenheit blockiert die Regr
 Nach dem obigen Vorbereitungsstand bestanden alle neun ausgewählten Quellen die isolierte Pfad-, Metadaten-, Frame- beziehungsweise Audiochunk-Prüfung mit PB-Studio-Funktionskörpern. Alle Original-SHA-256 blieben gleich. A03 M4A nutzte einen Librosa/audioread-Fallback mit Deprecation-Warnung. [Prüfbericht](../t002-cpu-check-2026-10-13/cpu-check-report.md). Die zwölf hier definierten Regressionsfälle wurden dadurch nicht als vollständige Produkt-/Qualitätsfälle ausgeführt; ihre Ergebnisvorlage bleibt `NOT_RUN`.
 
 **Gegenprüfung 19.10.2026:** Der begrenzte PB-CPU-Lauf wurde für alle neun Quellen erneut erfolgreich ausgeführt. V02-Dublette und sechs lokale Referenzbild-Hashes wurden erneut bestätigt. Vollständiger Decode/PTS bleibt Beleg vom 13.10.2026; fachliche Fälle und Nativebaseline bleiben offen. [Technischer Gegenprüfbericht](technical-countercheck-2026-10-19.md).
+
+
+## Menschliche Bildbewertungen erfasst (19.10.2026)
+
+Sechs direkte Nutzerbeschreibungen V01–V06 in ../t002-human-review-2026-10-19/bildbewertungen.json mit Quell-/Bildhash, Zeitpunkt und unveränderten Beschreibungswortlauten gespeichert; bilder.csv enthält die normalisierte Erfassung. Geführte Bewertung bei sichtbarem vorherigem KI-Kontext, keine blinde Referenz und keine unabhängige Holdoutqualifikation. Bewegung und vermutete Szene/Identität bleiben Interpretationen; V06-Figurenzahl unsicher (6 oder 7). Keine automatische Bewertung der früheren KI-Entwürfe als correct/incorrect. R08: Einzelbildbeschreibungen erfasst, Modellvergleich offen. R09: Musikbewertung offen.
+
+
+## Erste Hörbewertungen vollständig erfasst (19.10.2026)
+
+A01–A03 im Originalfenster 60–90 s: regelmäßiger Beat gut mitklopfbar, keine Störungen gehört. A01/A03 kein deutlicher Wechsel; A02 ungefähr 70–80 s Stimmen, weniger Bass und leisere Stellen, genaue Wechselart und Grenzen unsicher. Originalantworten: ../t002-human-review-2026-10-19/musikbewertungen.json. R09 damit teilweise vorbereitet: keine präzisen Beat-/Downbeat-/Tonartlabels, keine Whole-File-Abnahme. Nächster fachlicher Schritt: kurzes Referenzfenster mit unabhängig markierten Schlägen und Unsicherheit vorbereiten, A02-Wechsel gezielt eingrenzen; dann begrenzten Native-Vergleich mit geprüfter Isolation und expliziten Analysestufen binden. T002 bleibt offen.
+
+
+## GPU-Teilprüfung 2026-10-19
+
+19.10.2026: T002 GPU-Teilprüfung freigegeben und ausgeführt: A01–A03 je 30 s zweimal über native Beat-This-Audioroute; V01–V06 je ein Bildpaar zweimal mit RAFT/DirectML. 18 Läufe, identische Wiederholungen; Original-SHA-256, Recovery-Marker, Konfiguration und DB/WAL/SHM unverändert. BeatNet-Fehler und auffällige Downbeat-Anzahlen A01/A03 offen. Keine Generierung, kein Produktstart, keine Migration. T002/Qualitätsbaseline/GUI-Abnahme offen. Beleg: specs/00037-comfyui-control-center/t002-gpu-check-2026-10-19/gpu-check-report.md. Lokal dokumentiert, nicht committed.
+Die frühere GPU-Sperre dieser Vorbereitung wurde durch den ausdrücklichen Nutzerauftrag für diesen begrenzten Lauf aufgehoben. Generierung bleibt ausgeschlossen.
+
+
+## Ursachenanalyse Audio 2026-10-19
+
+19.10.2026: T002 Ursachenanalyse mit drei Spezialagenten. BeatNet offline/DBN-Abbruch in madmom ragged np.asarray reproduziert; isolierte Score-Auswahl-Gegenprobe erfolgreich (A03 68 Beats/34 Downbeats, Zweiermetrum). Beat-This-Rohlogits liefern bereits viele Downbeat-Spitzen; 90-s-Kontext beseitigt A01/A03-Auffälligkeit nicht. Frontend/80 Postprocess-Fälle/18 Chunklängen referenzkonform; Verbraucher prüfen keine musikalische Taktgüte. Produktcode/Pakete unverändert, Original-/Recovery-/DB-Hashes gleich. Beleg: specs/00037-comfyui-control-center/t002-audio-investigation-2026-10-19/investigation.md. T002/Qualitätsabnahme offen; lokal, nicht committed.
+
+
+## BeatNet-Kompatibilitaetsfix 2026-10-19
+
+19.10.2026: BeatNet-DBN-NumPy-Kompatibilitaetsfix in beiden Python-Aufrufern umgesetzt (lokaler Adapter, keine Packageaenderung). Nach Stromausfall/Neustart 18:54:22 erneut 54 Tests bestanden; A01–A03 je drei echte CPU-Analysen ohne Fallback, frische Wiederholungen identisch. Originale/Recovery/DB/Config/Library-Hashes gleich. Unabhaengiges Review mit16 Decodervergleichen ohne Blocker. Separater LSTM-Zustandsbefund bei Instanzwiederverwendung bleibt offen, ebenso musikalische Taktqualitaet/T002/WPF-Abnahme. T046/T047 abgeschlossen. Beleg: specs/00037-comfyui-control-center/t002-beatnet-fix-2026-10-19/qc-report.md. Quellen frisch ausgefuehrt; kein Produktneustart/EXE-Build, keine Generierung. Lokal, noch nicht committed.

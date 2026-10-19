@@ -8,6 +8,7 @@ Bietet state-of-the-art Accuracy für Beats und Downbeats.
 import gc
 import logging
 from pathlib import Path
+from threading import Lock
 from typing import Callable, List, Tuple
 
 import numpy as np
@@ -137,6 +138,7 @@ class BeatDetector:
         self.mode = mode
         self.inference_model = inference_model
         self._estimator = None
+        self._estimator_init_lock = Lock()
         self._progress_callback: ProgressCallback = None
 
     def set_progress_callback(self, callback: ProgressCallback) -> None:
@@ -150,13 +152,17 @@ class BeatDetector:
                 logger.warning(f"Progress-Callback Fehler: {e}")
 
     def _init_estimator(self) -> bool:
+        with self._estimator_init_lock:
+            return self._init_estimator_locked()
+
+    def _init_estimator_locked(self) -> bool:
         if not BEATNET_AVAILABLE:
             return False
         if self._estimator is None:
             try:
                 logger.info(f"Initialisiere BeatNet Modell {self.beatnet_model} ({self.mode}/{self.inference_model})...")
                 # AMD: BeatNet IMMER auf CPU (kein CUDA, kein DirectML für BeatNet)
-                self._estimator = BeatNet(
+                estimator = BeatNet(
                     self.beatnet_model,
                     mode=self.mode,
                     inference_model=self.inference_model,
@@ -164,6 +170,8 @@ class BeatDetector:
                     thread=False,
                     device='cpu'
                 )
+                from .beatnet_compat import adapt_beatnet_dbn, prepare_beatnet_file_state
+                self._estimator = prepare_beatnet_file_state(adapt_beatnet_dbn(estimator))
                 logger.info("BeatNet Modell initialisiert (CPU)")
                 return True
             except Exception as e:
@@ -331,7 +339,8 @@ class BeatDetector:
             # Stage 1/4: Probe done, BeatNet ready -> beginnt Inferenz
             self._safe_emit(on_progress, 30.0)
 
-            output = self._estimator.process(audio_path)
+            from .beatnet_compat import process_beatnet_file
+            output = process_beatnet_file(self._estimator, audio_path)
 
             # Stage 2/4: TCN inference fertig
             self._safe_emit(on_progress, 90.0)
@@ -368,7 +377,8 @@ class BeatDetector:
         if not BEATNET_AVAILABLE or not self._init_estimator():
             return []
         try:
-            output = self._estimator.process(audio_path)
+            from .beatnet_compat import process_beatnet_file
+            output = process_beatnet_file(self._estimator, audio_path)
             if output is None or len(output) == 0:
                 return []
             downbeats = [row[0] for row in output if row[1] == 1.0]
@@ -384,7 +394,8 @@ class BeatDetector:
             b = self._detect_beats_librosa(audio_path)
             return b, []
         try:
-            output = self._estimator.process(audio_path)
+            from .beatnet_compat import process_beatnet_file
+            output = process_beatnet_file(self._estimator, audio_path)
             if output is None or len(output) == 0:
                 return self._detect_beats_librosa(audio_path), []
             beats = output[:, 0].tolist()

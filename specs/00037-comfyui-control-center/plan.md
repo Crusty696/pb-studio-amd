@@ -1080,3 +1080,13 @@ Alle Fachabnahmen FP01–FP18 sind zukünftig und phasenbezogen zuzuordnen; kein
 ## X. Wiederholter Vollreview und ergänzende Zustandsverträge
 
 [Reviewloop-Korrekturen](review-loop-2026-10-13/contracts.md) L01–L07 sind verbindlicher Bestandteil. [Prüfprotokoll](review-loop-2026-10-13/protocol.md) definiert vollständige Runden und gesonderte Abschlussverifikation. Kein Nullbefund-/Abschlussclaim vor erfülltem Protokoll.
+
+
+## T002 BeatNet-Fix 2026-10-19
+
+Bestaetigte Root Cause und A/B-Beleg: t002-audio-investigation-2026-10-19/investigation.md. Lokaler versionierter DBN-Kompatibilitaetsadapter nur fuer PB-eigene offline/DBN-Instanz; skalare Scores selektieren, sonst Algorithmus erhalten. Keine globalen NumPy- oder site-packages-Aenderungen. Reihenfolge: Regression/Adapter, isolierte Unit-/Consumer-Tests, frische CPU-Prozesse mit hashgebundenen 30-s-Ausschnitten A01–A03 und verbotenem Fallback, unabhaengiges Review, Zustandsschutz vergleichen. Python wird direkt aus src geladen: neue isolierte Prozesse pruefen die aktuelle Quelle; kein Neustart bestehender Jobs. Keine Gesamtprodukt-/Taktqualitaetsfreigabe.
+
+
+## T002 Zustandsfix
+
+Nachgewiesene LSTM hidden/cell-Uebernahme am Dateianalyse-Einstieg beheben. Alle PB-Dateiaufrufer erfassen, einschließlich online/offline und dateibasiertem realtime. Mikrofon-stream behält seine fortlaufende Historie. Reset und Verarbeitung derselben Instanz serialisieren; Fehlerdurchläufe dürfen keine Folgedatei beeinflussen. Unit-Regressionen für Wiederholung, A-B-A, Fehler, Parallelzugriff und Streamabgrenzung; echte A01–A03-CPU-Matrix mit gesperrtem Fallback und Hashschutz. Bestehenden DBN-Adapter erhalten.

@@ -2,7 +2,7 @@
 
 > Aktuelle Freigabe 2026-10-13: T001/T003/T004 und zugehörige T045-Prüfungen sind zur Umsetzung freigegeben; siehe phase-manifests.md und wave-a/. Anschließendes „nächser schritt“ autorisiert Welle B T005/T006 samt zugehörigem T045-Anteil innerhalb derselben Betriebsgrenzen; Belege wave-b/. Frühere Aussagen „keine Implementierung/alle Tasks offen“ dokumentieren den Planreviewstand und gelten nicht als Widerruf dieser begrenzten Freigabe. Keine Generierung, GPU-Läufe, Migrationen oder Installationen.
 
-Status 2026-10-19: T001/T003/T004 (Welle A) und T005/T006 (Welle B, Bibliotheks-/Vertragsscope) umgesetzt und isoliert geprüft; 40 Pakete offen. T002: 9/9 ausgewählte Regressionstestmedien mit begrenzten PB-CPU-Funktionen erneut bestanden ([Gegenprüfung](t002-regression-preparation-2026-10-13/technical-countercheck-2026-10-19.md)); vollständige Nativebaseline, Holdout und Qualitätsgrenzen offen. T045 nur anteilig geprüft. Kein G1, keine Produkt-/Medienabnahme. Requirements: [spec.md](spec.md). Architektur/Typen/Transitions/Gates: [plan.md](plan.md). Vollständige Rückverfolgbarkeit: [traceability.md](traceability.md). Fachliche Gesamtgegenprüfung: [domain-contracts.md](domain-contracts.md).
+Status 2026-10-19: T001/T003/T004 (Welle A) und T005/T006 (Welle B, Bibliotheks-/Vertragsscope) umgesetzt und isoliert geprüft; 40 Pakete offen. T002: begrenzte GPU-Teilprüfung mit 18 tatsächlichen Läufen dokumentiert ([Bericht](t002-gpu-check-2026-10-19/gpu-check-report.md)); BeatNet-/Downbeat-Befunde offen. 9/9 ausgewählte Regressionstestmedien mit begrenzten PB-CPU-Funktionen erneut bestanden ([Gegenprüfung](t002-regression-preparation-2026-10-13/technical-countercheck-2026-10-19.md)); vollständige Nativebaseline, Holdout und Qualitätsgrenzen offen. T045 nur anteilig geprüft. Kein G1, keine Produkt-/Medienabnahme. Requirements: [spec.md](spec.md). Architektur/Typen/Transitions/Gates: [plan.md](plan.md). Vollständige Rückverfolgbarkeit: [traceability.md](traceability.md). Fachliche Gesamtgegenprüfung: [domain-contracts.md](domain-contracts.md).
 
 ## Ausführungskonvention
 
@@ -1582,3 +1582,17 @@ Verify-PY bedeutet nach Tests implementieren: `PYTHONPATH=src`, `.venv\Scripts\p
 ## Quellenstand
 
 Dieser Aufgabenplan übernimmt die gelesenen Reviewbelege, keine neue Laufzeitfreigabe. Vor betroffener Änderung konkrete aktuelle Caller/DTOs/Lockowner und Tests lesen. Source-/Runtime-/Qualitätsdrift ist expliziter Anlass für neue Evidence, kein Anlass für erfundene Defaults.
+
+
+## T002 — freigegebener BeatNet-Kompatibilitaetsfix 2026-10-19
+
+- [X] T046 {FR-005} Lokalen DBN-Score-Kompatibilitaetsadapter und Regression implementieren in src/pb_studio/audio/ und Tests/test_beatnet_compat.py.
+- [X] T047 {RR-003, RR-004} Frische isolierte CPU-Laeufe A01–A03, Schutzdateihashes und unabhaengiges Review dokumentieren in t002-beatnet-fix-2026-10-19/.
+
+T046/T047 sind Nacharbeiten unter T002, kein Abschluss des gesamten T002-Qualitaetspakets.
+
+
+- [X] T048 {FR-005} Dateizustandsisolation fuer wiederverwendete BeatNet-Instanzen in src/pb_studio/audio/ und Tests/test_beatnet_state.py implementieren.
+- [X] T049 {RR-003, RR-004} A01–A03 Wiederholungs-/Reihenfolgematrix, Review und Schutzbelege in t002-beatnet-state-fix-2026-10-19/ sichern.
+
+T048/T049 abgeschlossen; Scope-QC bestanden. Eine fruehe, nicht isolierte Testausfuehrung beruehrte APPDATA/Brain-Store-Seitendateien und entdeckte einen nicht lesbaren embedding_cache.db. Vorherhash fehlt; Zustand ist offengelegt und unangetastet gelassen. Siehe t002-beatnet-state-fix-2026-10-19/qc-report.md. Gesamt-T002 bleibt offen.

@@ -1,6 +1,6 @@
 # T002: Deine Bild- und Musikbewertung
 
-Stand: 19.10.2026. Vorbereitung; noch keine menschliche Bewertung eingetragen. Keine GPU-Analyse oder Generierung gestartet. Originale bleiben unverändert.
+Stand: 19.10.2026. Sechs menschliche Einzelbildbewertungen erfasst; alle drei ersten Hörbewertungen erfasst. Präzise Zeitmarken und Analysevergleich bleiben offen. Keine GPU-Analyse oder Generierung gestartet. Originale bleiben unverändert.
 
 ## 1. Sechs Bilder ansehen
 
@@ -66,4 +66,4 @@ Erst nach den Einzelbildern: Originalclips V01–V06 ansehen. Notiere nur erkenn
 
 ## Antworten abgeben
 
-Du kannst direkt im Chat antworten, zum Beispiel „V01: …“ und „A01: …“. Die CSV-Bögen daneben sind optional. Sie enthalten noch keine Bewertung. Erst deine tatsächlichen Antworten werden übernommen. Keine automatischen Bilder-/Audio-Uploads; Referenzbilder bleiben lokal.
+Du kannst direkt im Chat antworten, zum Beispiel „V01: …“ und „A01: …“. Die CSV-Bögen daneben sind optional. Der Bildbogen enthält deine sechs Chatbewertungen; der Musikbogen enthält A01–A03. Originalformulierungen und Unsicherheiten stehen in bildbewertungen.json. Keine automatischen Bilder-/Audio-Uploads; Referenzbilder bleiben lokal.
