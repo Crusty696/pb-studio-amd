@@ -50,6 +50,8 @@ Ohne unabhängigen Holdout dürfen Ergebnisse „Regression auf bekanntem Bestan
 
 ## Dateien und aktueller Nachweis
 
+Bewertungsdurchgang vorbereitet am 19.10.2026: [einfache Bild-/Musikanleitung](../t002-human-review-2026-10-19/BEWERTUNG.md), sechs leere Bildzeilen und drei leere Musikzeilen. Erst eigene Beobachtung, danach Vergleich mit KI-Ausgaben; grobe Musikzeitpunkte sind noch keine präzisen Beatlabels. Alle neuen Bewertungszeilen stehen auf UNBEWERTET.
+
 regression-cases.json:12konkrete Fälle mit Quellen, Erwartungen, Ausführungsklasse und Status. quality-profile-draft.json: offene Metrik-/Grenzwertfelder. result-template.json: leere Ergebnisvorlage, status NOT_RUN. Kein Testresultat simuliert. Der aktuelle Schritt verändert nur Plan-/Referenzdokumente; keine Originalmedien erneut decodiert, kein Test-/Produkt-App-/GPU-/Generierungslauf.
 
 T002 bleibt insgesamt offen. Die unbekannte Clipvergangenheit blockiert die Regressionvorbereitung nicht mehr. Unabhängiger Holdout bewusst zurückgestellt; fachliche Referenzbestätigung, Nativebasismessung und Qualitätsgrenzen bleiben echte spätere Nachweise.

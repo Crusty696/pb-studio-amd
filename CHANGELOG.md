@@ -5,6 +5,8 @@
 
 ## 2026-10-19 - T002 technical countercheck (Spec 00037)
 
+- Prepared a human-review guide with direct local source/frame links, six blank picture rows and three blank audio rows (01:00–01:30). Human observations precede model-output review; rough listening notes are not precise beat labels. No new analysis, GPU or generation run. Guide: specs/00037-comfyui-control-center/t002-human-review-2026-10-19/BEWERTUNG.md.
+
 - Re-ran the bounded PB Studio CPU functions on all nine pinned regression sources; all nine passed and original SHA-256 hashes still match. Rechecked the V02 exact duplicate and six local-only reference-image hashes. A03 still uses the Librosa/audioread fallback with a deprecation warning. Full decode/PTS evidence remains dated 2026-10-13; human labels, Native baseline and independent holdout remain open. Evidence: specs/00037-comfyui-control-center/t002-regression-preparation-2026-10-13/technical-countercheck-2026-10-19.md.
 
 ## 2026-10-13 - T002 read-only CPU media probe (Spec 00037)
