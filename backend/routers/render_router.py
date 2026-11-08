@@ -1041,7 +1041,10 @@ def _finalize_timeline_for_render(
     from copy import deepcopy
 
     from pb_studio.pacing.pacing_models import CutListEntry
-    from pb_studio.services.pacing_service import PacingService
+    from functools import partial
+
+    from pb_studio.pacing.media_duration import get_clip_duration
+    from pb_studio.pacing.timeline_finalizer import finalize_cut_list
 
     eligible = [
         deepcopy(entry)
@@ -1057,9 +1060,10 @@ def _finalize_timeline_for_render(
         )
         for entry in eligible
     ]
-    finalized = PacingService()._finalize_cut_list(
+    finalized = finalize_cut_list(
         cut_list,
         target_duration,
+        partial(get_clip_duration, cache={}),
     )
     templates = {
         str(source.get("clip_id", "")): source

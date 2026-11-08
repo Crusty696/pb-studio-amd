@@ -1,0 +1,256 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+timeout: 60.0s
+timeout method: thread
+timeout func_only: False
+collected 1150 items / 3 deselected / 1147 selected
+
+Tests\test_pacing_analysis_preflight.py F...F.........                   [  1%]
+Tests\test_pacing_audit_fixes.py ...........                             [  2%]
+Tests\test_pacing_bass_weighting.py .....                                [  2%]
+Tests\test_pacing_brain_w5.py ......                                     [  3%]
+Tests\test_pacing_cached_energy.py ....                                  [  3%]
+Tests\test_pacing_cached_structure.py ....                               [  3%]
+Tests\test_pacing_canvas_contract.py ...                                 [  4%]
+Tests\test_pacing_engine_trigger_defects.py .............                [  5%]
+Tests\test_pacing_engine.py ......................                       [  7%]
+Tests\test_pacing_functional_completion.py ..........................    [  9%]
+Tests\test_pacing_key_matching.py ..........                             [ 10%]
+Tests\test_pacing_l_ti_1_prompt_kwarg.py ....                            [ 10%]
+Tests\test_pacing_length_enforcement.py ....                             [ 10%]
+Tests\test_pacing_manual_cap.py .......                                  [ 11%]
+Tests\test_pacing_progress_events.py .....                               [ 12%]
+Tests\test_pacing_snap_subtrack_import.py ....                           [ 12%]
+Tests\test_pacing_spectral_mid_high.py .....                             [ 12%]
+Tests\test_pacing_split_min_length.py .....                              [ 13%]
+Tests\test_pacing_stem_branch.py ...                                     [ 13%]
+Tests\test_pacing_subtrack.py ....                                       [ 13%]
+Tests\test_pacing_tempo_curve.py ...                                     [ 14%]
+Tests\test_pacing_video_data_flow.py F.                                  [ 14%]
+Tests\test_pacing_video_key.py ............                              [ 15%]
+Tests\test_persist_error_emit.py ....                                    [ 15%]
+Tests\test_project_anchor_storage.py .......                             [ 16%]
+Tests\test_project_brain_binding.py ......                               [ 16%]
+Tests\test_project_close_anchor_contracts.py ..                          [ 17%]
+Tests\test_project_meta_name_fallback.py ...                             [ 17%]
+Tests\test_project_persistence.py ..........                             [ 18%]
+Tests\test_publish_event_threadsafe.py .........                         [ 18%]
+Tests\test_record_app_session.py .........                               [ 19%]
+Tests\test_recovery_barrier.py ...                                       [ 19%]
+Tests\test_recovery_bootstrap.py ................................        [ 22%]
+Tests\test_recovery_control_root_isolated.py ..                          [ 22%]
+Tests\test_recovery_generation.py .................                      [ 24%]
+Tests\test_recovery_owner_adapters.py ...............                    [ 25%]
+Tests\test_recovery_snapshot_validates_indexes.py ...                    [ 25%]
+Tests\test_release_ci_gate_regressions.py ........                       [ 26%]
+Tests\test_release_repair_audio_pacing.py ................               [ 28%]
+Tests\test_release_repair_brain_runtime_contracts.py ................... [ 29%]
+..                                                                       [ 29%]
+Tests\test_release_repair_render_full_length.py ...................      [ 31%]
+Tests\test_render_amf_only.py .............                              [ 32%]
+Tests\test_render_atomic_output.py ......                                [ 33%]
+Tests\test_render_audio_true_peak_artifact.py .                          [ 33%]
+Tests\test_render_persistence.py .................                       [ 34%]
+Tests\test_render_progress_durable.py ...                                [ 35%]
+Tests\test_render_router_validate_timeline.py ....                       [ 35%]
+Tests\test_render_segment_manifest.py .....                              [ 35%]
+Tests\test_render_w8_contracts.py .............                          [ 36%]
+Tests\test_reopen_keeps_unsaved_timeline.py .....                        [ 37%]
+Tests\test_runtime_contract.py .....                                     [ 37%]
+Tests\test_separator.py ...........                                      [ 38%]
+Tests\test_siglip_text_capability.py ...                                 [ 39%]
+Tests\test_siglip_video.py ....s.s........s....s                         [ 40%]
+Tests\test_silent_persistence_failures.py .....                          [ 41%]
+Tests\test_smart_director_integration.py .................               [ 42%]
+Tests\test_spec00035_caption_provider_truth.py ..                        [ 42%]
+Tests\test_spec00035_withdrawn_finding54.py .                            [ 43%]
+Tests\test_sqlite_parallel_contention.py .                               [ 43%]
+Tests\test_startup_temp_sweep.py ..........                              [ 44%]
+Tests\test_stem_progress.py .....                                        [ 44%]
+Tests\test_storage_layer.py ...............                              [ 45%]
+Tests\test_streaming_analyzer.py .........                               [ 46%]
+Tests\test_streaming_overlap_dedup.py ....                               [ 46%]
+Tests\test_structure_novelty_vectorization.py ...........                [ 47%]
+Tests\test_subtrack_detector.py ....s                                    [ 48%]
+Tests\test_subtrack_pipeline.py .                                        [ 48%]
+Tests\test_t003_analysis_accuracy.py ..............                      [ 49%]
+Tests\test_t054_caption_contract.py ...............................      [ 52%]
+Tests\test_t055_siglip_preprocessing.py .......                          [ 52%]
+Tests\test_t056_embedding_identity.py ................                   [ 54%]
+Tests\test_t329_security_regressions.py ...........                      [ 55%]
+Tests\test_t357_gpu_wpf_nullability_contracts.py ..........s.......      [ 56%]
+Tests\test_t357_model_inventory_receipts.py ...........                  [ 57%]
+Tests\test_t357_models_router_persistence.py ...................         [ 59%]
+Tests\test_t410_project_switch_e2e.py .....                              [ 59%]
+Tests\test_t412_render_release_contracts.py ...                          [ 60%]
+Tests\test_t413_chat_log_privacy.py ..                                   [ 60%]
+Tests\test_t413_internal_owner_auth.py ..                                [ 60%]
+Tests\test_t413_mcp_lock.py ........                                     [ 61%]
+Tests\test_t413_product_dependency_lock.py ..                            [ 61%]
+Tests\test_t413_python_sca_gate.py .............................         [ 63%]
+Tests\test_t413_release_provenance_lock_binding.py ......                [ 64%]
+Tests\test_t413_timeline_limits.py ....                                  [ 64%]
+Tests\test_timeline_finalizer.py ...............                         [ 66%]
+Tests\test_timeline_integration.py ...                                   [ 66%]
+Tests\test_timeline_integrity.py .......                                 [ 66%]
+Tests\test_timeline_survives_project_switch.py .........                 [ 67%]
+Tests\test_tool_registry.py .......................                      [ 69%]
+Tests\test_torchvision_stub.py .                                         [ 69%]
+Tests\test_trigger_dedup_threshold.py ................                   [ 71%]
+Tests\test_trigger_settings_drift.py ...                                 [ 71%]
+Tests\test_trigger_settings_full_wiring.py ............................. [ 74%]
+....................................                                     [ 77%]
+Tests\test_validate_sdd.py ............................                  [ 79%]
+Tests\test_validate_timeline_strict.py ........                          [ 80%]
+Tests\test_vector_operation_outbox.py ..                                 [ 80%]
+Tests\test_vector_store.py ......................                        [ 82%]
+Tests\test_video_analysis_resume.py ......                               [ 82%]
+Tests\test_video_caption_tag_merge.py ................                   [ 84%]
+Tests\test_video_clipwave_endpoint.py ...                                [ 84%]
+Tests\test_video_embedding_persist.py .....                              [ 85%]
+Tests\test_video_hash_persist.py ..                                      [ 85%]
+Tests\test_video_list_clips_post_analyze.py ..                           [ 85%]
+Tests\test_video_moondream.py ........                                   [ 86%]
+Tests\test_video_peak_motion.py ..                                       [ 86%]
+Tests\test_video_per_frame_progress.py ....                              [ 86%]
+Tests\test_video_pipeline_truth.py ..........                            [ 87%]
+Tests\test_video_stage_status_keys.py ..........                         [ 88%]
+Tests\test_video_status_audio_key_optional.py .....                      [ 88%]
+Tests\test_video_subprocess_startup.py ....                              [ 89%]
+Tests\test_video_thumbnail_flag.py ....                                  [ 89%]
+Tests\test_video_thumbstrip_endpoint.py ...                              [ 89%]
+Tests\test_viewmodel_binding_wiring.py ..............                    [ 90%]
+Tests\test_visual_curves.py ...                                          [ 91%]
+Tests\test_vram_budget_manager.py .......                                [ 91%]
+Tests\test_vram_sensor_wiring.py ...                                     [ 92%]
+Tests\test_vram_telemetry.py ................                            [ 93%]
+Tests\test_waveform_analyzer.py ....................                     [ 95%]
+Tests\test_wpf_api_dto_contract.py .                                     [ 95%]
+Tests\test_wpf_async_gate_lifecycle_contract.py ...                      [ 95%]
+Tests\test_wpf_brain_load_lifecycle_contract.py .                        [ 95%]
+Tests\test_wpf_chat_lifecycle_contract.py ..                             [ 95%]
+Tests\test_wpf_file_logging_contract.py ..                               [ 95%]
+Tests\test_wpf_learning_session_contract.py .                            [ 96%]
+Tests\test_wpf_model_manager_lifecycle_contract.py .                     [ 96%]
+Tests\test_wpf_operation_context_guarded.py .....                        [ 96%]
+Tests\test_wpf_project_cache_contract.py ..........                      [ 97%]
+Tests\test_wpf_project_command_wiring.py ...                             [ 97%]
+Tests\test_wpf_project_overview_di_contract.py .                         [ 97%]
+Tests\test_wpf_project_overview_refresh_lifecycle_contract.py .          [ 97%]
+Tests\test_wpf_project_overview_status_contract.py .                     [ 97%]
+Tests\test_wpf_python_bridge_gate_lifecycle_contract.py ..               [ 98%]
+Tests\test_wpf_python_runtime_contract.py .                              [ 98%]
+Tests\test_wpf_settings_debounce_contract.py ..                          [ 98%]
+Tests\test_wpf_sse_connection_aggregation_contract.py .                  [ 98%]
+Tests\test_wpf_sse_listener_generation_contract.py .                     [ 98%]
+Tests\test_wpf_sse_progress_contract.py .                                [ 98%]
+Tests\test_wpf_sse_reconnect_lock_contract.py .                          [ 98%]
+Tests\test_wpf_terminal_history_contract.py ...                          [ 99%]
+Tests\test_wpf_timeline_reset_lifecycle_contract.py .                    [ 99%]
+Tests\test_wpf_ui_observability_contract.py ..                           [ 99%]
+Tests\test_wpf_video_scene_selection_contract.py .                       [ 99%]
+Tests\test_wpf_vram_telemetry_lifecycle_contract.py .                    [ 99%]
+Tests\test_wpf_w9_lifecycle_contract.py ......                           [100%]
+
+================================== FAILURES ===================================
+______ test_preflight_reports_mode_specific_missing_stages_and_clip_ids _______
+Tests\test_pacing_analysis_preflight.py:85: in test_preflight_reports_mode_specific_missing_stages_and_clip_ids
+    assert detail["missing"]["video"] == [
+E   AssertionError: assert [{'clip_id': ... 'missing'}]}] == [{'clip_id': ... 'missing'}]}]
+E     
+E     At index 0 diff: {'clip_id': 10, 'stages': [{'stage': 'embedding', 'status': 'completed', 'payload_valid': False}]} != {'clip_id': 11, 'stages': [{'stage': 'motion', 'status': 'missing', 'payload_valid': False}, {'stage': 'embedding', 'status': 'missing', 'payload_valid': False}, {'stage': 'audio_key', 'status': 'missing', 'payload_valid': False}]}
+E     Left contains one more item: {'clip_id': 11, 'stages': [{'payload_valid': False, 'stage': 'motion', 'status': 'missing'}, {'payload_valid': False, 'stage': 'embedding', 'status': 'missing'}, {'payload_valid': False, 'stage': 'audio_key', 'status': 'missing'}]}
+E     Use -v to get more diff
+____ test_preflight_never_waives_stages_that_are_always_producible[motion] ____
+Tests\test_pacing_analysis_preflight.py:195: in test_preflight_never_waives_stages_that_are_always_producible
+    assert reported == [stage]
+E   AssertionError: assert ['motion', 'embedding'] == ['motion']
+E     
+E     Left contains one more item: 'embedding'
+E     Use -v to get more diff
+___ test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding ___
+Tests\test_pacing_video_data_flow.py:64: in test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding
+    assert clip["has_embedding"] is True
+E   assert False is True
+============================== warnings summary ===============================
+src\pb_studio\audio\beat_detector.py:65
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\beat_detector.py:65: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources  # noqa: F401
+
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(scipy_version) < LooseVersion("0.14"):
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `maximum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `minimum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+Tests/test_pacing_bass_weighting.py::test_pacing_uses_cached_bass_curve
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\audioread\rawread.py:16: DeprecationWarning: 'aifc' is deprecated and slated for removal in Python 3.13
+    import aifc
+
+Tests/test_pacing_bass_weighting.py::test_pacing_uses_cached_bass_curve
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\audioread\rawread.py:17: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop
+
+Tests/test_pacing_bass_weighting.py::test_pacing_uses_cached_bass_curve
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\audioread\rawread.py:19: DeprecationWarning: 'sunau' is deprecated and slated for removal in Python 3.13
+    import sunau
+
+Tests/test_pacing_cached_structure.py::test_pacing_no_cached_structure_calls_analyze
+Tests/test_pacing_cached_structure.py::test_pacing_no_cached_structure_calls_analyze
+Tests/test_streaming_analyzer.py::test_streaming_energy_preserves_time_after_middle_chunk_failure
+Tests/test_subtrack_detector.py::test_subtrack_fallback_short_signal
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\librosa\core\pitch.py:103: UserWarning: Trying to estimate tuning from empty frequency set.
+    return pitch_tuning(
+
+Tests/test_pacing_cached_structure.py::test_pacing_no_cached_structure_calls_analyze
+Tests/test_pacing_cached_structure.py::test_pacing_no_cached_structure_calls_analyze
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\librosa\core\spectrum.py:266: UserWarning: n_fft=1024 is too large for input signal of length=690
+    warnings.warn(
+
+Tests/test_pacing_l_ti_1_prompt_kwarg.py::test_select_clip_accepts_prompt_kwarg
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+Tests/test_pacing_l_ti_1_prompt_kwarg.py::test_select_clip_accepts_prompt_kwarg
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+Tests/test_stem_progress.py::test_stem_router_keeps_lock_and_telemetry_without_outer_budget
+  C:\Users\david\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py:58: FutureWarning: PySoundFile failed. Trying audioread instead.
+  	Audioread support is deprecated in librosa 0.10.0 and will be removed in version 1.0.
+    result = self.fn(*self.args, **self.kwargs)
+
+Tests/test_video_moondream.py::test_extract_dominant_colors_red_image
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\threadpoolctl.py:1226: RuntimeWarning: 
+  Found Intel OpenMP ('libiomp') and LLVM OpenMP ('libomp') loaded at
+  the same time. Both libraries are known to be incompatible and this
+  can cause random crashes or deadlocks on Linux when loaded in the
+  same Python program.
+  Using threadpoolctl may cause crashes or deadlocks. For more
+  information and possible workarounds, please see
+      https://github.com/joblib/threadpoolctl/blob/master/multiple_openmp.md
+  
+    warnings.warn(msg, RuntimeWarning)
+
+Tests/test_video_moondream.py::test_extract_dominant_colors_red_image
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\sklearn\base.py:1336: ConvergenceWarning: Number of distinct clusters (1) found smaller than n_clusters (3). Possibly due to duplicate points in X.
+    return fit_method(estimator, *args, **kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED Tests/test_pacing_analysis_preflight.py::test_preflight_reports_mode_specific_missing_stages_and_clip_ids
+FAILED Tests/test_pacing_analysis_preflight.py::test_preflight_never_waives_stages_that_are_always_producible[motion]
+FAILED Tests/test_pacing_video_data_flow.py::test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding
+= 3 failed, 1138 passed, 6 skipped, 3 deselected, 20 warnings in 811.15s (0:13:31) =

@@ -589,6 +589,8 @@ def test_task_sperre_laeuft_ab():
 
 def test_task_cooldown_enters_unavailable_and_recovers_on_new_batch(monkeypatch):
     """Cooldown suppresses retries, then a healthy provider can return tags."""
+    from types import SimpleNamespace
+
     import pb_studio.ai.model_registry as registry_module
     import pb_studio.video.lmstudio_vision_wrapper as wrapper
 
@@ -614,18 +616,24 @@ def test_task_cooldown_enters_unavailable_and_recovers_on_new_batch(monkeypatch)
             )
         return ["club", "dancing"], receipt, (receipt,)
 
-    monkeypatch.setattr(wrapper, "_UNAVAILABLE_COOLDOWN_SECONDS", 0.01)
+    # Replace only this module's clock namespace: patching time.monotonic itself
+    # would also freeze asyncio's clock. Wall-clock sleeps made the 10 ms window
+    # expire under load before the suppression assertion could run.
+    clock = SimpleNamespace(now=1000.0)
+    monkeypatch.setattr(wrapper, "time", SimpleNamespace(monotonic=lambda: clock.now))
+    monkeypatch.setattr(wrapper, "_UNAVAILABLE_COOLDOWN_SECONDS", 60.0)
     monkeypatch.setattr(
         registry_module, "execute_with_model_failover", fail_then_recover
     )
     frame = np.full((32, 32, 3), 47, dtype=np.uint8)
 
     assert extract_tags_via_lmstudio(frame, mode="balance") == []
-    assert wrapper._TASK_UNAVAILABLE_UNTIL["video_captioning"] > time.monotonic()
+    assert wrapper._TASK_UNAVAILABLE_UNTIL["video_captioning"] == 1060.0
+    clock.now = 1059.0
     assert extract_tags_via_lmstudio(frame, mode="balance") == []
     assert attempts == 1, "cooldown must avoid another provider attempt"
 
-    time.sleep(0.02)
+    clock.now = 1060.0
     assert extract_tags_via_lmstudio(frame, mode="balance") == ["club", "dancing"]
     assert attempts == 2
     assert "video_captioning" not in wrapper._TASK_UNAVAILABLE_UNTIL

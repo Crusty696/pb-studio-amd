@@ -1755,6 +1755,8 @@ class AppState:
                             # L-M8: SigLIP-Embedding-Metadaten nach Reload zeigen
                             "embedding_dim": int(ai_data.get("embedding_dim", 0) or 0),
                             "embedding_samples": int(ai_data.get("embedding_samples", 0) or 0),
+                            "embedding_model_name": ai_data.get("embedding_model_name"),
+                            "embedding_model_version": ai_data.get("embedding_model_version"),
                             "audio_key": ai_data.get("audio_key"),
                             # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10)
                             "avg_brightness": float(ai_data.get("avg_brightness", 0.5) or 0.5),

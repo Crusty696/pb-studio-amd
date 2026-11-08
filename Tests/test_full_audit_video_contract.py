@@ -12,6 +12,8 @@ import pytest
 
 pytestmark = pytest.mark.unauthorized_backend
 
+CURRENT = {"embedding_model_name": "siglip_vision", "embedding_model_version": "onnx-dml-v2"}
+
 
 def _router():
     return importlib.import_module("backend.routers.video_router")
@@ -285,7 +287,13 @@ def test_caption_provider_outage_keeps_full_moondream_fallback(monkeypatch):
     assert result["stage_status"]["captions"] == "completed"
 
 
-def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
+@pytest.mark.parametrize("identity_source", ["analysis", "vector"])
+@pytest.mark.parametrize("invalid_identity", [
+    {}, {**CURRENT, "embedding_model_version": "onnx-dml-v1"},
+], ids=["missing", "stale"])
+def test_embedding_resume_checks_vector_link_and_tombstone(
+    monkeypatch, identity_source, invalid_identity,
+):
     router = _router()
     database_core = importlib.import_module("pb_studio.data.database_core")
     media_repository = importlib.import_module(
@@ -311,7 +319,7 @@ def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
         _lock = __import__("threading").RLock()
         _tombstoned_ids = {41}
         index = type("Index", (), {"ntotal": 50})()
-        metadata = {41: {"path": "C:/clip.mp4", "video_hash": "hash"}}
+        metadata = {41: {"path": "C:/clip.mp4", "video_hash": "hash", **CURRENT}}
 
         def __init__(self, **_kwargs):
             pass
@@ -324,6 +332,11 @@ def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
     monkeypatch.setattr(vector_store, "VectorStore", FakeVectors)
 
     class State:
+        analysis = {
+            "has_embedding": True, "embedding_dim": 1152,
+            "embedding_samples": 1, **CURRENT,
+        }
+
         def require_project_context_current(self, _context):
             pass
 
@@ -331,7 +344,7 @@ def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
             return {"video_hash": "hash"}
 
         def get_video_analysis(self, _clip_id):
-            return {"has_embedding": True, "embedding_dim": 1152, "embedding_samples": 1}
+            return self.analysis
 
     assert router._get_reusable_embedding_metadata(
         "C:/clip.mp4", 1, "hash", State(), type("Context", (), {"project_id": 1})()
@@ -341,7 +354,23 @@ def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
     context = type("Context", (), {"project_id": 1})()
     assert router._get_reusable_embedding_metadata(
         "C:/clip.mp4", 1, "hash", State(), context
-    ) == {"embedding_dim": 1152, "embedding_samples": 1}
+    ) == {"embedding_dim": 1152, "embedding_samples": 1, **CURRENT}
+
+    # Valid linkage/hash/dimension is insufficient if either persisted side
+    # lacks the current preprocessing-space identity.
+    identity_metadata = (
+        State.analysis if identity_source == "analysis" else FakeVectors.metadata[41]
+    )
+    for key in CURRENT:
+        identity_metadata.pop(key)
+    identity_metadata.update(invalid_identity)
+    assert router._get_reusable_embedding_metadata(
+        "C:/clip.mp4", 1, "hash", State(), context
+    ) is None
+    identity_metadata.update(CURRENT)
+    assert router._get_reusable_embedding_metadata(
+        "C:/clip.mp4", 1, "hash", State(), context
+    ) == {"embedding_dim": 1152, "embedding_samples": 1, **CURRENT}
 
     FakeVectors.metadata[41]["video_hash"] = None
     assert router._get_reusable_embedding_metadata(
@@ -356,6 +385,7 @@ def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):
     FakeVectors.metadata[-1] = {
         "path": "C:/clip.mp4",
         "video_hash": "hash",
+        **CURRENT,
     }
     FakeConnection.rows = [(-1,)]
     assert router._get_reusable_embedding_metadata(

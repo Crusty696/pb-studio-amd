@@ -14,7 +14,7 @@ def test_later_frames_contribute():
     f3 = ["feuer"] + [f"c{i}" for i in range(9)]
     merged = _merge_frame_tags([f1, f2, f3])
     assert "taenzerinnen" in merged and "feuer" in merged
-    assert len(merged) == 10
+    assert len(merged) == 12
 
 
 def test_tags_seen_in_several_frames_rank_first():

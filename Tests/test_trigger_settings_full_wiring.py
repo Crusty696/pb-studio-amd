@@ -36,7 +36,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SCHEMA_FILE = REPO_ROOT / "backend" / "schemas" / "pacing_schemas.py"
-API_CLIENT_FILE = REPO_ROOT / "PBStudio.UI" / "Services" / "ApiClient.cs"
+API_RESPONSE_MODELS_FILE = REPO_ROOT / "PBStudio.UI" / "Services" / "ApiResponseModels.cs"
 VIEW_MODEL_FILE = (
     REPO_ROOT / "PBStudio.UI" / "ViewModels" / "DirectorViewModel.cs"
 )
@@ -70,7 +70,7 @@ def _read(path: Path) -> str:
 def sources() -> dict[str, str]:
     return {
         "schema": _read(SCHEMA_FILE),
-        "client": _read(API_CLIENT_FILE),
+        "client": _read(API_RESPONSE_MODELS_FILE),
         "view_model": _read(VIEW_MODEL_FILE),
         "view": _read(VIEW_FILE),
         "engine": _read(ENGINE_FILE),

@@ -43,6 +43,8 @@ from ..schemas.video_schemas import (
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
 from pb_studio.storage.recovery_barrier import recovery_write_operation
+from pb_studio.caption_contract import CAPTION_TAG_LIMIT
+from pb_studio.embedding_identity import current_video_embedding_identity, is_current_video_embedding
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/video", tags=["Video"])
@@ -65,7 +67,7 @@ VIDEO_ANALYSIS_STATES = {"completed", "partial", "failed"}
 VIDEO_ANALYSIS_STAGE_FIELDS = {
     "scenes": ("scene_count", "scenes"),
     "motion": ("avg_motion", "motion"),
-    "embedding": ("embedding_dim", "embedding_samples", "has_embedding"),
+    "embedding": ("embedding_dim", "embedding_samples", "has_embedding", "embedding_model_name", "embedding_model_version"),
     "colors": (
         "dominant_colors",
         "mood_tags",
@@ -172,6 +174,7 @@ def _video_stage_data_is_valid(stage: str, result: dict[str, Any]) -> bool:
     if stage == "embedding":
         return (
             result.get("has_embedding") is True
+            and is_current_video_embedding(result)
             and result.get("embedding_dim") == SIGLIP_EMBEDDING_DIM
             and int(result.get("embedding_samples", 0) or 0) > 0
         )
@@ -336,7 +339,7 @@ def _set_video_audio_key_outcome(
         result["stage_errors"].pop("audio_key", None)
 
 
-def _merge_frame_tags(frame_tags: list[list[str]], limit: int = 10) -> list[str]:
+def _merge_frame_tags(frame_tags: list[list[str]], limit: int = CAPTION_TAG_LIMIT) -> list[str]:
     """Combine per-frame caption tags so every sampled frame can contribute.
 
     Plain first-come order let frame 1 fill all slots and dropped frames 2 and
@@ -550,6 +553,8 @@ def _persist_video_analysis_outcome(
         "has_embedding",
         "embedding_dim",
         "embedding_samples",
+        "embedding_model_name",
+        "embedding_model_version",
         "dominant_colors",
         "tags",
         "tag_source",
@@ -662,6 +667,8 @@ def _commit_pending_video_embedding(result: dict[str, Any]) -> None:
     pending = result.pop("_pending_embedding", None)
     if pending is None:
         return
+    if not is_current_video_embedding(pending.get("meta_info")):
+        raise ValueError("Video embedding identity missing or incompatible")
 
     from pb_studio.data.vector_store import VectorStore
 
@@ -704,6 +711,9 @@ def _store_video_embedding_in_brain_cache(pending: dict[str, Any]) -> None:
     FAISS-Write ist zu diesem Zeitpunkt bereits durch.
     """
     meta_info = pending.get("meta_info") or {}
+    if not is_current_video_embedding(meta_info):
+        logger.warning("Brain-Cache-Write verweigert: inkompatible Video-Embedding-Identitaet")
+        return
     video_hash = meta_info.get("video_hash")
     if not video_hash:
         logger.debug(
@@ -1009,7 +1019,7 @@ async def list_clips(
                     embedding_samples = int(_emb_samples)
                 except (TypeError, ValueError):
                     embedding_samples = None
-            has_embedding = bool(va.get("has_embedding", False))
+            has_embedding = bool(va.get("has_embedding", False)) and is_current_video_embedding(va)
             tag_source = va.get("tag_source")
         tags = c.get("tags") or []
         if va and isinstance(va.get("tags"), list):
@@ -2062,7 +2072,7 @@ def _get_reusable_embedding_metadata(
     video_hash: Optional[str],
     state: AppState,
     context: ProjectOperationContext,
-) -> Optional[dict[str, int]]:
+) -> Optional[dict[str, Any]]:
     """Return persisted embedding metadata only for a verified content/link hit."""
     if not video_hash:
         return None
@@ -2082,6 +2092,7 @@ def _get_reusable_embedding_metadata(
         embedding_samples = int(cached.get("embedding_samples", 0) or 0)
         if (
             not cached.get("has_embedding")
+            or not is_current_video_embedding(cached)
             or embedding_dim != SIGLIP_EMBEDDING_DIM
             or embedding_samples <= 0
         ):
@@ -2120,12 +2131,15 @@ def _get_reusable_embedding_metadata(
                 ):
                     continue
                 metadata = vector_store.metadata.get(faiss_id) or {}
+                if not is_current_video_embedding(metadata):
+                    continue
                 metadata_path = metadata.get("path")
                 metadata_hash = metadata.get("video_hash")
                 if metadata_hash != video_hash:
                     continue
                 if metadata_path and Path(metadata_path).resolve() == expected_path:
                     return {
+                        **current_video_embedding_identity(),
                         "embedding_dim": embedding_dim,
                         "embedding_samples": embedding_samples,
                     }
@@ -2301,6 +2315,7 @@ def _run_video_gpu_analysis(
             result["embedding_dim"] = reusable["embedding_dim"]
             result["embedding_samples"] = reusable["embedding_samples"]
             result["embedding_reused"] = True
+            result.update(current_video_embedding_identity())
             result["stage_status"]["embedding"] = "completed"
             logger.info(
                 "SigLIP Embedding fuer Clip %s per Video-Hash wiederverwendet",
@@ -2404,6 +2419,7 @@ def _run_video_gpu_analysis(
                             result["_pending_embedding"] = {
                                 "vector": embedding.astype(_np.float32),
                                 "meta_info": {
+                                    **current_video_embedding_identity(),
                                     "clip_id": clip_id,
                                     "path": video_path,
                                     "video_hash": video_hash,
@@ -2416,6 +2432,7 @@ def _run_video_gpu_analysis(
                                 "description": f"clip_{clip_id}_full",
                             }
                             result["has_embedding"] = True
+                            result.update(current_video_embedding_identity())
                             result["embedding_dim"] = len(embedding)
                             result["embedding_samples"] = len(embeddings_collected)
                             result["stage_status"]["embedding"] = "completed"
@@ -2885,7 +2902,7 @@ async def _run_color_and_caption_analysis(
             except asyncio.CancelledError:
                 pass
 
-            result["tags"] = _merge_frame_tags(frame_tag_lists) if frame_tag_lists else all_tags[:10]
+            result["tags"] = _merge_frame_tags(frame_tag_lists) if frame_tag_lists else all_tags[:CAPTION_TAG_LIMIT]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
             expected_caption_frames = len(sampled_frame_indices)
             if expected_caption_frames == 0:

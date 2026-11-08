@@ -271,7 +271,7 @@ def _load_ui_anchors(state) -> list[dict]:
     if not root:
         return []
     try:
-        from .project_router import load_project_anchors
+        from ..project_anchors import load_project_anchors
 
         return load_project_anchors(root)
     except Exception as exc:  # noqa: BLE001 - Anker sind optional
@@ -297,6 +297,7 @@ def _pacing_stage_payload_is_valid(
     payload: dict[str, Any],
 ) -> bool:
     """Reject completed markers whose persisted payload is missing or invalid."""
+    from pb_studio.embedding_identity import is_current_video_embedding
     if domain == "audio":
         if stage == "beats":
             required_lists = (
@@ -335,6 +336,7 @@ def _pacing_stage_payload_is_valid(
             try:
                 return (
                     payload.get("has_embedding") is True
+                    and is_current_video_embedding(payload)
                     and int(payload.get("embedding_dim", 0) or 0) == 1152
                     and int(payload.get("embedding_samples", 0) or 0) > 0
                 )
@@ -1265,7 +1267,11 @@ def _run_pacing_generation(
                 clip_data["scene_changes"] = va.get("scenes", [])
                 clip_data["dominant_colors"] = va.get("dominant_colors", [])  # A4
                 clip_data["tags"] = va.get("tags", [])  # A4
-                clip_data["has_embedding"] = bool(va.get("has_embedding", False))  # A4
+                from pb_studio.embedding_identity import is_current_video_embedding
+                embedding_current = is_current_video_embedding(va)
+                clip_data["has_embedding"] = bool(va.get("has_embedding", False)) and embedding_current
+                clip_data["embedding_model_name"] = va.get("embedding_model_name")
+                clip_data["embedding_model_version"] = va.get("embedding_model_version")
                 clip_data["audio_key"] = va.get("audio_key")  # L-K4
                 clip_data["scenes"] = va.get("scenes", [])
                 clip_data["avg_brightness"] = va.get("avg_brightness", 0.5)
@@ -1274,7 +1280,7 @@ def _run_pacing_generation(
                 clip_data["mood_tags"] = va.get("mood_tags", [])
                 clip_data["motion_category"] = va.get("motion_category", "medium")
                 clip_data["pace_class_score"] = va.get("pace_class_score")
-                clip_data["video_embedding"] = va.get("video_embedding")
+                clip_data["video_embedding"] = va.get("video_embedding") if embedding_current else None
                 clip_data["is_analyzed"] = bool(va.get("is_analyzed", False))
                 clip_data["analysis_status"] = va.get("analysis_status")
                 clip_data["analysis_confidence"] = va.get("analysis_confidence")

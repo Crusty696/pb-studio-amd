@@ -1,0 +1,653 @@
+{
+  "scope": "SigLIP DirectML native25/50/75percent frames of six clips, two calls each; legacy/correct center comparison; no persistence or semantic label proof",
+  "before": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "runs": [
+    {
+      "source_id": "V01",
+      "frame_index": 75,
+      "size": [
+        720,
+        480
+      ],
+      "native_rgb_sha256": "0bc5400c204c39791939454b63d55cbba4cb3310daaf9521717459c536606c80",
+      "seconds": [
+        10.928124600000956,
+        0.10083239999949001
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999998807907104,
+      "vector_sha256": [
+        "21984f17f2c358c0dd7490041f9e29db6c791bc1ca201455582bcf067c3b256d",
+        "21984f17f2c358c0dd7490041f9e29db6c791bc1ca201455582bcf067c3b256d"
+      ]
+    },
+    {
+      "source_id": "V01",
+      "frame_index": 150,
+      "size": [
+        720,
+        480
+      ],
+      "native_rgb_sha256": "66c3bcf8d7258ce6874a69362b6ce5dbcf5fd69ce408a877e4fd37052384c2f4",
+      "seconds": [
+        0.11486759999934293,
+        0.10048599999936414
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999998807907104,
+      "vector_sha256": [
+        "b5d0670958ffeb3e24e832b1c2e6662710eafba9d2492abe9062d23c67e81824",
+        "b5d0670958ffeb3e24e832b1c2e6662710eafba9d2492abe9062d23c67e81824"
+      ],
+      "legacy_corrected_cosine": 0.9663569927215576,
+      "legacy_corrected_max_abs": 0.03625419735908508
+    },
+    {
+      "source_id": "V01",
+      "frame_index": 225,
+      "size": [
+        720,
+        480
+      ],
+      "native_rgb_sha256": "c2591cc546f7bd59e9f49fc4ace6295503dd3e2717fd70c21496507d222229d8",
+      "seconds": [
+        0.11667230000057316,
+        0.10034809999888239
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0,
+      "vector_sha256": [
+        "bb33b19cc97a6cc4f46da11a2ca688ce66f2fedbdda2f8b8f0f365fd1a55f290",
+        "bb33b19cc97a6cc4f46da11a2ca688ce66f2fedbdda2f8b8f0f365fd1a55f290"
+      ]
+    },
+    {
+      "source_id": "V02",
+      "frame_index": 180,
+      "size": [
+        1280,
+        720
+      ],
+      "native_rgb_sha256": "44a46b6afca9f863edb418e5880118ccf4f3df74f570d310448ddd8529658a17",
+      "seconds": [
+        0.12052210000001651,
+        0.11196259999996983
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0000001192092896,
+      "vector_sha256": [
+        "997da610e5351dfec205369165c67c79bbda7dc12c721ed1c227ea301c818e17",
+        "997da610e5351dfec205369165c67c79bbda7dc12c721ed1c227ea301c818e17"
+      ]
+    },
+    {
+      "source_id": "V02",
+      "frame_index": 360,
+      "size": [
+        1280,
+        720
+      ],
+      "native_rgb_sha256": "016262e45b8f625d9306ec51884e33f29239b678737bb2d88f71b94972c31ea6",
+      "seconds": [
+        0.1166350000003149,
+        0.11168919999909122
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999999403953552,
+      "vector_sha256": [
+        "c0f0ffbedc961322280147a1f66559e4b9628453f202d350749fe7ca0e2bbe57",
+        "c0f0ffbedc961322280147a1f66559e4b9628453f202d350749fe7ca0e2bbe57"
+      ],
+      "legacy_corrected_cosine": 0.946922779083252,
+      "legacy_corrected_max_abs": 0.12105215340852737
+    },
+    {
+      "source_id": "V02",
+      "frame_index": 540,
+      "size": [
+        1280,
+        720
+      ],
+      "native_rgb_sha256": "a0aff50ae1c728490b181f6a8d5682d3e01f0f32fb2fb7ea14b06bc67a8a16ed",
+      "seconds": [
+        0.11874270000043907,
+        0.10738479999963602
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999998807907104,
+      "vector_sha256": [
+        "2d4682e7ad610a7689ba85558a593a1af302abd208c9ee28f0b1352da6d87f58",
+        "2d4682e7ad610a7689ba85558a593a1af302abd208c9ee28f0b1352da6d87f58"
+      ]
+    },
+    {
+      "source_id": "V03",
+      "frame_index": 75,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "5bc005851e84f4a1174d931201875832771d4845777f2c952585c01cae5a7da3",
+      "seconds": [
+        0.11628750000090804,
+        0.09876510000140115
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0000001192092896,
+      "vector_sha256": [
+        "3742c147fa3b96b0a8fb97e74d3a721fa969ba7f9a0bc8e2b2268e8552805bc4",
+        "3742c147fa3b96b0a8fb97e74d3a721fa969ba7f9a0bc8e2b2268e8552805bc4"
+      ]
+    },
+    {
+      "source_id": "V03",
+      "frame_index": 150,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "aed8fafc5e6e1d93598d7d235164e12829d8707d5f7ac02b49086ba1672094a2",
+      "seconds": [
+        0.11526609999964421,
+        0.09837660000084725
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0000001192092896,
+      "vector_sha256": [
+        "4aca11f072e2f8c733bb643bf8a069a33b7a6a1b52efeb0de52d19600e84fff7",
+        "4aca11f072e2f8c733bb643bf8a069a33b7a6a1b52efeb0de52d19600e84fff7"
+      ],
+      "legacy_corrected_cosine": 0.9755216240882874,
+      "legacy_corrected_max_abs": 0.03776742145419121
+    },
+    {
+      "source_id": "V03",
+      "frame_index": 225,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "6452ed739be18a8ff2e4952797d98d8449c052238af812e4cb6abcac9660b424",
+      "seconds": [
+        0.11484150000069349,
+        0.09924930000124732
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999998807907104,
+      "vector_sha256": [
+        "7a48292a24d0435678df71aac47903bc0b059a3d74204c44c8d72b47c1b163ec",
+        "7a48292a24d0435678df71aac47903bc0b059a3d74204c44c8d72b47c1b163ec"
+      ]
+    },
+    {
+      "source_id": "V04",
+      "frame_index": 75,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "1ea508a4b2af1e695aae79bb8f102bae38f9fe0e2df6491ea53ae618a249ace4",
+      "seconds": [
+        0.11476089999996475,
+        0.09665760000098089
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0,
+      "vector_sha256": [
+        "7106bf3a454c4bac37b648c7dcf151646b07c5ce9b89dfe4d85f60e4580588e5",
+        "7106bf3a454c4bac37b648c7dcf151646b07c5ce9b89dfe4d85f60e4580588e5"
+      ]
+    },
+    {
+      "source_id": "V04",
+      "frame_index": 150,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "6f18b69876d9d04d035e26716185fc52136c55413e224a403bef443df6dea98f",
+      "seconds": [
+        0.11403840000093624,
+        0.09776880000026722
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999998807907104,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999998211860657,
+      "vector_sha256": [
+        "2f3d5d0463018b24baf4662a0a375a503d11df6a5bb2681333400ae7b7d52da6",
+        "2f3d5d0463018b24baf4662a0a375a503d11df6a5bb2681333400ae7b7d52da6"
+      ],
+      "legacy_corrected_cosine": 0.8683905005455017,
+      "legacy_corrected_max_abs": 0.1137935072183609
+    },
+    {
+      "source_id": "V04",
+      "frame_index": 225,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "3216c23017a1adad372ceb18d53aa8af50ff82d8ae17475a7473b859038c285b",
+      "seconds": [
+        0.11382840000078431,
+        0.09855750000133412
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999998807907104,
+      "vector_sha256": [
+        "81feaa012829c9a33f564fc51fa1060d4c853f1100e9786726ba2e33b430d09d",
+        "81feaa012829c9a33f564fc51fa1060d4c853f1100e9786726ba2e33b430d09d"
+      ]
+    },
+    {
+      "source_id": "V05",
+      "frame_index": 75,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "7070aa7141f7945da7c7b1e69e9ea6e9b29f15a884aab8aeaf53852c83cb0c9c",
+      "seconds": [
+        0.11600499999985914,
+        0.09710059999997611
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0,
+      "vector_sha256": [
+        "03e38a690249623c83bee3c1761d97b40e4866b7c55bb7a30fcbcb319867230f",
+        "03e38a690249623c83bee3c1761d97b40e4866b7c55bb7a30fcbcb319867230f"
+      ]
+    },
+    {
+      "source_id": "V05",
+      "frame_index": 150,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "e083dd0f5c00570aae0708060f1ffc2bf6f627172332f6a3035792d4f44ca52e",
+      "seconds": [
+        0.11448179999933927,
+        0.09835490000114078
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0000001192092896,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.000000238418579,
+      "vector_sha256": [
+        "bf42875492272d19261a2431681f74e7c536d99e4e3fede680a4a9bb08c169d6",
+        "bf42875492272d19261a2431681f74e7c536d99e4e3fede680a4a9bb08c169d6"
+      ],
+      "legacy_corrected_cosine": 0.9331883788108826,
+      "legacy_corrected_max_abs": 0.07663758844137192
+    },
+    {
+      "source_id": "V05",
+      "frame_index": 225,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "94eb036370e8413a4b3004537cd487ea4fd1ead45d919edeb69b86fd8d2854be",
+      "seconds": [
+        0.11375469999984489,
+        0.09887849999904574
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0000001192092896,
+      "vector_sha256": [
+        "d25e10defd5ab251f5b7f45fb126d120d6965fe7baecfe407bbe48dc6c49692e",
+        "d25e10defd5ab251f5b7f45fb126d120d6965fe7baecfe407bbe48dc6c49692e"
+      ]
+    },
+    {
+      "source_id": "V06",
+      "frame_index": 75,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "2f16938d96bf8a14ceccb5d6ba0478ab6200d6281f404da0d3fc4552643a6f6a",
+      "seconds": [
+        0.11676830000033078,
+        0.09806129999924451
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0000001192092896,
+      "vector_sha256": [
+        "034932cd19299d4c783aa2447eba0dece26ab1db9ac547021b7447f98b1cbdbc",
+        "034932cd19299d4c783aa2447eba0dece26ab1db9ac547021b7447f98b1cbdbc"
+      ]
+    },
+    {
+      "source_id": "V06",
+      "frame_index": 150,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "3d3e2a37146418e633f51938abdf0f630f9638da7c4bb36387153aebf0cef5c2",
+      "seconds": [
+        0.11500019999948563,
+        0.0990016999985528
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 0.9999998807907104,
+      "vector_sha256": [
+        "595aaef94085d24d260ad6e0e2c558d3e12d48f05d4e02a4368458da32ffca3e",
+        "595aaef94085d24d260ad6e0e2c558d3e12d48f05d4e02a4368458da32ffca3e"
+      ],
+      "legacy_corrected_cosine": 0.9479539394378662,
+      "legacy_corrected_max_abs": 0.05105210095643997
+    },
+    {
+      "source_id": "V06",
+      "frame_index": 225,
+      "size": [
+        854,
+        480
+      ],
+      "native_rgb_sha256": "e883efafcedb52b1ecbe3b9a34b765d771942336b2d44e1e912bdf6c4a4d37c0",
+      "seconds": [
+        0.11271400000077847,
+        0.10083300000042072
+      ],
+      "provider": "DmlExecutionProvider",
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "repeat_max_abs": 0.0,
+      "repeat_cosine": 1.0000001192092896,
+      "vector_sha256": [
+        "ba52b410db18f0f49720b065e7303e93620b0afb351a6fa52adc767aa6b9329e",
+        "ba52b410db18f0f49720b065e7303e93620b0afb351a6fa52adc767aa6b9329e"
+      ]
+    }
+  ],
+  "preflight": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x00013019",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 29.0,
+    "gpu_memory_used": 3.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 82.7699966430664,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16173.73,
+        "D3D Dedicated Memory Used": 3.58,
+        "D3D Shared Memory Used": 9.73,
+        "D3D Shared Memory Free": 31899.3,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 3.0,
+        "GPU Memory Free": 16365.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 0.0,
+        "D3D Copy": 0.0,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 10.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 80.0
+      },
+      "temperature": {
+        "GPU Core": 29.0,
+        "GPU Memory": 48.0,
+        "GPU Hot Spot": 37.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.06
+      }
+    }
+  },
+  "lmstudio_models": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  },
+  "asset_sha256": "863380e4e628cca0d61d4170bdb1401a66ce030080d7a956f90ebe42e040969e",
+  "wrapper_sha256": "174a8b055af6bce57363a952807d481300a7113f687f02590c4a9761f279251d",
+  "clip_aggregates": {
+    "V01": {
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "sha256": "435becd9d583588bde497c34b17f9c1144e28ea5abd9bfd8a6fef4ef2198c90a"
+    },
+    "V02": {
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999998807907104,
+      "sha256": "16959d3fbfc2a990c0df50d3994b94571b37a1790a0bc3d54aab77742cae73be"
+    },
+    "V03": {
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "sha256": "35e1221c62e340b0f3313cac8044266bd9af49bee8166af937cc495633bd5121"
+    },
+    "V04": {
+      "shape": [
+        1152
+      ],
+      "norm": 0.9999999403953552,
+      "sha256": "358373fb1c78a53ca4c9844209605072cfd068b4c4acc3918c80edbf14ffeff9"
+    },
+    "V05": {
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "sha256": "684374d567617c7eedc83bb739342836fc58199db171378ce92160f800905787"
+    },
+    "V06": {
+      "shape": [
+        1152
+      ],
+      "norm": 1.0,
+      "sha256": "9557a003982e076280a3644c8199a16d0b460b1c665797c90464bba42f941cae"
+    }
+  },
+  "session": {
+    "providers": [
+      "DmlExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "mem_pattern": false,
+    "cpu_mem_arena": false,
+    "text_encoder_available": false
+  },
+  "unloaded": true,
+  "after": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_unchanged": true
+}

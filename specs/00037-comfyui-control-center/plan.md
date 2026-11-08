@@ -1,8 +1,6 @@
 # PB-Studio Control Center Masterplan — Implementation Plan
 
-> Aktuelle Freigabe 2026-10-13: T001/T003/T004 und zugehörige T045-Prüfungen sind zur Umsetzung freigegeben; siehe phase-manifests.md und wave-a/. Frühere Aussagen „keine Implementierung/alle Tasks offen“ dokumentieren den Planreviewstand und gelten nicht als Widerruf dieser begrenzten Freigabe. Keine Generierung, GPU-Läufe, Migrationen oder Installationen.
-
-> **For agentic workers:** Dieser Auftrag erstellt ausschließlich den Plan. Erst nach expliziter späterer Implementierungsfreigabe: `superpowers:subagent-driven-development` oder `superpowers:executing-plans` taskweise verwenden; projektbezogene SDD-/Freigabegates beachten. Alle Checkboxen bleiben jetzt offen.
+> Abgehakter Gesamtplan: [masterplan-status.md](masterplan-status.md). Aktueller Ausfuehrungsstand 2026-10-19: [current-status.md](current-status.md). Wellen A/B und T002-Reparaturen umgesetzt und im dokumentierten Umfang geprueft; T002 wird autonom mit isolierten Nativepruefungen fortgesetzt. Keine Generierung, Installation oder Migration; Originale und laufende fremde Auftraege unveraendert lassen. Fruehere GPU-Freigaben gelten fuer begrenzte Analyse, nicht fuer Generierung.
 
 **Goal:** PB-Studio als Produktionskontrollzentrum mit separater, workflowbasierter ComfyUI-Ausführung schrittweise erweitern; Nativefunktionen und Projektdaten erhalten.
 
@@ -10,7 +8,9 @@
 
 **Tech Stack:** bestehendes WPF/.NET + Python/FastAPI; PB ONNX/DirectML, FFmpeg AMF, SQLite/FAISS, bestehendes SSE. Externe ComfyUI-Runtime separat; AMD/ROCm dort ausdrücklich erlaubt.
 
-**Spec:** [spec.md](spec.md). **Tasks:** [tasks.md](tasks.md). **Traceability:** [traceability.md](traceability.md). **Datum:** 2026-10-13. **Status:** vollständiger Planentwurf, weder implementiert noch produktiv abgenommen.
+**Spec:** [spec.md](spec.md). **Tasks:** [tasks.md](tasks.md). **Traceability:** [traceability.md](traceability.md). **Ursprungsdatum:** 2026-10-13. **Status aktualisiert:** 2026-10-19. **Status:** Teilumsetzung: T001/T003-T006 abgeschlossen; T002 in Arbeit; Gesamtprodukt nicht abgenommen.
+
+**T002-Nachtrag 19.10.2026:** T053 prueft sechs bewertete Standbilder mit je zwei nativen Caption-Aufrufen. Technisch erfolgreich mit vorhandenem Gemma/Vulkan, inhaltlich keine Freigabe (unbelegte Gruppen, fehlende Hauptobjekte, Zehn-Tag-Abschneidung). T054 inzwischen mit belegten Reparaturen abgeschlossen: Budget12, Haut-/Zahlfilter und getesteter Kandidat2-Prompt; 101 Tests und84 echte Aufrufe. Semantische Restfehler bleiben T055; siehe [T054-Bericht](t054-caption-2026-10-19/report.md). [Pruefbericht](t002-caption-2026-10-19/report.md). Vollclip-Verstaendnis und GUI bleiben offen.
 
 ## Global Constraints
 
@@ -1090,3 +1090,15 @@ Bestaetigte Root Cause und A/B-Beleg: t002-audio-investigation-2026-10-19/invest
 ## T002 Zustandsfix
 
 Nachgewiesene LSTM hidden/cell-Uebernahme am Dateianalyse-Einstieg beheben. Alle PB-Dateiaufrufer erfassen, einschließlich online/offline und dateibasiertem realtime. Mikrofon-stream behält seine fortlaufende Historie. Reset und Verarbeitung derselben Instanz serialisieren; Fehlerdurchläufe dürfen keine Folgedatei beeinflussen. Unit-Regressionen für Wiederholung, A-B-A, Fehler, Parallelzugriff und Streamabgrenzung; echte A01–A03-CPU-Matrix mit gesperrtem Fallback und Hashschutz. Bestehenden DBN-Adapter erhalten.
+
+
+### T055/T056-Pruefvertrag 2026-10-19
+
+V02/V03 gleiche Originalzeitpunkte mit nativer Aufloesung gegen480px-Referenzen vergleichen; PNG/JPEG und Reasoning getrennt messen. Keine Bild-spezifischen erwarteten Antworten vorgeben. In T055 entdeckte SigLIP-Normabweichung nur zusammen mit neuer Modellidentitaet und fail-closed Altvektorabgrenzung korrigieren (T056). Keine produktiven Vektoren, Projekte oder trainierten Gewichte migrieren/neu etikettieren. Normale Isolation und Hashschutz; danach sechs Videos an mehreren Zeitpunkten technisch pruefen, keine semantische Freigabe aus Vektornormen ableiten.
+
+Nachweisstand:42 Caption-Aufrufe und42 DirectML-Inferenzen in t055-vision-2026-10-19/. Native Aufloesung verbessert V03-Zweizahl; spaeterer Zeitpunkt liefert Wasserfall bis zum Merge. Kein umfassender Captionfix belegt. SigLIP-Preprocessing repariert und neue Identitaet onnx-dml-v2 durch Produktions-/Such-/Cache-/Reloadgrenzen gebunden. Bestehende Vektoren/Weights unangetastet, bei unbekannter/alter Identitaet keine semantische Nutzung im korrigierten Raum. Vor spaeterer Altbestands-Neuanalyse/Neutraining Umfang und Freigabe getrennt festlegen. Native Vollprodukt-/Qualitaetsabnahme bleibt offen; Details report.md und Prueflogs.
+
+
+## Verbindliche Fortschritts- und Wiederholungsregel 2026-10-19
+
+Haken und offene Qualität siehe [masterplan-status.md](masterplan-status.md). T046-T056 sind Teilaufgaben von T002, keine zusätzlich fertigen Hauptpakete. T055 schließt die Untersuchung ab, nicht die Erkennungsqualität. Neue Läufe brauchen eine konkrete offene Frage und ein Abbruchkriterium. Bereits bestandene Nachweise nur bei betroffenen Änderungen, neuen Fehlern oder konkretem offenen Risiko wiederholen. Keine Ausweitung auf unverbundene Nebenpfade ohne belegten Einfluss.

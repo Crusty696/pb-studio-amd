@@ -613,7 +613,7 @@ def test_openapi_csharp_and_python_models_expose_public_repair_contracts():
         assert fields <= model_fields[schema_name]
         assert fields <= set(schemas[schema_name]["properties"])
 
-    api_client = _source("PBStudio.UI/Services/ApiClient.cs")
+    api_client = _source("PBStudio.UI/Services/ApiResponseModels.cs")
     for field in (
         "AnalysisStatus",
         "StageStatus",
@@ -688,7 +688,7 @@ def test_partial_failure_and_evidence_states_remain_visible_and_copyable():
 
 
 def test_rejected_feedback_detail_flows_from_http_to_visible_ui():
-    api_client = _source("PBStudio.UI/Services/ApiClient.cs")
+    api_client = _source("PBStudio.UI/Services/ApiClient.Brain.cs")
     brain_vm = _source("PBStudio.UI/ViewModels/BrainViewModel.cs")
     brain_view = _source("PBStudio.UI/Views/BrainView.xaml")
 

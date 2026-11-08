@@ -1,0 +1,253 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+timeout: 60.0s
+timeout method: thread
+timeout func_only: False
+collected 2276 items / 9 deselected / 2267 selected
+
+Tests\test_ai_config_loader.py ...........                               [  0%]
+Tests\test_analysis_interrupt_batch_sse_restart_contract.py .            [  0%]
+Tests\test_analysis_lifecycle_http_contract.py .....                     [  0%]
+Tests\test_app_state.py ...................                              [  1%]
+Tests\test_app_state_ai_data_compression.py .......                      [  1%]
+Tests\test_app_state_truth_source.py ...                                 [  2%]
+Tests\test_audio_analysis_resume.py ...                                  [  2%]
+Tests\test_audio_analyzer.py ......                                      [  2%]
+Tests\test_audio_embedding_flag.py ....                                  [  2%]
+Tests\test_audio_long_mix_chunk_resume.py .........                      [  2%]
+Tests\test_audio_long_mix_truth.py ..............                        [  3%]
+Tests\test_audio_spectral_onsets_contract.py .....                       [  3%]
+Tests\test_audit_sdd_gate.py ...                                         [  3%]
+Tests\test_backend_config.py ..                                          [  4%]
+Tests\test_backend_lifespan_contract.py ...                              [  4%]
+Tests\test_backend_routers.py .................................          [  5%]
+Tests\test_band_params_single_source.py ..................               [  6%]
+Tests\test_beat_detector_import_hygiene.py .                             [  6%]
+Tests\test_beat_grid_estimator.py .....................                  [  7%]
+Tests\test_beat_grid_provenance.py .............                         [  7%]
+Tests\test_beat_grid_provenance_persistence.py .....                     [  8%]
+Tests\test_beat_grid_segments.py ..................................      [  9%]
+Tests\test_beat_grid_wiring.py ..............                            [ 10%]
+Tests\test_beat_progress.py ...                                          [ 10%]
+Tests\test_beat_strength.py ......                                       [ 10%]
+Tests\test_beat_this_gpu_lifecycle.py .........                          [ 11%]
+Tests\test_beat_this_integration.py ...................                  [ 11%]
+Tests\test_beat_this_tracker.py ..............                           [ 12%]
+Tests\test_beatnet_compat.py ....................                        [ 13%]
+Tests\test_beatnet_state.py .........                                    [ 13%]
+Tests\test_brain_backup.py ....                                          [ 14%]
+Tests\test_brain_caching.py ...........                                  [ 14%]
+Tests\test_brain_caching_layers.py ...............                       [ 15%]
+Tests\test_brain_core.py .................                               [ 15%]
+Tests\test_brain_cross_modal.py ................                         [ 16%]
+Tests\test_brain_embeddings.py ......                                    [ 16%]
+Tests\test_brain_explain.py .........                                    [ 17%]
+Tests\test_brain_helpers_new.py ....                                     [ 17%]
+Tests\test_brain_learned_projector.py ..............                     [ 18%]
+Tests\test_brain_neutral_section_label.py ..                             [ 18%]
+Tests\test_brain_post_processor.py .......                               [ 18%]
+Tests\test_brain_projector_v2.py .......                                 [ 18%]
+Tests\test_brain_recovery.py ........                                    [ 19%]
+Tests\test_brain_router.py .........                                     [ 19%]
+Tests\test_brain_router_narrative.py .......                             [ 19%]
+Tests\test_brain_smart_sampler.py ............                           [ 20%]
+Tests\test_c01_semantic_audio_directml.py ........                       [ 20%]
+Tests\test_cache_manager.py ............                                 [ 21%]
+Tests\test_capture_monitor_contract.py .....                             [ 21%]
+Tests\test_chat_agent.py ........................                        [ 22%]
+Tests\test_chat_confirmation.py ......                                   [ 22%]
+Tests\test_chat_router.py .............                                  [ 23%]
+Tests\test_clap_wrapper.py ......................s                       [ 24%]
+Tests\test_clip_selector_motion_curve.py ....                            [ 24%]
+Tests\test_clip_selector_provenance.py .....FF.....                      [ 25%]
+Tests\test_clip_selector_semantic_fallback.py .....                      [ 25%]
+Tests\test_comfyui_benchmark_manifest.py .........                       [ 25%]
+Tests\test_comfyui_capabilities.py ............                          [ 26%]
+Tests\test_comfyui_config.py ................                            [ 26%]
+Tests\test_comfyui_connection.py ...................                     [ 27%]
+Tests\test_comfyui_job_state_machine.py ................................ [ 29%]
+..                                                                       [ 29%]
+Tests\test_comfyui_result_contracts.py ..................                [ 30%]
+Tests\test_comfyui_workflow_bundle.py .................................  [ 31%]
+Tests\test_comfyui_workflow_policy.py .......................            [ 32%]
+Tests\test_concurrent_project_save.py ....                               [ 32%]
+Tests\test_config_hot_reload.py ......                                   [ 32%]
+Tests\test_config_manager.py ...........                                 [ 33%]
+Tests\test_config_manager_paths.py .                                     [ 33%]
+Tests\test_conftest_brain_reset_is_decoupled.py ...                      [ 33%]
+Tests\test_database_core_synchronous.py .                                [ 33%]
+Tests\test_dead_model_helper_contract.py .                               [ 33%]
+Tests\test_directml_motion_contract.py .........                         [ 34%]
+Tests\test_downbeat_alignment.py .........                               [ 34%]
+Tests\test_downbeats_reach_the_engine.py .........                       [ 34%]
+Tests\test_encoder_utils.py ....................                         [ 35%]
+Tests\test_full_audit_audio_provenance.py .......                        [ 36%]
+Tests\test_full_audit_brain_integrity.py ........                        [ 36%]
+Tests\test_full_audit_chat_contract.py ...                               [ 36%]
+Tests\test_full_audit_model_registry.py ....                             [ 36%]
+Tests\test_full_audit_music_pacing.py ..........                         [ 37%]
+Tests\test_full_audit_project_integrity.py .....                         [ 37%]
+Tests\test_full_audit_render_integrity.py ...s....                       [ 37%]
+Tests\test_full_audit_streaming_structure.py ...                         [ 37%]
+Tests\test_full_audit_streaming_structure_features.py ........           [ 38%]
+Tests\test_full_audit_system_contracts.py ....                           [ 38%]
+Tests\test_full_audit_ui_recovery_contract.py ..                         [ 38%]
+Tests\test_full_audit_video_contract.py .........F.                      [ 39%]
+Tests\test_gpu_cleanup_contract.py .                                     [ 39%]
+Tests\test_gpu_core_release_readiness.py .........                       [ 39%]
+Tests\test_gpu_load_fallback.py ..                                       [ 39%]
+Tests\test_gpu_temperature_fallback.py ..                                [ 39%]
+Tests\test_launch_backend_start_timeout.py ...                           [ 39%]
+Tests\test_legacy_symbols_have_no_production_callers.py ....             [ 39%]
+Tests\test_llm_narrator.py .............                                 [ 40%]
+Tests\test_llm_provider.py ................                              [ 41%]
+Tests\test_lmstudio_client.py ......................                     [ 42%]
+Tests\test_lmstudio_diagnostic_contract.py ........                      [ 42%]
+Tests\test_lmstudio_vision_wrapper.py .................................. [ 44%]
+.                                                                        [ 44%]
+Tests\test_lmstudio_vision_wrapper_status.py ...                         [ 44%]
+Tests\test_log_rotation.py .............                                 [ 44%]
+Tests\test_media_dedup_audit.py .                                        [ 44%]
+Tests\test_media_hash.py ....                                            [ 45%]
+Tests\test_media_json_schema.py .........                                [ 45%]
+Tests\test_media_repository_idempotency.py ...........                   [ 45%]
+Tests\test_model_loader.py ..................                            [ 46%]
+Tests\test_model_registry.py ............................                [ 47%]
+Tests\test_models_capability_routing.py ..                               [ 48%]
+Tests\test_models_router_pull_delete.py ....                             [ 48%]
+Tests\test_moondream_empty_response_handling.py .                        [ 48%]
+Tests\test_moondream_safety.py ...                                       [ 48%]
+Tests\test_motion_schema_forwarding.py ...                               [ 48%]
+Tests\test_no_duplicate_dict_keys.py ..                                  [ 48%]
+Tests\test_obj73_backend_contracts.py ........                           [ 48%]
+Tests\test_openapi_snapshot_drift.py ....                                [ 49%]
+Tests\test_owner_capability_global.py ......                             [ 49%]
+Tests\test_pacing_analysis_preflight.py F...F
+
+================================== FAILURES ===================================
+_________ test_semantic_faiss_path_records_semantic_and_motion_scores _________
+Tests\test_clip_selector_provenance.py:124: in test_semantic_faiss_path_records_semantic_and_motion_scores
+    assert selected.clip_id == "target"
+E   AssertionError: assert 'other' == 'target'
+E     
+E     - target
+E     + other
+------------------------------ Captured log call ------------------------------
+WARNING  pb_studio.pacing.clip_selector:clip_selector.py:1249 FAISS-Semantik fehlgeschlagen: _VectorStore.search() got an unexpected keyword argument 'query_identity' — direkte Embeddings werden versucht
+____ test_semantic_direct_path_records_similarity_without_changing_ranking ____
+Tests\test_clip_selector_provenance.py:170: in test_semantic_direct_path_records_similarity_without_changing_ranking
+    assert provenance["selection_path"] == "semantic_direct_embedding"
+E   AssertionError: assert 'semantic_fallback_motion' == 'semantic_direct_embedding'
+E     
+E     - semantic_direct_embedding
+E     + semantic_fallback_motion
+___________ test_embedding_resume_checks_vector_link_and_tombstone ____________
+Tests\test_full_audit_video_contract.py:342: in test_embedding_resume_checks_vector_link_and_tombstone
+    assert router._get_reusable_embedding_metadata(
+E   AssertionError: assert None == {'embedding_dim': 1152, 'embedding_samples': 1}
+E    +  where None = <function _get_reusable_embedding_metadata at 0x0000017F62373060>('C:/clip.mp4', 1, 'hash', <test_full_audit_video_contract.test_embedding_resume_checks_vector_link_and_tombstone.<locals>.State object at 0x000001804936E990>, <test_full_audit_video_contract.Context object at 0x000001804936EA10>)
+E    +    where <function _get_reusable_embedding_metadata at 0x0000017F62373060> = <module 'backend.routers.video_router' from 'C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\backend\\routers\\video_router.py'>._get_reusable_embedding_metadata
+E    +    and   <test_full_audit_video_contract.test_embedding_resume_checks_vector_link_and_tombstone.<locals>.State object at 0x000001804936E990> = <class 'test_full_audit_video_contract.test_embedding_resume_checks_vector_link_and_tombstone.<locals>.State'>()
+______ test_preflight_reports_mode_specific_missing_stages_and_clip_ids _______
+Tests\test_pacing_analysis_preflight.py:85: in test_preflight_reports_mode_specific_missing_stages_and_clip_ids
+    assert detail["missing"]["video"] == [
+E   AssertionError: assert [{'clip_id': ... 'missing'}]}] == [{'clip_id': ... 'missing'}]}]
+E     
+E     At index 0 diff: {'clip_id': 10, 'stages': [{'stage': 'embedding', 'status': 'completed', 'payload_valid': False}]} != {'clip_id': 11, 'stages': [{'stage': 'motion', 'status': 'missing', 'payload_valid': False}, {'stage': 'embedding', 'status': 'missing', 'payload_valid': False}, {'stage': 'audio_key', 'status': 'missing', 'payload_valid': False}]}
+E     Left contains one more item: {'clip_id': 11, 'stages': [{'payload_valid': False, 'stage': 'motion', 'status': 'missing'}, {'payload_valid': False, 'stage': 'embedding', 'status': 'missing'}, {'payload_valid': False, 'stage': 'audio_key', 'status': 'missing'}]}
+E     Use -v to get more diff
+____ test_preflight_never_waives_stages_that_are_always_producible[motion] ____
+Tests\test_pacing_analysis_preflight.py:195: in test_preflight_never_waives_stages_that_are_always_producible
+    assert reported == [stage]
+E   AssertionError: assert ['motion', 'embedding'] == ['motion']
+E     
+E     Left contains one more item: 'embedding'
+E     Use -v to get more diff
+============================== warnings summary ===============================
+src\pb_studio\audio\beat_detector.py:65
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\beat_detector.py:65: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources  # noqa: F401
+
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(scipy_version) < LooseVersion("0.14"):
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `maximum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `minimum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_returns_bpm_structure
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\audioread\rawread.py:16: DeprecationWarning: 'aifc' is deprecated and slated for removal in Python 3.13
+    import aifc
+
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_returns_bpm_structure
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\audioread\rawread.py:17: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop
+
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_returns_bpm_structure
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\audioread\rawread.py:19: DeprecationWarning: 'sunau' is deprecated and slated for removal in Python 3.13
+    import sunau
+
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_returns_bpm_structure
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_calculates_correct_bpm
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_handles_empty_output
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\analyzer.py:146: UserWarning: PySoundFile failed. Trying audioread instead.
+    y, sr = librosa.load(wav_path, sr=22050, mono=True)
+
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_returns_bpm_structure
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_calculates_correct_bpm
+Tests/test_audio_analyzer.py::TestAudioAnalyzerAnalysis::test_analyze_handles_empty_output
+Tests/test_backend_routers.py::TestAudioRouter::test_clips_haben_aufsteigende_ids
+Tests/test_backend_routers.py::TestAudioRouter::test_analyze_uses_stems_if_present
+Tests/test_beat_grid_provenance.py::test_streaming_bpm_uses_beat_grid_not_window_median
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\librosa\core\audio.py:184: FutureWarning: librosa.core.audio.__audioread_load
+  	Deprecated as of librosa version 0.10.0.
+  	It will be removed in librosa version 1.0.
+    y, sr_native = __audioread_load(path, offset, duration, dtype)
+
+Tests/test_backend_routers.py::TestAudioRouter::test_reimport_gleiche_datei_reused_clip_id
+Tests/test_backend_routers.py::TestAudioRouter::test_import_erfolgreich
+Tests/test_backend_routers.py::TestAudioRouter::test_clips_haben_aufsteigende_ids
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\subtrack_detector.py:113: FutureWarning: PySoundFile failed. Trying audioread instead.
+  	Audioread support is deprecated in librosa 0.10.0 and will be removed in version 1.0.
+    duration = float(librosa.get_duration(path=str(audio_path)))
+
+Tests/test_backend_routers.py::TestAudioRouter::test_clips_haben_aufsteigende_ids
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\subtrack_detector.py:122: UserWarning: PySoundFile failed. Trying audioread instead.
+    y, sr = librosa.load(str(audio_path), sr=self.sr, mono=True)
+
+Tests/test_backend_routers.py::TestAudioRouter::test_analyze_uses_stems_if_present
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+Tests/test_backend_routers.py::TestAudioRouter::test_analyze_uses_stems_if_present
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+Tests/test_backend_routers.py::TestAudioRouter::test_analyze_uses_stems_if_present
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\ai\clap_wrapper.py:201: UserWarning: PySoundFile failed. Trying audioread instead.
+    audio, _ = librosa.load(str(audio_path), sr=CLAP_SAMPLE_RATE, mono=True, duration=CLAP_DURATION)
+
+Tests/test_beat_grid_provenance.py::test_streaming_bpm_uses_beat_grid_not_window_median
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\beat_grid_segments.py:636: UserWarning: PySoundFile failed. Trying audioread instead.
+    chunk, actual_sr = librosa.load(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED Tests/test_clip_selector_provenance.py::test_semantic_faiss_path_records_semantic_and_motion_scores
+FAILED Tests/test_clip_selector_provenance.py::test_semantic_direct_path_records_similarity_without_changing_ranking
+FAILED Tests/test_full_audit_video_contract.py::test_embedding_resume_checks_vector_link_and_tombstone
+FAILED Tests/test_pacing_analysis_preflight.py::test_preflight_reports_mode_specific_missing_stages_and_clip_ids
+FAILED Tests/test_pacing_analysis_preflight.py::test_preflight_never_waives_stages_that_are_always_producible[motion]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 5 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+= 5 failed, 1118 passed, 2 skipped, 9 deselected, 26 warnings in 549.10s (0:09:09) =

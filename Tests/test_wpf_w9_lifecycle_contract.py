@@ -70,7 +70,7 @@ def test_audio_stems_and_pacing_use_project_generation_and_cancellation():
 
 
 def test_embedding_status_flows_from_list_dto_to_view():
-    api = _read("Services/ApiClient.cs")
+    api = _read("Services/ApiResponseModels.cs")
     model = _read("Models/VideoClip.cs")
     view_model = _read("ViewModels/VideoLibraryViewModel.cs")
     view = _read("Views/VideoLibraryView.xaml")

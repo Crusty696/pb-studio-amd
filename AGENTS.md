@@ -5,7 +5,7 @@ Apply the Spec-Driven Development rules below during feature delivery. Enforce t
 ## Obsidian Brain Policy
 **The vault at `C:\Users\david\Brain` is your source of truth.**
 - BEFORE RESEARCH: Search the Brain for existing context on the task.
-- BEFORE DESIGN: Read `_wiki/decisions` to avoid repeating mistakes or violating architecture.
+- BEFORE DESIGN: Read `C:\Users\david\Brain\10_Projects\PB_studio\INDEX.md` and task-relevant entries in `log.md`, then the relevant repository `specs/` and `docs/`. Neither `_wiki/decisions` nor the project vault `_wiki/decisions` exists as of 2026-10-30; do not repeatedly read these nonexistent paths or invent decision records.
 - AFTER IMPLEMENTATION: Log your progress in `10_Projects/PB_studio/log.md`.
 - ON DISCOVERY: If you find a new pattern or trap, create a note in `_wiki/learnings`.
 
@@ -90,6 +90,8 @@ Zonen, Subagent-Brief, Convergence und Skill-Mapping: `docs/agents/subagent-para
 Historie/Status: `docs/archive/CLAUDE-project-brain-history-2026-10-17.md` (nicht automatisch laden). Aktueller Stand: CHANGELOG.md, specs/, Vault.
 
 ## 0. ⚡ COMMANDS (copy-paste ready)
+
+Tool routing: the existing run skill is `.claude/skills/run-pb-studio/SKILL.md`; its driver is `.claude/skills/run-pb-studio/driver.ps1` (not `.codex/skills`). Use `-Command health` for read-only checks of an existing backend. `smoke` and `full-smoke` start/stop processes and are not passive probes. Read the skill before use. Test configuration is `pytest.ini`; do not assume `pyproject.toml` exists.
 ```powershell
 # Python Backend starten
 # WICHTIG (Audit 2026-08-05, H-7): NICHT nur PYTHONPATH setzen. Ohne
@@ -131,7 +133,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
    - Setup-Script-Änderung → `requirements.txt`/Dependency-Listen synchron halten
    - End-Report MUSS explizit zeigen: was gebaut, welche Binaries/Scripts aktualisiert, welche validiert.
    - **Hintergrund:** 2026-05-08 Trust-Incident — Bug-Fix in C# war im Source aber Release-Binary nicht gebaut → User testete altes Binary und verlor Vertrauen. Diese Regel verhindert Wiederholung.
-11. **OBSIDIAN VAULT FORTLAUFEND (User-Direktive 2026-05-11):** Obsidian-Vault `C:\Users\david\Brain\10_Projects\PB_studio\` MUSS bei JEDER nicht-trivialen Aenderung mitlaufen: INDEX.md `updated`-Frontmatter + Status-Sektion, log.md append entry, neue ADR in decisions/ bei Architektur-Entscheidung. Drift zwischen Code-State und Vault-State = Vertrauensverlust. Tools: `mcp__obsidian__*` (update_frontmatter, append_to_note, replace_in_note). **Hintergrund:** User explizit angemahnt 2026-05-11 dass Vault nicht stale werden darf.
+11. **OBSIDIAN VAULT FORTLAUFEND (User-Direktive 2026-05-11):** Obsidian-Vault `C:\Users\david\Brain\10_Projects\PB_studio\` MUSS bei JEDER nicht-trivialen Aenderung mitlaufen: INDEX.md `updated`-Frontmatter + Status-Sektion, log.md append entry, neue ADR in decisions/ bei Architektur-Entscheidung. Drift zwischen Code-State und Vault-State = Vertrauensverlust. Tools: vorhandene Obsidian-Tools laut aktuellem Werkzeugkatalog nutzen; wenn sie fehlen, die vorhandenen lokalen Vault-Dateien mit Sicherung und gezielten Aenderungen pflegen. Keine nicht verfuegbaren `mcp__obsidian__*`-Aufrufe erfinden. **Hintergrund:** User explizit angemahnt 2026-05-11 dass Vault nicht stale werden darf.
 12. **FULL-SYNC EISERN (User-Direktive 2026-05-11):** Bei der Direktive "alles committen / kompletter Status / Vault gleichstand" MUSS folgendes synchron sein — **kein Detail darf ausgelassen oder uebersprungen werden**:
    - Git: alle relevanten Files committed, `git status --short` leer (außer ignorierten Runtime-Artefakten in .gitignore)
    - Obsidian INDEX.md: Frontmatter `updated` aktuell, Status-Sektion spiegelt Repo-HEAD wider (alle Commits seit letztem INDEX-Update reflektiert)
@@ -180,7 +182,7 @@ PBStudio.UI/
 ├── Views/      # 13 XAML Views + 2 Dialoge (kein StartupUri)
 ├── Converters/ # NullToVisibility, InverseBool, InverseNullToVisibility
 ├── Resources/  # app.ico (3-size, 16/32/48px)
-└── Models/     # AudioClipModel (Key+BeatCount), VideoClipModel (Thumbnail)
+└── Models/     # AudioClip.cs enthaelt AudioClipModel; VideoClip.cs enthaelt VideoClipModel
 ```
 
 ## Locked Versions

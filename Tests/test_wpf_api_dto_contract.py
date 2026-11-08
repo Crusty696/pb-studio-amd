@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_handwritten_analysis_dtos_include_current_openapi_fields():
     api_client = (
-        ROOT / "PBStudio.UI" / "Services" / "ApiClient.cs"
+        ROOT / "PBStudio.UI" / "Services" / "ApiResponseModels.cs"
     ).read_text(encoding="utf-8")
 
     for field in (

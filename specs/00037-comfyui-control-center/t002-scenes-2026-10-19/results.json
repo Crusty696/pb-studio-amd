@@ -1,0 +1,240 @@
+{
+  "scope": "Full clips; SceneDetector body with observed software OpenCV decoder; no router or GUI",
+  "code_sha256": "e7920da0f03916667395614e32200a17f87dde06e396ba4ecb1d331d24510a51",
+  "sources": [
+    {
+      "id": "V01",
+      "source_sha256": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+      "ffprobe_duration_seconds": 10.0,
+      "ffprobe_decoded_frames": 300,
+      "runs": [
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.27229629999965255,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        },
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.1844146000003093,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V02",
+      "source_sha256": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+      "ffprobe_duration_seconds": 30.0,
+      "ffprobe_decoded_frames": 720,
+      "runs": [
+        {
+          "decoded_frames": 720,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 1.207280599999649,
+          "scenes": [
+            [
+              0.0,
+              30.0
+            ]
+          ]
+        },
+        {
+          "decoded_frames": 720,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 1.0360459000003175,
+          "scenes": [
+            [
+              0.0,
+              30.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V03",
+      "source_sha256": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+      "ffprobe_duration_seconds": 10.0,
+      "ffprobe_decoded_frames": 300,
+      "runs": [
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.2527270000000499,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        },
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.24241080000047077,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V04",
+      "source_sha256": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+      "ffprobe_duration_seconds": 10.0,
+      "ffprobe_decoded_frames": 300,
+      "runs": [
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.25249040000016976,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        },
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.24734590000025491,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V05",
+      "source_sha256": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+      "ffprobe_duration_seconds": 10.0,
+      "ffprobe_decoded_frames": 300,
+      "runs": [
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.24386409999988246,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        },
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.23719139999957406,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V06",
+      "source_sha256": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+      "ffprobe_duration_seconds": 10.0,
+      "ffprobe_decoded_frames": 300,
+      "runs": [
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.2511590000003707,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        },
+        {
+          "decoded_frames": 300,
+          "hardware_acceleration": 0.0,
+          "decode_failures": 0,
+          "seconds": 0.24273180000000139,
+          "scenes": [
+            [
+              0.0,
+              10.0
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "protection_before": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "technical_status": "PASS",
+  "protection_after": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_files_unchanged": true
+}

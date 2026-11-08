@@ -1,5 +1,7 @@
 # T002 — Referenzbestand und Messplan
 
+> Aktueller Stand 2026-10-19: [current-status.md](current-status.md). Nachstehende Vorbereitung vom 13.10. ist historisch: Medienauswahl, neun Nutzerbewertungen, CPU-/GPU-Teilpruefungen und BeatNet-Reparaturen liegen inzwischen vor. NOT MEASURED bezeichnet keine pauschale Messungsfreiheit mehr; vollstaendige qualifizierte Baseline und Qualitaetsgrenzen bleiben offen.
+
 Stand: 2026-10-13. Status PREPARED / NOT MEASURED. Nutzerauftrag: gründlich vorbereiten, keine Generierung oder GPU-Läufe. T002 bleibt offen. Keine Produktcodeänderung, kein Appstart, kein Workflowstart, keine Installation, Migration oder Originalmutation. Die folgenden Zahlen sind vorgeschlagene Stichprobenumfänge und Quellbereiche, keine gemessenen Leistungs-/Qualitätsgrenzen.
 
 **Fortschreibung 2026-10-13:** Der folgende Ausgangsstand beschreibt die frühe reine Verzeichnisprüfung. Danach wurden Quellen ausgewählt, technisch mit FFmpeg geprüft und 9/9 mit begrenzten PB-Studio-CPU-Funktionen gelesen. [CPU-Prüfbericht](t002-cpu-check-2026-10-13/cpu-check-report.md). `NOT MEASURED` gilt weiterhin für Native-Qualitäts-/Leistungsbaseline und Grenzwerte; T002 und unabhängiger Holdout bleiben offen.
@@ -115,3 +117,11 @@ Siehe [Referenzvorbereitung](t002-reference-preparation-2026-10-13/reference-pre
 ## Aktueller Nutzerentscheid: Regression statt ungeklärtem Holdout
 
 2026-10-13: Nutzer erinnert frühere Nutzung/Familien nicht genau. Bestehende Clips ausdrücklich als Regressionstestmedien nutzen; unabhängigen Holdout offenlassen. Keine erneute Herkunftsantwort als Blocker der Vorbereitung. Siehe [Regressionsprotokoll](t002-regression-preparation-2026-10-13/regression-protocol.md). Alle früheren Herkunftsfragen bleiben dokumentierte Unsicherheit, keine ausstehende Voraussetzung für Regression. Generierung/GPU weiter verboten.
+
+## Fortschreibung 2026-10-19: freigegebene begrenzte Modellpruefungen
+
+Das GPU-Verbot des obigen historischen Vorbereitungsstands wurde vom Nutzer fuer begrenzte Analysepruefungen aufgehoben; Generierung bleibt verboten. Aktueller Stand und Grenzen: current-status.md. T053/T054 verarbeiteten480x270-Vorschaubilder, keine Originalframe-Eingaenge. T055 ergaenzt echte native RGB-Frames an drei Zeitpunkten je Video und dokumentiert Bildtransport, Caption-Merge und SigLIP getrennt. Nur die mittleren Zeitpunkte besitzen Nutzerbewertungen; neue Zeitpunkte sind technische Regression, keine unabhaengig gelabelte Qualitaetsreferenz.42 Caption-Aufrufe und42 DirectML-Inferenzen siehe t055-vision-2026-10-19/report.md. Wiederholbarkeit/Norm/Hashschutz sind keine Inhaltsguete. T002, Holdout, fachliche Schwellen, Vollprodukt-/Langdatei-/Ressourcenbaseline bleiben offen; jede neue GPU-Serie braucht frische Lastpruefung.
+
+## Fortschreibung 2026-10-20: maschinenlesbarer Offline-Gatecheck
+
+Der reine Manifestpruefer `src/pb_studio/providers/benchmark_manifest.py` und `Tests/test_comfyui_benchmark_manifest.py` pruefen Split-/Familienkonsistenz und weisen unbelegte `QUALIFIED`-Behauptungen ab. [Pruefbericht](t002-manifest-2026-10-20/report.md). Im aktuellen Bestand fehlen Holdout, unabhaengige Labels, qualifizierte Profile und Messungen. `qualification_ready=false` bedeutet keine Produkt- oder Fachabnahme. Die Kennung wird nicht produktiv konsumiert; spaetere Belege muessen gegen ihre Originale und die tatsaechlichen Laufzeiten separat verifiziert werden. ComfyUI-Laeufe bleiben verschoben.

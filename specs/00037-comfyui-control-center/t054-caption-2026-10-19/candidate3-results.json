@@ -1,0 +1,1084 @@
+{
+  "scope": "Counterbalanced baseline/candidate prompt comparison, six reviewed frames, two actual calls per arm each; unchanged product parser; no GUI",
+  "before": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "runs": [
+    {
+      "source_id": "V01",
+      "arm": "candidate",
+      "repeat": 1,
+      "frame_sha256": "6b5411062d8228c95d3c2288e55b22a9ab0db24f8b2c322b16a34d16eb5d9c74",
+      "source_time_seconds": 5.0,
+      "seconds": 3.4075882999995883,
+      "tags": [
+        "eine person",
+        "dunkles kostüm",
+        "wald",
+        "nebel",
+        "bäume",
+        "blaues leuchten",
+        "grün",
+        "violett"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine person, dunkles kostüm, Wald, Nebel, Bäume, blaues leuchten, grün, violett",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 26,
+              "total_tokens": 283,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-t1wxb9t0bec08x70h4sie5g",
+              "object": "chat.completion",
+              "created": 1792440816,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine person, dunkles kostüm, Wald, Nebel, Bäume, blaues leuchten, grün, violett",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 26,
+                "total_tokens": 283,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V01",
+      "arm": "candidate",
+      "repeat": 2,
+      "frame_sha256": "6b5411062d8228c95d3c2288e55b22a9ab0db24f8b2c322b16a34d16eb5d9c74",
+      "source_time_seconds": 5.0,
+      "seconds": 0.5709697000002052,
+      "tags": [
+        "eine person",
+        "dunkles kostüm",
+        "wald",
+        "nebel",
+        "leuchtende blaue lichter",
+        "grün",
+        "blau",
+        "violett"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine person, dunkles kostüm, wald, nebel, leuchtende blaue lichter, grün, blau, violett",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 29,
+              "total_tokens": 286,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-20c2a9htsn54hl50c6c5re",
+              "object": "chat.completion",
+              "created": 1792440817,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine person, dunkles kostüm, wald, nebel, leuchtende blaue lichter, grün, blau, violett",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 29,
+                "total_tokens": 286,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "candidate",
+      "repeat": 1,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 0.6972198999992543,
+      "tags": [
+        "gruppe",
+        "dunkle kleidung",
+        "steinernes bauwerk",
+        "portalartige struktur",
+        "leuchtende linien",
+        "blau",
+        "grün",
+        "dunkelblau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, dunkle Kleidung, steinernes Bauwerk, portalartige Struktur, leuchtende Linien, blau, grün, dunkelblau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 29,
+              "total_tokens": 286,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-clf2txrsxuuymd4zg9kmzf",
+              "object": "chat.completion",
+              "created": 1792440817,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, dunkle Kleidung, steinernes Bauwerk, portalartige Struktur, leuchtende Linien, blau, grün, dunkelblau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 29,
+                "total_tokens": 286,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "candidate",
+      "repeat": 2,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 0.4584426000001258,
+      "tags": [
+        "gruppe",
+        "dunkle kleidung",
+        "steinstruktur",
+        "portal",
+        "lichtstrahlen",
+        "blau",
+        "grün",
+        "dunkelgrün"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, dunkle Kleidung, Steinstruktur, Portal, Lichtstrahlen, blau, grün, dunkelgrün",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 25,
+              "total_tokens": 282,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-c0zzbmoomeh3bn6tt19pfr",
+              "object": "chat.completion",
+              "created": 1792440818,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, dunkle Kleidung, Steinstruktur, Portal, Lichtstrahlen, blau, grün, dunkelgrün",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 25,
+                "total_tokens": 282,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "candidate",
+      "repeat": 1,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.6317626000000018,
+      "tags": [
+        "zwei personen",
+        "dunkles kleid",
+        "nebeliges wasser",
+        "bäume",
+        "himmel",
+        "grau",
+        "blau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Personen, dunkles Kleid, nebeliges Wasser, Bäume, Himmel, grau, blau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 22,
+              "total_tokens": 279,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-fujqmjkafo92gb56dgx2l",
+              "object": "chat.completion",
+              "created": 1792440818,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Personen, dunkles Kleid, nebeliges Wasser, Bäume, Himmel, grau, blau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 22,
+                "total_tokens": 279,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "candidate",
+      "repeat": 2,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.44101559999944584,
+      "tags": [
+        "zwei personen",
+        "dunkles kleid",
+        "nebelig",
+        "wasser",
+        "bäume",
+        "himmel",
+        "grau",
+        "blau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Personen, dunkles Kleid, nebelig, Wasser, Bäume, Himmel, Grau, Blau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 23,
+              "total_tokens": 280,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-1u99c28hm881m88qeqvbac",
+              "object": "chat.completion",
+              "created": 1792440819,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Personen, dunkles Kleid, nebelig, Wasser, Bäume, Himmel, Grau, Blau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 23,
+                "total_tokens": 280,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V04",
+      "arm": "candidate",
+      "repeat": 1,
+      "frame_sha256": "1c1ad3a99d35dcbe4b3fa5bcbcc3e59b219502fd9ec30a8ebaf8913ea63d41b2",
+      "source_time_seconds": 5.0,
+      "seconds": 0.603991900001347,
+      "tags": [
+        "eine person",
+        "dunkles gewand",
+        "steinwand",
+        "steinboden",
+        "dunkel",
+        "orange",
+        "gelb"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine person, dunkles gewand, steinwand, steinboden, dunkel, orange, gelb",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 21,
+              "total_tokens": 278,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-63ti5hjink5oj81jl8dvd8",
+              "object": "chat.completion",
+              "created": 1792440819,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine person, dunkles gewand, steinwand, steinboden, dunkel, orange, gelb",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 21,
+                "total_tokens": 278,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V04",
+      "arm": "candidate",
+      "repeat": 2,
+      "frame_sha256": "1c1ad3a99d35dcbe4b3fa5bcbcc3e59b219502fd9ec30a8ebaf8913ea63d41b2",
+      "source_time_seconds": 5.0,
+      "seconds": 0.4336223999998765,
+      "tags": [
+        "eine person",
+        "dunkles gewand",
+        "steinwand",
+        "steinboden",
+        "nachts",
+        "orange",
+        "gelb"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine person, dunkles gewand, steinwand, steinboden, nachts, orange, gelb",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 22,
+              "total_tokens": 279,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-dvj7ka9keau6o691o9vhhv",
+              "object": "chat.completion",
+              "created": 1792440820,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine person, dunkles gewand, steinwand, steinboden, nachts, orange, gelb",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 22,
+                "total_tokens": 279,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V05",
+      "arm": "candidate",
+      "repeat": 1,
+      "frame_sha256": "010fd896ab7bbccab7711635ce0e7ddf8f29ade2515763ab3b616a7408bebda4",
+      "source_time_seconds": 5.0,
+      "seconds": 0.6436327999999776,
+      "tags": [
+        "gruppe menschen",
+        "dunkle kleidung",
+        "gewitterhimmel",
+        "blitz",
+        "wolken",
+        "dunkelblau",
+        "grau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe Menschen, dunkle Kleidung, Gewitterhimmel, Blitz, Wolken, Dunkelblau, Grau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 24,
+              "total_tokens": 281,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-1hrefu2aecqiqxspau7lg",
+              "object": "chat.completion",
+              "created": 1792440821,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe Menschen, dunkle Kleidung, Gewitterhimmel, Blitz, Wolken, Dunkelblau, Grau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 24,
+                "total_tokens": 281,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V05",
+      "arm": "candidate",
+      "repeat": 2,
+      "frame_sha256": "010fd896ab7bbccab7711635ce0e7ddf8f29ade2515763ab3b616a7408bebda4",
+      "source_time_seconds": 5.0,
+      "seconds": 3.0639136000008875,
+      "tags": [
+        "gruppe",
+        "dunkle kleidung",
+        "gewitterhimmel",
+        "blitz",
+        "wolken",
+        "nacht",
+        "blau",
+        "grau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, dunkle Kleidung, Gewitterhimmel, Blitz, Wolken, Nacht, Blau, Grau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 23,
+              "total_tokens": 280,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-1m6z60oyra9lr0kz11kmy",
+              "object": "chat.completion",
+              "created": 1792440824,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, dunkle Kleidung, Gewitterhimmel, Blitz, Wolken, Nacht, Blau, Grau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 23,
+                "total_tokens": 280,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V06",
+      "arm": "candidate",
+      "repeat": 1,
+      "frame_sha256": "6542bbafb087179015c1ddb7ca394dcdb382a310e6d099d370357a0e11fd8f5c",
+      "source_time_seconds": 5.0,
+      "seconds": 0.616416399998343,
+      "tags": [
+        "gruppe menschen",
+        "dunkle kleidung",
+        "wasser",
+        "mond",
+        "nacht",
+        "blau",
+        "schwarz",
+        "lichtstrahl"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe Menschen, dunkle Kleidung, Wasser, Mond, Nacht, Blau, Schwarz, Lichtstrahl",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 22,
+              "total_tokens": 279,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-4hqwcakwc2h6j5892votzn",
+              "object": "chat.completion",
+              "created": 1792440824,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe Menschen, dunkle Kleidung, Wasser, Mond, Nacht, Blau, Schwarz, Lichtstrahl",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 22,
+                "total_tokens": 279,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V06",
+      "arm": "candidate",
+      "repeat": 2,
+      "frame_sha256": "6542bbafb087179015c1ddb7ca394dcdb382a310e6d099d370357a0e11fd8f5c",
+      "source_time_seconds": 5.0,
+      "seconds": 0.444617000001017,
+      "tags": [
+        "gruppe menschen",
+        "dunkle kleidung",
+        "wasser",
+        "mond",
+        "nacht",
+        "blaues licht",
+        "schwarz",
+        "dramatisch"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe Menschen, dunkle Kleidung, Wasser, Mond, Nacht, blaues Licht, schwarz, dramatisch",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 257,
+              "completion_tokens": 23,
+              "total_tokens": 280,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-l6sxjiwyn8au1hbqunim",
+              "object": "chat.completion",
+              "created": 1792440825,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe Menschen, dunkle Kleidung, Wasser, Mond, Nacht, blaues Licht, schwarz, dramatisch",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 257,
+                "completion_tokens": 23,
+                "total_tokens": 280,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "preflight": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x00013019",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 29.0,
+    "gpu_memory_used": 3.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 22.290000915527344,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16173.73,
+        "D3D Dedicated Memory Used": 3.58,
+        "D3D Shared Memory Used": 9.73,
+        "D3D Shared Memory Free": 31899.3,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 3.0,
+        "GPU Memory Free": 16365.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 0.0,
+        "D3D Copy": 0.0,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 10.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 130.0
+      },
+      "temperature": {
+        "GPU Core": 29.0,
+        "GPU Memory": 48.0,
+        "GPU Hot Spot": 37.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.06
+      }
+    }
+  },
+  "models_before": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  },
+  "load": {
+    "returncode": 0,
+    "stdout": "\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 2% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 2% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 2% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 6% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 6% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 11% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 11% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 100% ⠇\n\u001b[K\u001b[?25h",
+    "stderr": "Model loaded successfully in 4.55s.\n(5.89 GiB)\nTo use the model in the API/SDK, use the identifier \"google/gemma-4-e4b\".\n"
+  },
+  "wrapper_sha256": "26c0063ccb82aec8c1e23872d5573da720ff976ad0470098cef8f140e81072be",
+  "prompts": {
+    "baseline": "Analysiere dieses Video-Frame. Gib 8-12 praegnante Tags zurueck, kommagetrennt, deutsch. Beginne mit den sichtbaren Personen oder Wesen: wie viele (bei mehr als drei nur 'gruppe'), was fuer eine Figur, Kleidung, was sie tun. Keine Hautfarbe nennen. Danach Ort, Licht und Farben, Stimmung. Nenne nur, was eindeutig im Bild zu sehen ist. Nur die Tags, keine Erklaerung, keine Nummern.",
+    "candidate": "Analysiere dieses Video-Frame. Gib bis zu 12 praegnante Tags zurueck, kommagetrennt, deutsch. Wenn Personen oder Wesen eindeutig sichtbar sind, beginne mit ihrer Anzahl und Art: eine, zwei, drei oder bei mehr als drei nur gruppe. Nenne dann sichtbare Kleidung. Sind keine Personen oder Wesen eindeutig erkennbar, lasse diese Angaben ganz weg. Danach die wichtigsten sichtbaren Objekte, Ort, Licht und Farben. Keine Bewegung oder Handlung aus einem Einzelbild ableiten. Keine Hautfarbe nennen. Nenne nur, was eindeutig im Bild zu sehen ist; unsichere Details und allgemeine Stimmung weglassen. Weniger Tags sind erlaubt. Nur die Tags, keine Erklaerung, keine Nummern."
+  },
+  "unload": {
+    "returncode": 0,
+    "stdout": "",
+    "stderr": "Model \"google/gemma-4-e4b\" unloaded.\n"
+  },
+  "after": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_unchanged": true,
+  "models_after": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  }
+}

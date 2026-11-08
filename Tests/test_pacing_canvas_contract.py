@@ -61,7 +61,7 @@ def test_pacing_clip_id_is_prefixed_exactly_once(monkeypatch):
 def test_wpf_canvas_path_is_bound_and_sent():
     view_model = _source("PBStudio.UI/ViewModels/DirectorViewModel.cs")
     view = _source("PBStudio.UI/Views/DirectorView.xaml")
-    api = _source("PBStudio.UI/Services/ApiClient.cs")
+    api = _source("PBStudio.UI/Services/ApiResponseModels.cs")
 
     assert "[ObservableProperty] private string? _canvasPath;" in view_model
     assert "CanvasPath: CanvasPath" in view_model

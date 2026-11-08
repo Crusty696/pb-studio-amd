@@ -1,0 +1,9 @@
+{
+  "real_calls": 12,
+  "over_ten_raw_tags": 6,
+  "min_seconds": 0.5380244999996648,
+  "max_seconds": 5.8627086000005875,
+  "protected_unchanged": true,
+  "syntax_valid": true,
+  "memory_exact_readback": true
+}

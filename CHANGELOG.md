@@ -1,4 +1,44 @@
 # CHANGELOG - PB Studio AMD Edition
+
+## 2026-11-08 - Git-Synchronisierung des vorhandenen Projektstands
+
+- Vorhandene Caption-/Embedding-Vertraege, ComfyUI-Vertraege, Refaktorierung 00038 und Bereinigungsbelege 00039 fuer GitHub und `main` zusammengefuehrt.
+- Frische Pruefung: WPF Release 0 Warnungen/Fehler, 91 native Tests bestanden; Python 2272 bestanden, 1 fehlgeschlagen, 9 uebersprungen. Der unveraenderte SCA-Vertrag scheitert an drei am 31.10.2026 abgelaufenen Sicherheitsausnahmen. Keine Sicherheitsausnahme verlaengert, keine neue Produkt-/Releaseabnahme.
+- Umfang, Belege und Grenzen: `docs/git-sync-2026-11-08.md`. Persoenliche Claude-Einstellungen/Hooks bleiben lokal.
+
+## 2026-10-30 - Projektrefaktorierung, Spec 00038
+
+- API-Client in sieben Domaenen-Partials plus zentrale Transportklasse und separate Response-Modelle aufgeteilt; oeffentliche Vertraege erhalten.
+- Audio-Bibliothek aktualisiert bestehende Clipmodelle statt Clear/Neuanlage: Mehrfachauswahl bleibt erhalten, unveraenderte Antworten erzeugen keine CollectionChanged-Ereignisse. Projektkontext direkt vor UI-Veroeffentlichung erneut geprueft.
+- Timelineabschluss und gecachte Dauerprobe gemeinsam von Pacing/Export nutzbar; Anchor-Dateilesen aus Projekt-Router ausgelagert.
+- Release gebaut, 91 native Tests bestanden; 139 gezielte Python-Pruefungen bestanden, 2 uebersprungen. Zwei breite Abschnitte decken 2267 ausgewaehlte Python-Faelle ab: sechs gegen Baseline bestaetigte veraltete Embedding-Fixtures korrigiert, 56/20 gezielte Nachpruefungen bestanden. Weitere 16 Finalizer-/Pfadtests bestanden. Einzelheiten und Abnahmegrenzen in specs/00038-project-refactoring/verification.md.
+- Isoliertes Backend gesund; sichtbare WPF-Pruefung durch bestehenden Launcher-Socketbefund und automatische Freigabesperre offen. Produktions-Recovery und Konfigurationen hashgleich. Keine Gesamt-/Releasefreigabe, keine Skriptaenderung; neue Pfade ASCII.
+
+## 2026-10-19 - Masterplan-Fortschritt bereinigt
+
+- Veraltete Aufgaben-Kopfzeile korrigiert, Paketindex mit Status und vollständige lesbare Übersicht masterplan-status.md ergänzt. 5/45 Hauptpakete plus11 erledigte T002-Teilaufgaben getrennt; Erkennungsqualität bleibt offen. Arbeitsregel gegen Wiederholungsprüfungen festgehalten; KI-Hirn synchronisiert. Nur Dokumentpflege anhand vorhandener Belege, keine neuen Analyse-/Modelltests.
+
+
+## 2026-10-19 - T055/T056 native Bildpruefung und SigLIP-Korrektur
+
+-42 Caption-Aufrufe: native Originalframes statt480px-Vorschau, JPEG/PNG und Reasoning getrennt, sechs Clips an drei Zeitpunkten. V03-Wasserfall am spaeten Zeitpunkt bis Merge erhalten; Einzelbild-/V02-Qualitaetsfehler bleiben. Keine globale Transport-/Reasoningumstellung, keine semantische Gesamtfreigabe.
+- SigLIP nutzte falsche CLIP-Normalisierung; auf registrierte0.5/0.5 korrigiert und Einzel-/Batchpfad vereinheitlicht. Neuer Vektorraum onnx-dml-v2; Producer, Queries, Kandidaten, Reuse, Persistenz/Reload und Backfill gegen Vermischung mit Altvektoren geschuetzt. Alte Projektorgewichte unveraendert abgelehnt; keine Migration/Retaggingaktion.
+-186 gezielte Tests bestanden, unabhaengiger Review und42 echte DirectML-Inferenzen (18 native Bilder je zweimal plus6 Altvergleich) dokumentiert. Original-/Schutzdateien gleich, eigene Modelle entladen. Ein bestehender10ms-Testflake per kontrollierter Testuhr behoben. Keine Generierung/Installation, kein Produktneustart/GUI-Abnahme. Beleg specs/00037-comfyui-control-center/t055-vision-2026-10-19/report.md. Masterplan und neues KI-Hirn aktualisiert.
+
+## 2026-10-19 - T054 Caption-Reparaturen
+
+- Gemeinsames12-Tag-Budget fuer Parser und Clip-Merge; Hautfarben werden nicht per Wortfallback/Prosa wieder eingefuehrt. Numerische Personenzahlen vor/nach Nomen werden oberhalb3 zu Gruppen normalisiert. Nummerierungs-/Prosa-Regressionsfaelle gesichert.
+- Kontrollierte Bildvergleiche: Kandidat2-Prompt begrenzt uebernommen; weniger erfundene Gruppen, konkrete Bilddetails besser erhalten. V03-Wasserfall/Zweizahl und V02-Torform/Ort bleiben fehlerhaft.101 Tests gruen;84 echte Bildaufrufe inkl. verworfener Varianten, letzte12 endgueltiger Code. Schutzdateien unveraendert, eigenes Modell entladen. Keine Gesamtqualitaets-/GUI-Freigabe. Beleg specs/00037-comfyui-control-center/t054-caption-2026-10-19/report.md.
+
+## 2026-10-19 - T002 Caption-Teilpruefung
+
+- T053: V01-V06 Referenzbilder je zweimal mit unveraendertem nativen Caption-Wrapper analysiert, 12 echte HTTP-Antworten. Gemma 4 E4B auf vorhandener Vulkan-Runtime 2.60.0; konfiguriertes Qwen fehlt im Inventar. Keine Produkt-/Konfigurationsaenderung. Original-/Schutzdateihashes identisch, eigenes Modell entladen.
+- Qualitaetsfreigabe verweigert: unbelegte Gruppen V02/V05, fehlender Wasserfall V03; Parser entfernt sechs elfte Tags, darunter Blitzschlag. T054 Prompt-/Parservergleich offen. Masterplan aktualisiert; Nachweis specs/00037-comfyui-control-center/t002-caption-2026-10-19/report.md. Keine Vollclip-/GUI-Abnahme oder Generierung.
+
+## 2026-10-19 - Umbau-Status und T002-CPU-Fortsetzung
+
+- Aktueller Masterplanstatus in specs/00037-comfyui-control-center/current-status.md: 5/45 urspruengliche Pakete und T046-T049 abgeschlossen; T002 weiter offen. Historische Berichte werden nicht als aktuelle offene BeatNet-Fehler interpretiert. Cache-Restore vom 01.10. mit 247 Eintraegen und Grenzen dokumentiert. KI-Hirn ersetzt Obsidian auf Nutzeranweisung.
+- T051: Spektral-/Strukturmodule A01-A03 je zweimal im Fenster 60-90 s erfolgreich und exakt wiederholbar; A02 70-80 s messbar leiser/bassaermer. T052: sechs vollstaendige Clips je zweimal mit CPU-Szenendetektor, Frameabdeckung gegen ffprobe, eine Szene je Clip ueber No-cut-Ersatzpfad. Alle erfassten Quell-/Schutzdateien unveraendert. Keine semantische Gesamtqualitaetsabnahme, keine Generierung, kein Produktneustart.
 # Bug-History archiviert 2026-03-09
 
 ---
@@ -1067,3 +1107,8 @@ pytest: 511 passed / 8 skipped / 0 failed. dotnet build Release: clean.
 - T003, T013, T014 and historical finding #2 remain partial/open; no release/QC marker.
 
 ---
+
+
+## 2026-11-01 - Lokale Bereinigung
+
+Bereinigung: 49 belegte Wegwerfziele entfernt, 734648061 logische Bytes. Getrackte Dateien und Venv-Interpreter hashgleich. 35 Dublettengruppen inventarisiert; QC-Belege, Sicherheitsstubs, Modelle, offene Arbeiten und Produktionsdaten erhalten. Keine Produktcodeaenderung oder neue Live-Abnahme. Beleg: specs/00039-project-cleanup/report.md. Spec00038 bleibt offen.

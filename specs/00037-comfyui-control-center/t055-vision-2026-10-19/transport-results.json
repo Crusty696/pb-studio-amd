@@ -1,0 +1,1621 @@
+{
+  "scope": "Same exact source frame V02/V03; preview/native and JPEG/PNG transport matrix; unchanged prompt and native wrapper/client; two calls each",
+  "before": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "runs": [
+    {
+      "source_id": "V02",
+      "arm": "preview_jpeg",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 1,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 4.02848449999874,
+      "tags": [
+        "dungeon-szene",
+        "steinstruktur",
+        "magieeffekt",
+        "lichtstrahl",
+        "violett",
+        "blaugrün",
+        "dunkelheit",
+        "rohbau",
+        "ornamentik",
+        "energie",
+        "portal",
+        "steinwand"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "JPEG",
+            "bytes": 37747,
+            "sha256": "ff53cc879d182db72a8d2903852c14f3689a5979410fba6b98bf06511a9b1b63"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Dungeon-Szene, Steinstruktur, Magieeffekt, Lichtstrahl, Violett, Blaugrün, Dunkelheit, Rohbau, Ornamentik, Energie, Portal, Steinwand",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 43,
+              "total_tokens": 310,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-x04r265rw0hjylpy000io8",
+              "object": "chat.completion",
+              "created": 1792441745,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Dungeon-Szene, Steinstruktur, Magieeffekt, Lichtstrahl, Violett, Blaugrün, Dunkelheit, Rohbau, Ornamentik, Energie, Portal, Steinwand",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 43,
+                "total_tokens": 310,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "native_jpeg",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 2,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 0.9986415000003035,
+      "tags": [
+        "fantasy-architektur",
+        "portal",
+        "steinstruktur",
+        "leuchtlinien",
+        "lila",
+        "blaugrün",
+        "dunkelheit",
+        "wald",
+        "felsen",
+        "mystisch",
+        "energie",
+        "eingang"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 432,
+            "format": "JPEG",
+            "bytes": 77364,
+            "sha256": "82d439e7b4d3c37e68984ceebdffb6da9242f97dd6406c8c779e0b8dd6f982ab"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Fantasy-Architektur, Portal, Steinstruktur, Leuchtlinien, Lila, Blaugrün, Dunkelheit, Wald, Felsen, Mystisch, Energie, Eingang",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 37,
+              "total_tokens": 364,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-0pdq6dtz2od85kbnec84gt",
+              "object": "chat.completion",
+              "created": 1792441746,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Fantasy-Architektur, Portal, Steinstruktur, Leuchtlinien, Lila, Blaugrün, Dunkelheit, Wald, Felsen, Mystisch, Energie, Eingang",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 37,
+                "total_tokens": 364,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "preview_png",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 3,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 1.002017299999352,
+      "tags": [
+        "dschungel",
+        "steinstruktur",
+        "portal",
+        "lichtstrahlen",
+        "lila",
+        "grün",
+        "dunkelheit",
+        "rohbau",
+        "mystisch",
+        "säulen",
+        "wasserfall",
+        "tropen"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "PNG",
+            "bytes": 230874,
+            "sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Dschungel, Steinstruktur, Portal, Lichtstrahlen, Lila, Grün, Dunkelheit, Rohbau, Mystisch, Säulen, Wasserfall, Tropen",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 38,
+              "total_tokens": 305,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-ri1xl7jrb4ros5o917j2b",
+              "object": "chat.completion",
+              "created": 1792441747,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Dschungel, Steinstruktur, Portal, Lichtstrahlen, Lila, Grün, Dunkelheit, Rohbau, Mystisch, Säulen, Wasserfall, Tropen",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 38,
+                "total_tokens": 305,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "native_png",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 4,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 1.8532990000003338,
+      "tags": [
+        "stelenportal",
+        "steinarchitektur",
+        "neongrün",
+        "lila",
+        "tropischevegetation",
+        "felsen",
+        "dunkleumgebung",
+        "mystisch",
+        "portal",
+        "skulptur"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 1280,
+            "height": 720,
+            "format": "PNG",
+            "bytes": 1083793,
+            "sha256": "5340d3e07038b3abced696df187606a12d63cc98340a2429223e161f7108a436"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Stelenportal, steinarchitektur, neongrün, lila, tropischevegetation, felsen, dunkleumgebung, mystisch, portal, skulptur",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 588,
+              "completion_tokens": 37,
+              "total_tokens": 625,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-06px875fqbdh1bfraub4gaf",
+              "object": "chat.completion",
+              "created": 1792441748,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Stelenportal, steinarchitektur, neongrün, lila, tropischevegetation, felsen, dunkleumgebung, mystisch, portal, skulptur",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 588,
+                "completion_tokens": 37,
+                "total_tokens": 625,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "native_png",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 5,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 0.9755466999995406,
+      "tags": [
+        "steinarchitektur",
+        "portal",
+        "leuchtende energie",
+        "schlangenartige strukturen",
+        "dunkle umgebung",
+        "grün",
+        "lila",
+        "stein",
+        "felsen",
+        "nebel",
+        "tor",
+        "mystisch"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 1280,
+            "height": 720,
+            "format": "PNG",
+            "bytes": 1083793,
+            "sha256": "5340d3e07038b3abced696df187606a12d63cc98340a2429223e161f7108a436"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "steinarchitektur, portal, leuchtende energie, schlangenartige strukturen, dunkle umgebung, grün, lila, stein, felsen, nebel, tor, mystisch",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 588,
+              "completion_tokens": 40,
+              "total_tokens": 628,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-aobz8r450jt2z0arnh3lg",
+              "object": "chat.completion",
+              "created": 1792441750,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "steinarchitektur, portal, leuchtende energie, schlangenartige strukturen, dunkle umgebung, grün, lila, stein, felsen, nebel, tor, mystisch",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 588,
+                "completion_tokens": 40,
+                "total_tokens": 628,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "preview_png",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 6,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 3.9416186999987985,
+      "tags": [
+        "dungeon-szene",
+        "steinstruktur",
+        "magieeffekt",
+        "lila",
+        "dunkelgrün",
+        "tiefenblau",
+        "torbogen",
+        "runen",
+        "energie",
+        "felswand",
+        "geheimnisvoll",
+        "mystisch"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "PNG",
+            "bytes": 230874,
+            "sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Dungeon-Szene, Steinstruktur, Magieeffekt, Lila, Dunkelgrün, Tiefenblau, Torbogen, Runen, Energie, Felswand, Geheimnisvoll, Mystisch",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 45,
+              "total_tokens": 312,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-t8z3f6kkediya07lsbqnn",
+              "object": "chat.completion",
+              "created": 1792441754,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Dungeon-Szene, Steinstruktur, Magieeffekt, Lila, Dunkelgrün, Tiefenblau, Torbogen, Runen, Energie, Felswand, Geheimnisvoll, Mystisch",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 45,
+                "total_tokens": 312,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "native_jpeg",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 7,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 1.0789351999992505,
+      "tags": [
+        "fantasy-architektur",
+        "portal",
+        "steinstruktur",
+        "magie",
+        "lichteffekte",
+        "lila",
+        "blau",
+        "dunkelgrün",
+        "ranken",
+        "steinmauer",
+        "torbogen",
+        "mystisch"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 432,
+            "format": "JPEG",
+            "bytes": 77364,
+            "sha256": "82d439e7b4d3c37e68984ceebdffb6da9242f97dd6406c8c779e0b8dd6f982ab"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Fantasy-Architektur, Portal, Steinstruktur, Magie, Lichteffekte, Lila, Blau, Dunkelgrün, Ranken, Steinmauer, Torbogen, Mystisch",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 40,
+              "total_tokens": 367,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-1f2l3swu0trs0zx536j6k",
+              "object": "chat.completion",
+              "created": 1792441755,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Fantasy-Architektur, Portal, Steinstruktur, Magie, Lichteffekte, Lila, Blau, Dunkelgrün, Ranken, Steinmauer, Torbogen, Mystisch",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 40,
+                "total_tokens": 367,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "preview_jpeg",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 8,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 1.0468746000005922,
+      "tags": [
+        "dungeon-szene",
+        "steinstruktur",
+        "magieeffekt",
+        "lichtstrahlen",
+        "dunkelheit",
+        "violett",
+        "blau",
+        "roh",
+        "architektonisch",
+        "portal",
+        "mysteriös",
+        "objekten"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "JPEG",
+            "bytes": 37747,
+            "sha256": "ff53cc879d182db72a8d2903852c14f3689a5979410fba6b98bf06511a9b1b63"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Dungeon-Szene, Steinstruktur, Magieeffekt, Lichtstrahlen, Dunkelheit, Violett, Blau, Roh, Architektonisch, Portal, Mysteriös, Objekten",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 45,
+              "total_tokens": 312,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-1al072hpknb0124ibwbwyptq",
+              "object": "chat.completion",
+              "created": 1792441756,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Dungeon-Szene, Steinstruktur, Magieeffekt, Lichtstrahlen, Dunkelheit, Violett, Blau, Roh, Architektonisch, Portal, Mysteriös, Objekten",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 45,
+                "total_tokens": 312,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "preview_jpeg",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 1,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.8524906000002375,
+      "tags": [
+        "frau",
+        "wasser",
+        "nebel",
+        "bäume",
+        "himmel",
+        "abendlicht",
+        "dunkelblau",
+        "grau",
+        "silhouette",
+        "outdoor",
+        "natur"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "JPEG",
+            "bytes": 21900,
+            "sha256": "c4264be2dc196525f82066f1c8f9c238f84c74afde8059ca23cf66e90265e786"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Frau, Frau, Wasser, Nebel, Bäume, Himmel, Abendlicht, Dunkelblau, Grau, Silhouette, Outdoor, Natur",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 30,
+              "total_tokens": 297,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-eqve9mf8s47a03neogrsa",
+              "object": "chat.completion",
+              "created": 1792441757,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Frau, Frau, Wasser, Nebel, Bäume, Himmel, Abendlicht, Dunkelblau, Grau, Silhouette, Outdoor, Natur",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 30,
+                "total_tokens": 297,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_jpeg",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 2,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.8874249000000418,
+      "tags": [
+        "zwei frauen",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "wald",
+        "bäume",
+        "abendlicht",
+        "dunst",
+        "braun",
+        "grau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 431,
+            "format": "JPEG",
+            "bytes": 43857,
+            "sha256": "ac596de0ad7adb3132fb3b5c72185403e3026717e8d079579748cbec457e86dc"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, braun, grau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 29,
+              "total_tokens": 356,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-3swkrbvohph709q1b14bnj",
+              "object": "chat.completion",
+              "created": 1792441758,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, braun, grau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 29,
+                "total_tokens": 356,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "preview_png",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 3,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 3.721724600000016,
+      "tags": [
+        "zwei frauen",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "bäume",
+        "himmel",
+        "abendlicht",
+        "grau",
+        "blau",
+        "braun",
+        "natur",
+        "outdoor"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "PNG",
+            "bytes": 162398,
+            "sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Bäume, Himmel, Abendlicht, Grau, Blau, Braun, Natur, Outdoor",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 31,
+              "total_tokens": 298,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-brm0werswtlmmybe4cq8v",
+              "object": "chat.completion",
+              "created": 1792441762,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Bäume, Himmel, Abendlicht, Grau, Blau, Braun, Natur, Outdoor",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 31,
+                "total_tokens": 298,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_png",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 4,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 1.036459199998717,
+      "tags": [
+        "zwei personen",
+        "schwarzes oberteil",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "wald",
+        "bäume",
+        "dämmerlicht",
+        "grau",
+        "braun"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 854,
+            "height": 480,
+            "format": "PNG",
+            "bytes": 357212,
+            "sha256": "650778d26b24cb607ecd2ee78982f2a630bebc1ec10f8263a4313bb5f9d9c3b1"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Personen, schwarzes Oberteil, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Dämmerlicht, Grau, Braun",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 363,
+              "completion_tokens": 32,
+              "total_tokens": 395,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-amjs4lmk8u7aio3ltwpa5",
+              "object": "chat.completion",
+              "created": 1792441763,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Personen, schwarzes Oberteil, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Dämmerlicht, Grau, Braun",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 363,
+                "completion_tokens": 32,
+                "total_tokens": 395,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_png",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 5,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.7568226000003051,
+      "tags": [
+        "zwei personen",
+        "schwarzes oberteil",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "wald",
+        "bäume",
+        "morgenlicht",
+        "grau",
+        "blau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 854,
+            "height": 480,
+            "format": "PNG",
+            "bytes": 357212,
+            "sha256": "650778d26b24cb607ecd2ee78982f2a630bebc1ec10f8263a4313bb5f9d9c3b1"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Personen, schwarzes Oberteil, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Morgenlicht, Grau, Blau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 363,
+              "completion_tokens": 30,
+              "total_tokens": 393,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-qwc3ssyltj2qddx1l0lqo",
+              "object": "chat.completion",
+              "created": 1792441764,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Personen, schwarzes Oberteil, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Morgenlicht, Grau, Blau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 363,
+                "completion_tokens": 30,
+                "total_tokens": 393,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "preview_png",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 6,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.9460135999997874,
+      "tags": [
+        "frau",
+        "wasser",
+        "nebel",
+        "bäume",
+        "himmel",
+        "abenddämmerung",
+        "dunkelblau",
+        "grau",
+        "silhouette",
+        "flüssigkeit",
+        "natur"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "PNG",
+            "bytes": 162398,
+            "sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Frau, Frau, Wasser, Nebel, Bäume, Himmel, Abenddämmerung, Dunkelblau, Grau, Silhouette, Flüssigkeit, Natur",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 34,
+              "total_tokens": 301,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-i5c8n2m1m19d80sz3pmzzf",
+              "object": "chat.completion",
+              "created": 1792441765,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Frau, Frau, Wasser, Nebel, Bäume, Himmel, Abenddämmerung, Dunkelblau, Grau, Silhouette, Flüssigkeit, Natur",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 34,
+                "total_tokens": 301,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_jpeg",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 7,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.9571273000001383,
+      "tags": [
+        "zwei frauen",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "wald",
+        "bäume",
+        "abendlicht",
+        "dunst",
+        "natur",
+        "gewässer",
+        "blau",
+        "braun"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 431,
+            "format": "JPEG",
+            "bytes": 43857,
+            "sha256": "ac596de0ad7adb3132fb3b5c72185403e3026717e8d079579748cbec457e86dc"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, Natur, Gewässer, Blau, Braun",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 33,
+              "total_tokens": 360,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-gco8m46ajqbjhaevmd0u8",
+              "object": "chat.completion",
+              "created": 1792441766,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, Natur, Gewässer, Blau, Braun",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 33,
+                "total_tokens": 360,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "preview_jpeg",
+      "input_shape": [
+        270,
+        480,
+        3
+      ],
+      "repeat": 8,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.8351572999999917,
+      "tags": [
+        "zwei frauen",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "bäume",
+        "himmel",
+        "grau",
+        "blau",
+        "outdoor",
+        "natur"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 480,
+            "height": 270,
+            "format": "JPEG",
+            "bytes": 21900,
+            "sha256": "c4264be2dc196525f82066f1c8f9c238f84c74afde8059ca23cf66e90265e786"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Bäume, Himmel, Grau, Blau, Outdoor, Natur",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 267,
+              "completion_tokens": 26,
+              "total_tokens": 293,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-6yivterhufpj8elaj8khmf",
+              "object": "chat.completion",
+              "created": 1792441767,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Bäume, Himmel, Grau, Blau, Outdoor, Natur",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 267,
+                "completion_tokens": 26,
+                "total_tokens": 293,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "preflight": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x00013019",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 24.0,
+    "gpu_memory_used": 3.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 82.13999938964844,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16173.73,
+        "D3D Dedicated Memory Used": 3.58,
+        "D3D Shared Memory Used": 9.73,
+        "D3D Shared Memory Free": 31899.3,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 3.0,
+        "GPU Memory Free": 16365.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 0.0,
+        "D3D Copy": 0.0,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 9.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 71.0
+      },
+      "temperature": {
+        "GPU Core": 24.0,
+        "GPU Memory": 44.0,
+        "GPU Hot Spot": 32.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.05
+      }
+    }
+  },
+  "models_before": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  },
+  "load": {
+    "returncode": 0,
+    "stdout": "\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 2% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 2% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 6% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 6% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 11% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 11% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 100% ⠇\n\u001b[K\u001b[?25h",
+    "stderr": "Model loaded successfully in 13.03s.\n(5.89 GiB)\nTo use the model in the API/SDK, use the identifier \"google/gemma-4-e4b\".\n"
+  },
+  "wrapper_sha256": "13bf733b606b9caba9d55ef906a4752a5fac7cf46819a351d76880f5ff482682",
+  "prompt": "Analysiere den sichtbaren Inhalt dieses einzelnen Video-Frames. Pruefe Vordergrund, Bildmitte und Hintergrund. Gib bis zu 12 kurze deutsche Tags kommagetrennt aus; weniger sind erlaubt. Nenne eindeutig sichtbare Personen oder Wesen mit ihrer Anzahl und sichtbarer Kleidung. Falls keine eindeutig erkennbar sind, erfinde keine Personen oder Gruppe. Bei mehr als drei eindeutig erkennbaren Figuren schreibe gruppe. Erfasse ausserdem die wichtigsten konkreten Objekte, die Umgebung, Lichtquellen und Farben. Bevorzuge diese Bildinhalte gegenueber allgemeinen Stimmungswoertern. Keine Bewegung oder Handlung aus einer Pose ableiten, keine Geschichte erfinden. Lasse unsichere Details weg. Keine Hautfarbe. Nur Tags, keine Erklaerung oder Nummerierung.",
+  "unload": {
+    "returncode": 0,
+    "stdout": "",
+    "stderr": "Model \"google/gemma-4-e4b\" unloaded.\n"
+  },
+  "after": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_unchanged": true,
+  "models_after": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  }
+}

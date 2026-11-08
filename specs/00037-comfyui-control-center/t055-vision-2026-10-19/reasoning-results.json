@@ -1,0 +1,915 @@
+{
+  "scope": "Same exact source frame V02/V03; preview/native and JPEG/PNG transport matrix; unchanged prompt and native wrapper/client; two calls each",
+  "before": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "runs": [
+    {
+      "source_id": "V02",
+      "arm": "native_none",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 1,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 4.168149699999049,
+      "tags": [
+        "fantasy-architektur",
+        "torbogen",
+        "steinstruktur",
+        "leuchtende linien",
+        "magie",
+        "dunkelgrün",
+        "violett",
+        "steinmauerwerk",
+        "eingang",
+        "mystisch",
+        "felsen",
+        "nacht"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 432,
+            "format": "JPEG",
+            "bytes": 77364,
+            "sha256": "82d439e7b4d3c37e68984ceebdffb6da9242f97dd6406c8c779e0b8dd6f982ab"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Fantasy-Architektur, Torbogen, Steinstruktur, Leuchtende Linien, Magie, Dunkelgrün, Violett, Steinmauerwerk, Eingang, Mystisch, Felsen, Nacht",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 44,
+              "total_tokens": 371,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-kx69c0us4djigld3xjbdel",
+              "object": "chat.completion",
+              "created": 1792441813,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Fantasy-Architektur, Torbogen, Steinstruktur, Leuchtende Linien, Magie, Dunkelgrün, Violett, Steinmauerwerk, Eingang, Mystisch, Felsen, Nacht",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 44,
+                "total_tokens": 371,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "native_omitted",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 2,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 12.91010230000029,
+      "tags": [
+        "ruinenarchitektur",
+        "steintor",
+        "überwuchert",
+        "ranken",
+        "tentakel",
+        "leuchtendes muster",
+        "portal",
+        "felsen",
+        "jungle",
+        "magenta",
+        "cyanblau",
+        "dunkelheit"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 432,
+            "format": "JPEG",
+            "bytes": 77364,
+            "sha256": "82d439e7b4d3c37e68984ceebdffb6da9242f97dd6406c8c779e0b8dd6f982ab"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Ruinenarchitektur, Steintor, Überwuchert, Ranken, Tentakel, Leuchtendes Muster, Portal, Felsen, Jungle, Magenta, Cyanblau, Dunkelheit",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 334,
+              "completion_tokens": 748,
+              "total_tokens": 1082,
+              "completion_tokens_details": {
+                "reasoning_tokens": 703
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-ehjpg5chpio9nrv2rktnep",
+              "object": "chat.completion",
+              "created": 1792441814,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Ruinenarchitektur, Steintor, Überwuchert, Ranken, Tentakel, Leuchtendes Muster, Portal, Felsen, Jungle, Magenta, Cyanblau, Dunkelheit",
+                    "reasoning_content": "Here's a thinking process to arrive at the desired output:\n\n1.  **Analyze the Request Constraints:**\n    *   Goal: Analyze a single video frame (still image).\n    *   Structure: Check Foreground, Center, Background.\n    *   Output Format: Up to 12 short German tags, comma-separated. No explanation, no numbering.\n    *   People/Creatures: Must be clearly visible. State count and clothing. If >3, use \"gruppe.\" If none, state none. *Crucially: Do not invent.*\n    *   Objects/Environment/Light/Colors: Capture the most important concrete details (preferring these over mood words).\n    *   Action/Movement/Story: None allowed. No speculation.\n    *   Uncertain Details: Omit them.\n    *   Skin Color: Do not mention it.\n\n2.  **Analyze the Image Content:**\n    *   **Overall Impression:** Dark, mysterious, ancient structure with glowing elements.\n    *   **Foreground:** Rocks/rubble on the ground; some dark foliage (leaves).\n    *   **Center:** A large, ornate stone doorway/portal. Inside the portal, there is a glowing blue/cyan geometric pattern. Overlapping this are several thick, purple/magenta, serpentine, glowing tendrils/vines.\n    *   **Background:** Dark, overgrown jungle/forest setting; massive, weathered stone architecture surrounding the central portal (suggesting ruins).\n    *   **Light Sources:** The primary light sources are the internal blue glow of the portal and the external purple glow of the tendrils. The overall lighting is dim/low key.\n    *   **Colors:** Dark green, slate gray, deep black, vibrant magenta/purple, electric cyan/blue.\n    *   **People/Creatures:** None visible.\n\n3.  **Drafting the Tags (Focusing on Concrete Details):**\n    *   *Structure:* Ruine, Steintor, Portal, Architektur.\n    *   *Elements:* Ranken, Tentakel, Leuchten, Geometrisches Muster.\n    *   *Environment/Details:* Überwuchert, Felsen, Jungle, Dunkelheit.\n    *   *Colors/Materials (if needed for tags):* Magenta, Cyanblau, Grau.\n\n4.  **Selecting and Refining the 12 Tags (Prioritizing the most descriptive nouns/adjectives):**\n    *   (Self-Correction: Need to ensure they are concise German tags.)\n    *   Ruinenarchitektur\n    *   Steintor\n    *   Überwuchert\n    *   Ranken\n    *   Tentakel\n    *   Leuchtendes Muster\n    *   Felsen\n    *   Jungle\n    *   Magenta\n    *   Cyanblau\n    *   Dunkelheit\n    *   Portal\n\n5.  **Final Review against Constraints:**\n    *   Tags only? Yes.\n    *   Comma-separated? Yes.\n    *   Max 12 tags? Yes (12 used).\n    *   No explanation/numbering? Yes.\n    *   People mentioned? No, because none are visible.\n\n6.  **Final Output Generation.** (This matches the provided good response.)",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 334,
+                "completion_tokens": 748,
+                "total_tokens": 1082,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 703
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "native_omitted",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 3,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 11.415740500000538,
+      "tags": [
+        "steinstruktur",
+        "portal",
+        "kabel",
+        "leuchtmuster",
+        "ruinen",
+        "dschungel",
+        "felsen",
+        "laubwerk",
+        "cyan-licht",
+        "magenta",
+        "architektur",
+        "leitungen"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 432,
+            "format": "JPEG",
+            "bytes": 77364,
+            "sha256": "82d439e7b4d3c37e68984ceebdffb6da9242f97dd6406c8c779e0b8dd6f982ab"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Steinstruktur, Portal, Kabel, Leuchtmuster, Ruinen, Dschungel, Felsen, Laubwerk, Cyan-Licht, Magenta, Architektur, Leitungen",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 334,
+              "completion_tokens": 691,
+              "total_tokens": 1025,
+              "completion_tokens_details": {
+                "reasoning_tokens": 649
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-tgql3mn1oaoiivuvibvvj",
+              "object": "chat.completion",
+              "created": 1792441830,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Steinstruktur, Portal, Kabel, Leuchtmuster, Ruinen, Dschungel, Felsen, Laubwerk, Cyan-Licht, Magenta, Architektur, Leitungen",
+                    "reasoning_content": "Here's a thinking process to arrive at the desired output:\n\n1.  **Analyze the Request Constraints:**\n    *   Goal: Analyze a single video frame (still image).\n    *   Structure: Check Foreground, Center, Background.\n    *   Output Format: Up to 12 short German tags, comma-separated. No explanation, no numbering.\n    *   People/Creatures: Must be clearly visible. State count and clothing. If >3, use \"Gruppe.\" (Crucially: None are visible here).\n    *   Objects/Environment/Light/Colors: Capture key concrete details, prioritizing them over mood words.\n    *   Restrictions: No movement/action derivation. No story creation. Omit unsure details. No skin color.\n\n2.  **Analyze the Image Content (The Frame):**\n    *   *Overall Impression:* Mysterious, ancient, glowing technology.\n    *   *Foreground:* Rocks, debris, dark foliage/leaves (bottom edges).\n    *   *Center:* A large, carved stone structure/portal. Within this portal is a glowing, geometric pattern (blue/cyan lines). Overlapping the center are several thick, serpentine, glowing purple/magenta cables/vines.\n    *   *Background:* Dark jungle/forest foliage, heavy shadows, more ancient stone architecture framing the central element.\n    *   *Light Sources:* The blue glow from the portal mechanism; the purple glow from the cables. These are artificial/magical light sources.\n    *   *Colors:* Deep greens (foliage), dark grays/blacks (stone), cyan/blue (glow), magenta/purple (cables).\n\n3.  **Identify Key Elements for Tags:**\n    *   *People:* None visible.\n    *   *Objects:* Stone structure, portal, cables/vines, glowing mechanism, debris/rocks, foliage.\n    *   *Environment:* Jungle, ruins, ancient architecture.\n    *   *Light/Color:* Neon glow (blue), purple light, dark atmosphere.\n\n4.  **Drafting and Filtering Tags (Applying Constraints):**\n    *   (Initial Draft): Steinstruktur, Portal, Kabel, Glow, Dschungel, Ruinen, Lichter, Grün, Lila, Felsen, Mechanismus, Dunkelheit.\n    *   (Refining/Selecting the best 12 and ensuring German tags):\n        *   Stone structure -> Steinarchitektur / Steinstruktur\n        *   Portal -> Portal\n        *   Cables -> Kabel (or Leitungen)\n        *   Glow/Light -> Leuchtmuster / Neonlicht\n        *   Environment -> Ruinen, Dschungel\n        *   Foreground elements -> Felsen, Laubwerk\n        *   Colors/Details: Lila, Cyan\n\n5.  **Final Selection and Formatting (Comma-separated tags):**\n    (Checking against the constraints: Max 12 tags, no explanation, concrete details only.)\n\n6.  **Final Output Generation.** (This matches the provided good response.)",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 334,
+                "completion_tokens": 691,
+                "total_tokens": 1025,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 649
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "arm": "native_none",
+      "input_shape": [
+        720,
+        1280,
+        3
+      ],
+      "repeat": 4,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 3.8384340000011434,
+      "tags": [
+        "fantasy-architektur",
+        "steinstruktur",
+        "portal",
+        "leuchtende linien",
+        "magisch",
+        "dunkelgrün",
+        "blau",
+        "violett",
+        "gewölbe",
+        "torbogen",
+        "felsbrocken",
+        "nacht"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 432,
+            "format": "JPEG",
+            "bytes": 77364,
+            "sha256": "82d439e7b4d3c37e68984ceebdffb6da9242f97dd6406c8c779e0b8dd6f982ab"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Fantasy-Architektur, Steinstruktur, Portal, leuchtende Linien, magisch, Dunkelgrün, Blau, Violett, Gewölbe, Torbogen, Felsbrocken, Nacht",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 44,
+              "total_tokens": 371,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-fpg4cdpfwbm6o2ii47jexd",
+              "object": "chat.completion",
+              "created": 1792441841,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Fantasy-Architektur, Steinstruktur, Portal, leuchtende Linien, magisch, Dunkelgrün, Blau, Violett, Gewölbe, Torbogen, Felsbrocken, Nacht",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 44,
+                "total_tokens": 371,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_none",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 1,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 2.330696999999418,
+      "tags": [
+        "zwei frauen",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "wald",
+        "bäume",
+        "abendlicht",
+        "dunst",
+        "natur",
+        "düsternis",
+        "braun",
+        "grau"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 431,
+            "format": "JPEG",
+            "bytes": 43857,
+            "sha256": "ac596de0ad7adb3132fb3b5c72185403e3026717e8d079579748cbec457e86dc"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, Natur, Düsternis, braun, grau",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 35,
+              "total_tokens": 362,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-dbobkuc5dhxqv8j39c9l",
+              "object": "chat.completion",
+              "created": 1792441843,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, Natur, Düsternis, braun, grau",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 35,
+                "total_tokens": 362,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_omitted",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 2,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 9.001586700000189,
+      "tags": [
+        "wasserfläche",
+        "nebel",
+        "dunst",
+        "diffuses licht",
+        "blau-grau-töne",
+        "spiegelung",
+        "dunkle bäume",
+        "waldkulisse",
+        "gewässer",
+        "vordergrund"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 431,
+            "format": "JPEG",
+            "bytes": 43857,
+            "sha256": "ac596de0ad7adb3132fb3b5c72185403e3026717e8d079579748cbec457e86dc"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Zwei Frauen in dunkler Kleidung, Wasserfläche, Nebel, Dunst, Diffuses Licht, Blau-Grau-Töne, Spiegelung, Dunkle Bäume, Waldkulisse, Gewässer, Vordergrund",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 334,
+              "completion_tokens": 722,
+              "total_tokens": 1056,
+              "completion_tokens_details": {
+                "reasoning_tokens": 670
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-p5kn3simbmk0k38u9b28dse",
+              "object": "chat.completion",
+              "created": 1792441845,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Zwei Frauen in dunkler Kleidung, Wasserfläche, Nebel, Dunst, Diffuses Licht, Blau-Grau-Töne, Spiegelung, Dunkle Bäume, Waldkulisse, Gewässer, Vordergrund",
+                    "reasoning_content": "Here's a thinking process to arrive at the desired output:\n\n1.  **Analyze the Request Constraints:**\n    *   Goal: Analyze a single video frame (still image).\n    *   Structure: Check Foreground, Center, Background.\n    *   Output Format: Up to 12 short German tags, comma-separated. No explanation, no numbering.\n    *   People/Creatures: Must be clearly visible. State count and clothing. If >3, use \"Gruppe.\" Do not invent people. (Constraint check: Two women are visible.)\n    *   Objects/Environment/Light/Colors: List concrete details, prioritizing them over mood words.\n    *   Action/Movement: None allowed (no deriving action from a pose, no story).\n    *   Uncertain Details: Omit.\n    *   Skin Color: Do not mention.\n\n2.  **Analyze the Image Content:**\n    *   **Overall Scene:** Two women standing in water, surrounded by mist/fog, with a dark background of falling material (looks like smoke or curtain-like fog).\n    *   **Foreground:** Water surface, reflections, misty ground level.\n    *   **Center:** The two figures.\n        *   Figure 1 (Left): Woman, wearing a dark, fitted outfit/dress. Standing in water.\n        *   Figure 2 (Right): Woman, wearing a long, flowing, dark dress. Standing in water.\n    *   **Background:** Dense curtain of white/blue mist/fog falling from above; dark vertical elements (trees or structure) visible through the fog.\n    *   **Light Source:** Diffuse, soft light coming from the front/left, illuminating the mist and figures.\n    *   **Colors:** Dark blues, grays, blacks, whites (mist), browns (water reflections).\n\n3.  **Drafting the Tags (Focusing on Concrete Details):**\n    *   *People:* Zwei Frauen, dunkle Kleidung.\n    *   *Environment/Setting:* Wasser, Nebel, Dunst, Waldhintergrund (or Bäume), Pfütze.\n    *   *Lighting/Atmosphere (but concrete):* Diffuses Licht, Spiegelung.\n    *   *Colors:* Blau-, Grau- und Schwarztöne.\n\n4.  **Selecting and Refining the 12 Tags (Prioritizing Concreteness & German Flow):**\n    *   (People) Zwei Frauen in dunkler Kleidung\n    *   (Environment) Wasserfläche\n    *   (Environment) Nebel/Dunst\n    *   (Background) Dunkle Bäume\n    *   (Lighting) Diffuses Licht\n    *   (Colors) Blau-Grau-Töne\n    *   (Objects) Spiegelung\n    *   (Setting) Wasserbecken (or simply: Wasser)\n\n5.  **Final Polish and Formatting Check:**\n    *   Constraint check: Max 12 tags, comma-separated, no explanation.\n    *   Refinement: Combine similar concepts for efficiency.\n\n6.  **Final Output Generation.** (This matches the provided good response.)",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 334,
+                "completion_tokens": 722,
+                "total_tokens": 1056,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 670
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_omitted",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 3,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 11.758987799999886,
+      "tags": [
+        "zwei frauen",
+        "wasser",
+        "nebel",
+        "wald",
+        "dunkle kleidung",
+        "diffuses licht",
+        "gewässer",
+        "blau-",
+        "dunkeltöne"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 431,
+            "format": "JPEG",
+            "bytes": 43857,
+            "sha256": "ac596de0ad7adb3132fb3b5c72185403e3026717e8d079579748cbec457e86dc"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Zwei Frauen, Wasser, Nebel, Wald, dunkle Kleidung, diffuses Licht, Gewässer, Blau-, Dunkeltöne",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 334,
+              "completion_tokens": 740,
+              "total_tokens": 1074,
+              "completion_tokens_details": {
+                "reasoning_tokens": 707
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-ejxw0zn4qs7smprk9wbj0j",
+              "object": "chat.completion",
+              "created": 1792441857,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Zwei Frauen, Wasser, Nebel, Wald, dunkle Kleidung, diffuses Licht, Gewässer, Blau-, Dunkeltöne",
+                    "reasoning_content": "Here's a thinking process to arrive at the desired output:\n\n1.  **Analyze the Request Constraints:**\n    *   Analyze a single video frame (still image).\n    *   Check Foreground, Center, Background.\n    *   Output up to 12 short German tags, comma-separated. Fewer are allowed.\n    *   Identify visible people/creatures: Count and describe clothing. *Crucial Rule:* If none are clearly visible, do not invent them. (If >3 figures, use \"gruppe\").\n    *   Identify key concrete objects, environment, light sources, and colors. Prioritize these over general mood words.\n    *   No movement/action inference (no poses/stories).\n    *   Leave unsure details out.\n    *   No skin color description.\n    *   Output must be *only* tags, no explanation or numbering.\n\n2.  **Analyze the Image Content:**\n    *   **Subject(s):** Two women standing in water.\n        *   Woman 1 (Left): Dark hair, wearing a dark/black outfit (appears to be a dress or two-piece).\n        *   Woman 2 (Right): Dark hair, wearing a dark/brownish outfit (appears to be a dress).\n    *   **Environment:** A body of water (lake/river).\n    *   **Background:** Dense forest/trees.\n    *   **Atmosphere/Elements:** Heavy mist/fog rising from the water and surrounding the subjects.\n    *   **Lighting:** Diffused, dramatic lighting. The light source seems to be coming from the front/left, creating a glow through the fog.\n    *   **Colors:** Dominant colors are deep blues (sky/mist), dark greens/blacks (trees), browns/blacks (clothing).\n\n3.  **Structure the Output (Drafting Tags):**\n\n    *   *People:* Zwei Frauen, dunkle Kleidung.\n    *   *Environment/Objects:* Wasser, Wald, Nebel/Dampf.\n    *   *Lighting/Color:* Diffuses Licht, Blau-, Dunkeltöne.\n    *   *Composition:* Vordergrund (Wasser), Hintergrund (Wald).\n\n4.  **Refining and Selecting the Best Tags (Max 12, German, Concrete):**\n\n    *   Zwei Frauen (People count/description)\n    *   Wasser (Environment)\n    *   Nebel (Atmosphere/Element)\n    *   Wald (Background/Environment)\n    *   Dunkle Kleidung (Clothing description)\n    *   Diffuses Licht (Light source quality)\n    *   Blaustimmung (Color/Tone - acceptable if it describes the light/mist)\n    *   Fluss/See (Specific body of water - \"Wasser\" is safer, but \"See\" or \"Gewässer\" works). Let's stick with Wasser.\n\n5.  **Final Polish and Formatting Check:**\n    *   Are there 12 tags? No, fewer are fine.\n    *   Are they comma-separated? Yes.\n    *   Is the tone purely descriptive (no emotion/action)? Yes.\n    *   Is it *only* tags? Yes.\n\n6.  **Final Tag List Generation.** (This matches the provided solution.)",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 334,
+                "completion_tokens": 740,
+                "total_tokens": 1074,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 707
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "arm": "native_none",
+      "input_shape": [
+        480,
+        854,
+        3
+      ],
+      "repeat": 4,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 3.64306409999881,
+      "tags": [
+        "zwei frauen",
+        "dunkles kleid",
+        "wasser",
+        "nebel",
+        "wald",
+        "bäume",
+        "abendlicht",
+        "dunst",
+        "natur",
+        "dunkelblau",
+        "braun"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "wire_image": {
+            "width": 768,
+            "height": 431,
+            "format": "JPEG",
+            "bytes": 43857,
+            "sha256": "ac596de0ad7adb3132fb3b5c72185403e3026717e8d079579748cbec457e86dc"
+          },
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, Natur, dunkelblau, braun",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 327,
+              "completion_tokens": 32,
+              "total_tokens": 359,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-ctbsbubwymijm2ep6u0k3s",
+              "object": "chat.completion",
+              "created": 1792441869,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei Frauen, dunkles Kleid, Wasser, Nebel, Wald, Bäume, Abendlicht, Dunst, Natur, dunkelblau, braun",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 327,
+                "completion_tokens": 32,
+                "total_tokens": 359,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "preflight": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x00013019",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 26.0,
+    "gpu_memory_used": 3.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 72.68000030517578,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16173.73,
+        "D3D Dedicated Memory Used": 3.58,
+        "D3D Shared Memory Used": 9.73,
+        "D3D Shared Memory Free": 31899.3,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 3.0,
+        "GPU Memory Free": 16365.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 0.0,
+        "D3D Copy": 0.0,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 7.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 71.0
+      },
+      "temperature": {
+        "GPU Core": 26.0,
+        "GPU Memory": 46.0,
+        "GPU Hot Spot": 34.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.06
+      }
+    }
+  },
+  "models_before": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  },
+  "load": {
+    "returncode": 0,
+    "stdout": "\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 2% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 2% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 4% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 6% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 6% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 9% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 11% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 11% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 14% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 18% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 22% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 100% ⠦\n\u001b[K\u001b[?25h",
+    "stderr": "Model loaded successfully in 7.22s.\n(5.89 GiB)\nTo use the model in the API/SDK, use the identifier \"google/gemma-4-e4b\".\n"
+  },
+  "wrapper_sha256": "13bf733b606b9caba9d55ef906a4752a5fac7cf46819a351d76880f5ff482682",
+  "prompt": "Analysiere den sichtbaren Inhalt dieses einzelnen Video-Frames. Pruefe Vordergrund, Bildmitte und Hintergrund. Gib bis zu 12 kurze deutsche Tags kommagetrennt aus; weniger sind erlaubt. Nenne eindeutig sichtbare Personen oder Wesen mit ihrer Anzahl und sichtbarer Kleidung. Falls keine eindeutig erkennbar sind, erfinde keine Personen oder Gruppe. Bei mehr als drei eindeutig erkennbaren Figuren schreibe gruppe. Erfasse ausserdem die wichtigsten konkreten Objekte, die Umgebung, Lichtquellen und Farben. Bevorzuge diese Bildinhalte gegenueber allgemeinen Stimmungswoertern. Keine Bewegung oder Handlung aus einer Pose ableiten, keine Geschichte erfinden. Lasse unsichere Details weg. Keine Hautfarbe. Nur Tags, keine Erklaerung oder Nummerierung.",
+  "unload": {
+    "returncode": 0,
+    "stdout": "",
+    "stderr": "Model \"google/gemma-4-e4b\" unloaded.\n"
+  },
+  "after": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_unchanged": true,
+  "models_after": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  }
+}

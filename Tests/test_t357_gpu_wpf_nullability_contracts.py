@@ -375,7 +375,7 @@ def test_gpu_status_api_reports_selected_identity_and_monitoring_truth(monkeypat
 
 
 def test_settings_gui_binds_every_additive_gpu_truth_field():
-    dto = _read("PBStudio.UI/Services/ApiClient.cs")
+    dto = _read("PBStudio.UI/Services/ApiResponseModels.cs")
     view_model = _read("PBStudio.UI/ViewModels/SettingsViewModel.cs")
     view = _read("PBStudio.UI/Views/SettingsView.xaml")
     schema = json.loads(_read("PBStudio.UI/openapi.snapshot.json"))
@@ -551,7 +551,20 @@ def test_model_manager_uses_live_truth_labels_without_static_ghost_cards():
 
 def test_model_provider_identity_is_forwarded_from_card_to_backend():
     interface = _read("PBStudio.UI/Services/IApiClient.cs")
-    client = _read("PBStudio.UI/Services/ApiClient.cs")
+    # Inspect every partial: the owner-capability prohibition is class-wide.
+    client = "\n".join(
+        _read(f"PBStudio.UI/Services/{name}")
+        for name in (
+            "ApiClient.cs",
+            "ApiClient.Health.cs",
+            "ApiClient.Projects.cs",
+            "ApiClient.Media.cs",
+            "ApiClient.PacingRender.cs",
+            "ApiClient.Brain.cs",
+            "ApiClient.Models.cs",
+            "ApiClient.Chat.cs",
+        )
+    )
     owner_handler = _read(
         "PBStudio.UI/Services/OwnerCapabilityRequestHandler.cs"
     )
@@ -630,7 +643,7 @@ def test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts():
     assert "SceneInfo(double? @confidence" in generated_scene
     assert "public double? Confidence { get; }" in generated_scene
 
-    handwritten = _read("PBStudio.UI/Services/ApiClient.cs")
+    handwritten = _read("PBStudio.UI/Services/ApiResponseModels.cs")
     assert (
         "record SceneInfo(double StartTime, double EndTime, "
         "string SceneType, double? Confidence)"
@@ -658,7 +671,7 @@ def test_video_batch_retries_requested_stages_and_counts_success_only_after_non_
     label: str,
 ):
     source = _read("PBStudio.UI/ViewModels/VideoLibraryViewModel.cs")
-    dto = _read("PBStudio.UI/Services/ApiClient.cs")
+    dto = _read("PBStudio.UI/Services/ApiResponseModels.cs")
     method = _method_block(source, method_marker, next_marker)
     batch_runner = _method_block(
         source,

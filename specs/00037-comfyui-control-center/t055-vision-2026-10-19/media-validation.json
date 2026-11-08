@@ -1,0 +1,20 @@
+{
+  "caption_calls": 42,
+  "directml_calls": 42,
+  "native_frames": 18,
+  "identical_frame_hashes_caption_and_siglip": true,
+  "identical_siglip_repeats": 18,
+  "four_series_protected_unchanged": true,
+  "owned_models_unloaded": true,
+  "siglip_executed_code_matches": true,
+  "legacy_corrected_cosine": {
+    "V01": 0.9663569927215576,
+    "V02": 0.946922779083252,
+    "V03": 0.9755216240882874,
+    "V04": 0.8683905005455017,
+    "V05": 0.9331883788108826,
+    "V06": 0.9479539394378662
+  },
+  "semantic_acceptance": false,
+  "full_native_api_gui_acceptance": false
+}

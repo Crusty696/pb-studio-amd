@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-10-19T23:02:13.216314+02:00",
+  "text": "PB-STUDIO MASTERPLAN STATUSPFLEGE 2026-10-19: Nutzer beanstandet Wiederholungsschleifen. Vorhandene Belege abgeglichen, keine neuen Analyse-/GPU-/Medientests. tasks.md Kopf und Paketindex aktualisiert; plan.md und current-status.md verweisen auf neue vollstaendige lesbare masterplan-status.md. 5von45 Hauptpaketen erledigt:T001,T003,T004,T005,T006;40nichtabgeschlossen.11 Teilaufgaben T046-T056 unter T002 abgeschlossen, keine weiteren fertigen Hauptpakete. T055 bedeutet Untersuchung abgeschlossen, V02/V03-Erkennungsqualitaet weiterhin offen. T002 bleibt teilweise; T045 phasenweise teilweise. Offene technische/Qualitaetsabnahmen und Abhaengigkeiten bleiben. Arbeitsregel: neue Frage/Entscheidungsnutzen/Abbruchkriterium vor jedem Lauf; bestehende Belege wiederverwenden; bestandene Pruefungen nur bei betroffenen Aenderungen, neuen Fehlern oder konkretem Risiko wiederholen. Keine Testausweitung allein fuer hoehere Zahlen; Modellgrenzen ehrlich offenlassen. Kein Generierungspilot ohne separate konkrete Freigabe; kein Produktcode, Installation, Migration oder Auftrag angefasst. Planansicht specs/00037-comfyui-control-center/masterplan-status.md.",
+  "write_response": {
+    "success": true,
+    "id": "1792443732204"
+  },
+  "exact_readback_confirmed": true,
+  "main_tasks": 45,
+  "main_done": 5,
+  "subtasks_done": 11,
+  "checklist_consistent": true
+}

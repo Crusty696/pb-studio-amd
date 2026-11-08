@@ -1,0 +1,371 @@
+{
+  "scope": "CPU module bodies, not router/GUI; source seconds 60-90",
+  "run_directory": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\scratch\\t002-spectral-20261019-215504",
+  "sources": [
+    {
+      "id": "A01",
+      "source_sha256": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+      "source_window": [
+        60,
+        90
+      ],
+      "samples": 1323000,
+      "repeats": [
+        {
+          "seconds": 2.2023447000001397,
+          "result_sha256": "c7fc10097b15f3b8fa2c86b596e24b03a0c2a63c35291bc1dac10bbd2b22785a",
+          "sampled_rss_max_bytes": 405143552,
+          "rss_samples": 21
+        },
+        {
+          "seconds": 0.8836724000002505,
+          "result_sha256": "c7fc10097b15f3b8fa2c86b596e24b03a0c2a63c35291bc1dac10bbd2b22785a",
+          "sampled_rss_max_bytes": 371425280,
+          "rss_samples": 9
+        }
+      ],
+      "structure_relative_to_excerpt": {
+        "total_segments": 2,
+        "segments": [
+          {
+            "segment_id": 1,
+            "start_time": 0.0,
+            "end_time": 13.049614512471654,
+            "duration": 13.049614512471654,
+            "label": "intro",
+            "cluster": 1,
+            "confidence": 0.7,
+            "energy_score": 0.18040162324905396
+          },
+          {
+            "segment_id": 2,
+            "start_time": 13.049614512471654,
+            "end_time": 30.0,
+            "duration": 16.950385487528344,
+            "label": "verse",
+            "cluster": 0,
+            "confidence": 0.7,
+            "energy_score": 0.18067723512649536
+          }
+        ]
+      },
+      "events_relative_to_excerpt": [],
+      "ten_second_descriptive_windows": [
+        {
+          "source_seconds": [
+            60,
+            70
+          ],
+          "rms": 0.18634046614170074,
+          "band_mean_magnitude": {
+            "sub_bass": 86.82112516770506,
+            "bass": 267.086547143498,
+            "low_mid": 89.31436916100176,
+            "mid": 228.5579457825132,
+            "upper_mid": 62.86320568195905,
+            "presence": 22.591914369376795,
+            "brilliance": 19.056579565296595,
+            "air": 5.458843409669371
+          }
+        },
+        {
+          "source_seconds": [
+            70,
+            80
+          ],
+          "rms": 0.18644657731056213,
+          "band_mean_magnitude": {
+            "sub_bass": 85.67386915182541,
+            "bass": 264.3645930495135,
+            "low_mid": 89.03802838364268,
+            "mid": 223.3431940909462,
+            "upper_mid": 136.10339840945466,
+            "presence": 46.68542465349523,
+            "brilliance": 21.987702876640945,
+            "air": 5.691588100655984
+          }
+        },
+        {
+          "source_seconds": [
+            80,
+            90
+          ],
+          "rms": 0.18689937889575958,
+          "band_mean_magnitude": {
+            "sub_bass": 87.08906977295737,
+            "bass": 269.4358454138283,
+            "low_mid": 91.24065960353536,
+            "mid": 191.37563906812503,
+            "upper_mid": 68.98963837119622,
+            "presence": 41.35703345998239,
+            "brilliance": 55.01792281734542,
+            "air": 11.383227260962872
+          }
+        }
+      ],
+      "technical_checks": "PASS"
+    },
+    {
+      "id": "A02",
+      "source_sha256": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+      "source_window": [
+        60,
+        90
+      ],
+      "samples": 1323000,
+      "repeats": [
+        {
+          "seconds": 0.9921942000000854,
+          "result_sha256": "be4df485b1b045f6358446e62b3b5049cbf8ed1e0b0a7bf02effd0dac8367671",
+          "sampled_rss_max_bytes": 375635968,
+          "rss_samples": 10
+        },
+        {
+          "seconds": 0.8587864000000991,
+          "result_sha256": "be4df485b1b045f6358446e62b3b5049cbf8ed1e0b0a7bf02effd0dac8367671",
+          "sampled_rss_max_bytes": 373264384,
+          "rss_samples": 8
+        }
+      ],
+      "structure_relative_to_excerpt": {
+        "total_segments": 2,
+        "segments": [
+          {
+            "segment_id": 1,
+            "start_time": 0.0,
+            "end_time": 12.585215419501134,
+            "duration": 12.585215419501134,
+            "label": "intro",
+            "cluster": 1,
+            "confidence": 0.7,
+            "energy_score": 0.1213521957397461
+          },
+          {
+            "segment_id": 2,
+            "start_time": 12.585215419501134,
+            "end_time": 30.0,
+            "duration": 17.414784580498868,
+            "label": "verse",
+            "cluster": 0,
+            "confidence": 0.7,
+            "energy_score": 0.172348290681839
+          }
+        ]
+      },
+      "events_relative_to_excerpt": [
+        {
+          "type": "drop",
+          "time": 16.27718820861678,
+          "intensity": 0.02142757412206423,
+          "confidence": 0.04285514824412846
+        },
+        {
+          "type": "drop",
+          "time": 19.388662131519276,
+          "intensity": 0.045180433527080996,
+          "confidence": 0.09036086705416199
+        },
+        {
+          "type": "drop",
+          "time": 21.39718820861678,
+          "intensity": 0.18072201770062965,
+          "confidence": 0.3614440354012593
+        }
+      ],
+      "ten_second_descriptive_windows": [
+        {
+          "source_seconds": [
+            60,
+            70
+          ],
+          "rms": 0.1508229374885559,
+          "band_mean_magnitude": {
+            "sub_bass": 24.086024354823504,
+            "bass": 233.41305223031276,
+            "low_mid": 108.20076582658595,
+            "mid": 317.160622846776,
+            "upper_mid": 179.15034083921782,
+            "presence": 131.631617172135,
+            "brilliance": 340.1417703650667,
+            "air": 101.26365229701774
+          }
+        },
+        {
+          "source_seconds": [
+            70,
+            80
+          ],
+          "rms": 0.049741119146347046,
+          "band_mean_magnitude": {
+            "sub_bass": 1.0872860257989758,
+            "bass": 17.88368265069459,
+            "low_mid": 24.69572721430372,
+            "mid": 127.49756906533767,
+            "upper_mid": 41.47127392898453,
+            "presence": 21.70413141397372,
+            "brilliance": 55.16075258415612,
+            "air": 9.161410346679157
+          }
+        },
+        {
+          "source_seconds": [
+            80,
+            90
+          ],
+          "rms": 0.2891726493835449,
+          "band_mean_magnitude": {
+            "sub_bass": 145.20754869477813,
+            "bass": 325.00666725677064,
+            "low_mid": 68.5979624763737,
+            "mid": 257.29698119567803,
+            "upper_mid": 105.1343967191849,
+            "presence": 49.501213125512436,
+            "brilliance": 115.4254082642089,
+            "air": 26.087525766901024
+          }
+        }
+      ],
+      "technical_checks": "PASS"
+    },
+    {
+      "id": "A03",
+      "source_sha256": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f",
+      "source_window": [
+        60,
+        90
+      ],
+      "samples": 1323000,
+      "repeats": [
+        {
+          "seconds": 0.8129618000002665,
+          "result_sha256": "d6654fc41101a95038da0f6b7c60bbdca2137c9e3560eb1769d8bd4931f55da9",
+          "sampled_rss_max_bytes": 374874112,
+          "rss_samples": 8
+        },
+        {
+          "seconds": 0.8367533000000549,
+          "result_sha256": "d6654fc41101a95038da0f6b7c60bbdca2137c9e3560eb1769d8bd4931f55da9",
+          "sampled_rss_max_bytes": 376705024,
+          "rss_samples": 8
+        }
+      ],
+      "structure_relative_to_excerpt": {
+        "total_segments": 1,
+        "segments": [
+          {
+            "segment_id": 1,
+            "start_time": 0.0,
+            "end_time": 30.0,
+            "duration": 30.0,
+            "label": "intro",
+            "cluster": 0,
+            "confidence": 0.7,
+            "energy_score": 0.05494663864374161
+          }
+        ]
+      },
+      "events_relative_to_excerpt": [],
+      "ten_second_descriptive_windows": [
+        {
+          "source_seconds": [
+            60,
+            70
+          ],
+          "rms": 0.0559362955391407,
+          "band_mean_magnitude": {
+            "sub_bass": 32.820605019405654,
+            "bass": 76.268580700018,
+            "low_mid": 16.942586120105673,
+            "mid": 29.46177018518514,
+            "upper_mid": 13.234443450541065,
+            "presence": 5.440836977896447,
+            "brilliance": 5.89150806991794,
+            "air": 4.242119577257373
+          }
+        },
+        {
+          "source_seconds": [
+            70,
+            80
+          ],
+          "rms": 0.05654028430581093,
+          "band_mean_magnitude": {
+            "sub_bass": 32.70037323201852,
+            "bass": 76.7049444643878,
+            "low_mid": 17.871089145558496,
+            "mid": 35.092595299500346,
+            "upper_mid": 20.60037697676859,
+            "presence": 7.316828659325665,
+            "brilliance": 16.786240065139346,
+            "air": 5.604541457073198
+          }
+        },
+        {
+          "source_seconds": [
+            80,
+            90
+          ],
+          "rms": 0.055876582860946655,
+          "band_mean_magnitude": {
+            "sub_bass": 31.943057169482266,
+            "bass": 76.40781588892212,
+            "low_mid": 19.272860217731314,
+            "mid": 43.502208571816155,
+            "upper_mid": 23.909707292585562,
+            "presence": 13.638095791331567,
+            "brilliance": 35.29498337467096,
+            "air": 12.343693811303647
+          }
+        }
+      ],
+      "technical_checks": "PASS"
+    }
+  ],
+  "protection_before": {
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Progressive Psy Summer Dream mix  by Crusty Free download.wav": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Crusty -Klangkraft-21nai2022.wav": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Podcast-04.m4a": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f"
+  },
+  "code_sha256": {
+    "spectral_analyzer": "c2b5715b079634edada7f158b53a1868ca09faea4e8c5af1f0931b657c5aae8f",
+    "structure_analyzer": "5d4891784d70daeea1248084c3af443014e27c4c6b6caa724edf1f8a994a81bb"
+  },
+  "versions": {
+    "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+    "numpy": "1.26.4",
+    "librosa": "0.11.0"
+  },
+  "sampler_scope": "100ms process RSS samples during analysis only; not exact peak or GPU measurement",
+  "technical_status": "PASS",
+  "logs_warning_or_above": [],
+  "protection_after": {
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Progressive Psy Summer Dream mix  by Crusty Free download.wav": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Crusty -Klangkraft-21nai2022.wav": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Podcast-04.m4a": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f"
+  },
+  "protected_files_unchanged": true
+}

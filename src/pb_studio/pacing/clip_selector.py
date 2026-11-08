@@ -23,6 +23,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from .pacing_models import SelectedClip, SelectionProvenance
+from pb_studio.embedding_identity import is_current_video_embedding, current_video_embedding_identity
 from .constants import (
     EMBEDDING_CACHE_SIZE,
     MOTION_TOLERANCE,
@@ -162,6 +163,8 @@ class ClipMetadata:
     energy_score: float = 0.0
     tags: List[str] = None
     embedding: Optional[np.ndarray] = None
+    embedding_model_name: Optional[str] = None
+    embedding_model_version: Optional[str] = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -636,7 +639,7 @@ class ClipSelector:
                 cut_time_sec=float(current_time or 0.0),
                 cut_duration_sec=cut_duration_sec,
                 audio_embedding=af.get("audio_embedding"),
-                video_embedding=vf.get("video_embedding"),
+                video_embedding=vf.get("video_embedding") if is_current_video_embedding(vf) else None,
             )
             from pb_studio.brain.reranker import RerankInput
             rerank_inputs.append(RerankInput(candidate=clip, features=feats))
@@ -858,6 +861,8 @@ class ClipSelector:
         for faiss_id, meta in list(metadata.items()):
             if not isinstance(meta, dict):
                 continue
+            if not is_current_video_embedding(meta):
+                continue
             raw_path = meta.get("path") or meta.get("file_path")
             if not raw_path:
                 continue
@@ -893,7 +898,8 @@ class ClipSelector:
         # Finde das Embedding des Target-Clips in unserem cache/index
         target_emb = None
         for metadata in self.clip_cache.values():
-            if str(Path(metadata.file_path).absolute()) == target_absolute:
+            if (str(Path(metadata.file_path).absolute()) == target_absolute
+                    and is_current_video_embedding(vars(metadata))):
                 target_emb = metadata.embedding
                 break
 
@@ -915,9 +921,11 @@ class ClipSelector:
 
 
         try:
-            results = self.vector_store.search(target_emb, k=10)
+            results = self.vector_store.search(target_emb, k=10, query_identity=current_video_embedding_identity())
             neighbors = []
             for meta, score in results:
+                if not is_current_video_embedding(meta):
+                    continue
                 p = meta.get("path", meta.get("file_path", ""))
                 if p:
                     neighbors.append(str(Path(p).absolute()))
@@ -1175,18 +1183,21 @@ class ClipSelector:
                 results = self.vector_store.search(
                     query_embedding,
                     k=min(10, len(clips)),
+                    query_identity=current_video_embedding_identity(),
                 )
                 faiss_status = "searched"
                 faiss_scores = {
                     self._normalized_path_key(self._metadata_path(meta)): float(score)
                     for meta, score in results
                     if isinstance(meta, dict)
+                    and is_current_video_embedding(meta)
                     and self._normalized_path_key(self._metadata_path(meta))
                 }
                 faiss_paths = {
                     self._normalized_path_key(self._metadata_path(meta))
                     for meta, _score in results
                     if isinstance(meta, dict)
+                    and is_current_video_embedding(meta)
                 }
                 faiss_paths.discard("")
                 semantic_candidates = [
@@ -1244,6 +1255,8 @@ class ClipSelector:
         # bleibt für bestehende Aufrufer kompatibel. Keine Dummy-Vektoren.
         scored_candidates = []
         for clip in clips:
+            if not is_current_video_embedding(clip):
+                continue
             clip_embedding = clip.get("embedding")
             if clip_embedding is None:
                 clip_embedding = clip.get("video_embedding")
@@ -1479,8 +1492,11 @@ class ClipSelector:
 
     def add_clip(self, clip: ClipMetadata) -> int:
         """Fügt einen Clip zur Auswahl hinzu (FAISS-Architektur)."""
-        if clip.embedding is not None and self.vector_store is not None:
+        if (clip.embedding is not None and self.vector_store is not None
+                and is_current_video_embedding(vars(clip))):
             meta_info = {
+                "embedding_model_name": clip.embedding_model_name,
+                "embedding_model_version": clip.embedding_model_version,
                 "video_id": clip.video_id,
                 "file_path": clip.file_path,
                 "start_time": clip.start_time,
@@ -1502,17 +1518,23 @@ class ClipSelector:
         query_embedding: np.ndarray,
         k: int = 5,
         exclude_ids: Optional[List[int]] = None,
+        *, query_identity=None,
     ) -> List[Tuple[ClipMetadata, float]]:
         """FAISS-basierte Ähnlichkeitssuche."""
+        if not is_current_video_embedding(query_identity):
+            logger.warning("Similarity unavailable: query identity missing or incompatible")
+            return []
         if self.vector_store is None or self.vector_store.index.ntotal == 0:
             logger.warning("VectorStore nicht verfügbar — Zufallsauswahl")
             return self._random_selection_meta(k)
 
-        results = self.vector_store.search(query_embedding, k=k * 2)
+        results = self.vector_store.search(query_embedding, k=k * 2, query_identity=query_identity)
         selected = []
         exclude_set = set(exclude_ids) if exclude_ids else set()
 
         for meta, score in results:
+            if not is_current_video_embedding(meta):
+                continue
             faiss_id = meta.get("video_id", -1)
             if faiss_id in exclude_set:
                 continue
@@ -1590,6 +1612,7 @@ class ClipSelector:
         required_tags: Optional[List[str]] = None,
         weights: Optional[Dict[str, float]] = None,
         k: int = 5,
+        *, query_identity=None,
     ) -> List[Tuple[ClipMetadata, float]]:
         """Hybrid-Auswahl mit gewichteten Kriterien (FAISS-Architektur)."""
         if weights is None:
@@ -1607,7 +1630,9 @@ class ClipSelector:
         scored = []
         for clip in candidates:
             score = 0.0
-            if query_embedding is not None and clip.embedding is not None:
+            if (query_embedding is not None and is_current_video_embedding(query_identity)
+                    and clip.embedding is not None
+                    and is_current_video_embedding(vars(clip))):
                 score += self._cosine_similarity(query_embedding, clip.embedding) * weights.get("similarity", 0.0)
             if energy_target is not None:
                 score += (1.0 - abs(clip.energy_score - energy_target)) * weights.get("energy", 0.0)

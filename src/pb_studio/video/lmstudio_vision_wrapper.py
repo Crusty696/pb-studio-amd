@@ -28,6 +28,7 @@ from typing import Any, Callable, Optional
 
 import numpy as np
 from pb_studio.ai.config_loader import load_ai_config as _load_ai_config
+from pb_studio.caption_contract import CAPTION_TAG_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -194,17 +195,21 @@ def _publish_status(model: str, provider: str, status: str, percent: float) -> N
     except Exception as exc:  # noqa: BLE001 - Status ist rein kosmetisch
         logger.debug("llm_status publish fehlgeschlagen: %s", exc)
 
-# Deutscher Prompt — Tags kommagetrennt, knapp, keine Erklaerung.
-# Figuren zuerst: der fruehere Prompt lieferte fast nur Ort und Stimmung
-# (T013, 2026-09-30). Keine Merkmal-Beispiele wie "Fluegel" im Text — die
-# hat qwen2.5-vl im A/B-Test in jedes Bild hineinhalluziniert.
+# T054: conditionally describe figures and prioritize concrete scene content.
+# Real-frame A/B reduced invented groups; semantic quality remains limited.
 DEFAULT_PROMPT = (
-    "Analysiere dieses Video-Frame. Gib 8-12 praegnante Tags zurueck, "
-    "kommagetrennt, deutsch. Beginne mit den sichtbaren Personen oder Wesen: "
-    "wie viele (bei mehr als drei nur 'gruppe'), was fuer eine Figur, "
-    "Kleidung, was sie tun. Keine Hautfarbe nennen. Danach Ort, "
-    "Licht und Farben, Stimmung. Nenne nur, was eindeutig im Bild zu sehen "
-    "ist. Nur die Tags, keine Erklaerung, keine Nummern."
+    'Analysiere den sichtbaren Inhalt dieses einzelnen Video-Frames. '
+    'Pruefe Vordergrund, Bildmitte und Hintergrund. '
+    'Gib bis zu 12 kurze deutsche Tags kommagetrennt aus; weniger sind erlaubt. '
+    'Nenne eindeutig sichtbare Personen oder Wesen mit ihrer Anzahl und sichtbarer Kleidung. '
+    'Falls keine eindeutig erkennbar sind, erfinde keine Personen oder Gruppe. '
+    'Bei mehr als drei eindeutig erkennbaren Figuren schreibe gruppe. '
+    'Erfasse ausserdem die wichtigsten konkreten Objekte, die Umgebung, Lichtquellen und Farben. '
+    'Bevorzuge diese Bildinhalte gegenueber allgemeinen Stimmungswoertern. '
+    'Keine Bewegung oder Handlung aus einer Pose ableiten, keine Geschichte erfinden. '
+    'Lasse unsichere Details weg. '
+    'Keine Hautfarbe. '
+    'Nur Tags, keine Erklaerung oder Nummerierung.'
 )
 
 # T014 (2026-10-01, Davids Entscheid): Hautfarbe wird unter farbigem Licht und
@@ -236,6 +241,13 @@ def _normalize_tag(tag: str) -> str | None:
     """None for skin-tone tags; 'gruppe von ...' instead of counts above three."""
     if _SKIN_TONE_RE.search(tag):
         return None
+    # Some VLMs emit the count after the noun: "Menschen (5)". Treat it
+    # like a leading count; never generalize counts of non-person objects.
+    suffix_count = re.fullmatch(r"(.+?)\s*\((\d+)\)", tag)
+    if suffix_count and int(suffix_count[2]) > 3:
+        subject = suffix_count[1].strip()
+        if any(w.startswith(_PERSON_NOUN_PREFIXES) for w in subject.split()):
+            return "gruppe von " + subject
     words = tag.split()
     if (
         len(words) >= 2
@@ -298,6 +310,10 @@ def _looks_like_prose(
     *,
     has_list_prefix: bool,
 ) -> bool:
+    if has_list_prefix and len(parts) == 1:
+        # A model can put "Tags:" before a whole sentence. Preserve the
+        # existing keyword recovery without reviving filtered list entries.
+        return len(re.findall(r"[^\W\d_]+", parts[0], flags=re.UNICODE)) > 4
     if has_list_prefix or re.search(r"(?m)^\s*(?:[-*]|\d+[.)])\s+", text):
         return False
     # Three or more comma items are a tag list even if one item is long or the
@@ -319,7 +335,7 @@ def _looks_like_prose(
     )
 
 
-def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
+def _parse_tags(raw: str, *, max_tags: int = CAPTION_TAG_LIMIT) -> list[str]:
     """Parsed kommagetrennte (oder Zeilen-getrennte) Tags zu sauberer Liste.
 
     Defensive: Vision-Modelle koennen Bullet-Listen, Punkte am Ende, etc.
@@ -344,14 +360,25 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
     seen: set[str] = set()
     stem_counts: dict[str, int] = defaultdict(int)
     prose = _looks_like_prose(text, parts, has_list_prefix=has_list_prefix)
+    # Filter whole clauses before prose tokenization. Otherwise "dunkle Haut"
+    # becomes harmless-looking individual words and bypasses the phrase rule.
+    # Conservatively discard a clause containing a forbidden description;
+    # other comma-separated clauses remain available.
+    prose_text = ", ".join(
+        part for part in parts if _normalize_tag(part.lower()) is not None
+    ) if prose else text
     candidates = (
-        re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE)
+        re.findall(r"[^\W\d_]+", prose_text.lower(), flags=re.UNICODE)
         if prose
         else parts
     )
     for candidate in candidates:
         # entferne fuehrende Bulletpoints/Nummern (-, *, 1., usw.)
-        cleaned = candidate.lstrip("-*0123456789. )").strip(".;:!?\"'()[]")
+        # Strip list numbering ("1. tag"), not subject counts ("5 menschen").
+        cleaned = re.sub(r"^\s*(?:[-*]\s*|\d+[.)](?!\d)\s*)", "", candidate)
+        cleaned = cleaned.strip().strip(".;:!?\"'[]")
+        if cleaned.startswith("(") and cleaned.endswith(")"):
+            cleaned = cleaned[1:-1].strip()
         cleaned = cleaned.strip().lower()
         if not cleaned or len(cleaned) < 3:
             continue
@@ -379,21 +406,8 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         seen.add(cleaned)
         if len(tags) >= max_tags:
             break
-    if not tags and not prose:
-        for word in re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE):
-            if len(word) < 3 or word in _STOPWORDS or word in seen:
-                continue
-            if _normalize_tag(word) is None:
-                continue
-            # Gleiche Bremse wie oben — sonst ist dieser Pfad ein Schlupfloch.
-            stem = word[:_STEM_LEN]
-            if stem_counts[stem] >= _MAX_PER_STEM:
-                continue
-            stem_counts[stem] += 1
-            tags.append(word)
-            seen.add(word)
-            if len(tags) >= max_tags:
-                break
+    # Prose is already tokenized above. Never resurrect deliberately rejected
+    # list entries (e.g. a skin-tone phrase) by splitting them into words.
     return tags
 
 
@@ -668,7 +682,7 @@ async def extract_tags_and_model_via_lmstudio_async(
 
     Returns:
         Tuple aus:
-            - Liste von max 10 Tags (lowercased, Stopwords gefiltert)
+            - Liste von max 12 Tags (lowercased, Stopwords gefiltert)
             - Name des benutzten Modells (z.B. "qwen3-vl-8b" oder "none")
     """
     if frame_rgb is None:
@@ -755,7 +769,7 @@ def extract_tags_via_lmstudio(
         timeout_seconds: HTTP-Timeout fuer den Chat-Call.
 
     Returns:
-        Liste von max 10 Tags (lowercased, Stopwords gefiltert).
+        Liste von max 12 Tags (lowercased, Stopwords gefiltert).
     """
     tags, _ = extract_tags_and_model_via_lmstudio(
         frame_rgb,

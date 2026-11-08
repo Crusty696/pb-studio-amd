@@ -1,0 +1,22 @@
+[
+  {
+    "Path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json",
+    "Hash": "799C551D5ACD11EA49FA157E2FFF26183E3AF7E548B2364E4D2E2C888B5CDE1A"
+  },
+  {
+    "Path": "C:\\Users\\david\\AppData\\Roaming\\PBStudio\\settings.json",
+    "Hash": "F615AFD0CA354429FEA527DAB4E141E156E3C696A175B1F2065AADAAD58DA2A3"
+  },
+  {
+    "Path": "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\CURRENT",
+    "Hash": "E7A937BDBD116B337963C3D87F4F603DA2710B79C809BE9994830AFC975F3963"
+  },
+  {
+    "Path": "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY",
+    "Hash": "B7C659AB5C7CA0E72CAB15AC09775B569D651AD711BD3DB2E182E078C65794E9"
+  },
+  {
+    "Path": "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\journal.json",
+    "Hash": "0508B7EA2737C39F39CDE52FD79835C8D7695F9804FB4175C2BD389C1E381BC2"
+  }
+]

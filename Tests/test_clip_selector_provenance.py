@@ -9,6 +9,8 @@ import pytest
 
 from pb_studio.pacing.clip_selector import ClipSelector
 
+CURRENT = {"embedding_model_name": "siglip_vision", "embedding_model_version": "onnx-dml-v2"}
+
 
 def _clips(count: int = 6) -> list[dict]:
     return [
@@ -100,12 +102,13 @@ class _VectorStore:
         self.index = SimpleNamespace(ntotal=len(results))
         self.results = results
 
-    def search(self, _embedding, *, k):
+    def search(self, _embedding, *, k, query_identity):
+        assert query_identity == CURRENT
         return self.results[:k]
 
 
 def test_semantic_faiss_path_records_semantic_and_motion_scores() -> None:
-    store = _VectorStore([({"file_path": "target.mp4"}, 0.91)])
+    store = _VectorStore([({"file_path": "target.mp4", **CURRENT}, 0.91)])
     selector = ClipSelector(strategy="semantic", vector_store=store)
     selector._get_text_embedding = lambda _prompt: np.array(
         [1.0, 0.0], dtype=np.float32
@@ -143,6 +146,7 @@ def test_semantic_direct_path_records_similarity_without_changing_ranking() -> N
             "file_path": "semantic.mp4",
             "motion_score": 0.5,
             "video_embedding": [1.0, 0.0],
+            **CURRENT,
         }
     ]
     clips.extend(
@@ -151,6 +155,7 @@ def test_semantic_direct_path_records_similarity_without_changing_ranking() -> N
             "file_path": f"middle-{index}.mp4",
             "motion_score": 0.0,
             "video_embedding": [0.8, 0.6],
+            **CURRENT,
         }
         for index in range(9)
     )
@@ -160,6 +165,7 @@ def test_semantic_direct_path_records_similarity_without_changing_ranking() -> N
             "file_path": "motion-only.mp4",
             "motion_score": 0.5,
             "video_embedding": [-1.0, 0.0],
+            **CURRENT,
         }
     )
 

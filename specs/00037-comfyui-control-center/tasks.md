@@ -1,64 +1,64 @@
 # Tasks: PB-Studio Control Center Masterplan
 
-> Aktuelle Freigabe 2026-10-13: T001/T003/T004 und zugehörige T045-Prüfungen sind zur Umsetzung freigegeben; siehe phase-manifests.md und wave-a/. Anschließendes „nächser schritt“ autorisiert Welle B T005/T006 samt zugehörigem T045-Anteil innerhalb derselben Betriebsgrenzen; Belege wave-b/. Frühere Aussagen „keine Implementierung/alle Tasks offen“ dokumentieren den Planreviewstand und gelten nicht als Widerruf dieser begrenzten Freigabe. Keine Generierung, GPU-Läufe, Migrationen oder Installationen.
+> Aktualisiert 2026-10-20: T001/T003-T006/T008 sowie T046-T056 im dokumentierten Umfang abgeschlossen. T002/T007 bleiben offen. [Lesbare Gesamtuebersicht mit allen Haken](masterplan-status.md). T008 nur isolierter Vertrag, kein Produkt-/ComfyUI-Lauf.
 
-Status 2026-10-19: T001/T003/T004 (Welle A) und T005/T006 (Welle B, Bibliotheks-/Vertragsscope) umgesetzt und isoliert geprüft; 40 Pakete offen. T002: begrenzte GPU-Teilprüfung mit 18 tatsächlichen Läufen dokumentiert ([Bericht](t002-gpu-check-2026-10-19/gpu-check-report.md)); BeatNet-/Downbeat-Befunde offen. 9/9 ausgewählte Regressionstestmedien mit begrenzten PB-CPU-Funktionen erneut bestanden ([Gegenprüfung](t002-regression-preparation-2026-10-13/technical-countercheck-2026-10-19.md)); vollständige Nativebaseline, Holdout und Qualitätsgrenzen offen. T045 nur anteilig geprüft. Kein G1, keine Produkt-/Medienabnahme. Requirements: [spec.md](spec.md). Architektur/Typen/Transitions/Gates: [plan.md](plan.md). Vollständige Rückverfolgbarkeit: [traceability.md](traceability.md). Fachliche Gesamtgegenprüfung: [domain-contracts.md](domain-contracts.md).
+Stand 2026-10-20: 6 von 45 urspruenglichen Paketen abgeschlossen, 39 noch nicht abgeschlossen (inklusive T002/T007 und wiederkehrendem T045). Zusaetzlich sind 11 Teil-/Reparaturaufgaben T046-T056 unter T002 erledigt. Diese werden nicht als weitere abgeschlossene Hauptpakete gezaehlt. T055 bedeutet abgeschlossene Untersuchung, nicht behobene Caption-Qualitaet. T056 bedeutet gepruefte SigLIP-/Versionsreparatur, keine Bestandsmigration oder GUI-Abnahme. Details und Belege: [current-status.md](current-status.md).
 
 ## Ausführungskonvention
 
-Neue Source-/Test-/Workflowdateien unten sind geplante Liefergegenstände, keine jetzt vorhandenen Implementierungen. Als „Modify“ aufgeführte zukünftige Dateien werden erst durch benannte Vorgänger erstellt; bestehende Dateien sind auf Existenz geprüft. Produktwrites erst nach Freigabe und dem jeweiligen O-/Ggate. Jede Phase erhält eigenes Manifest/Spec/Tasks/Evidence; Package-Checkbox erst [X], wenn sämtliche ausgewählten Pflichtcapabilities/Iterationsgates bestanden sind. Optionale Erweiterungen benötigen ausdrücklich gewählten Scope.
+Neue Source-/Test-/Workflowdateien unten sind geplante Liefergegenstände, soweit die zugehoerige Aufgabe noch offen ist. Als „Modify“ aufgeführte zukünftige Dateien werden erst durch benannte Vorgänger erstellt; bestehende Dateien sind auf Existenz geprüft. Produktwrites erst nach Freigabe und dem jeweiligen O-/Ggate. Jede Phase erhält eigenes Manifest/Spec/Tasks/Evidence; Package-Checkbox erst [X], wenn sämtliche ausgewählten Pflichtcapabilities/Iterationsgates bestanden sind. Optionale Erweiterungen benötigen ausdrücklich gewählten Scope.
 
 Verify-PY bedeutet nach Tests implementieren: `PYTHONPATH=src`, `.venv\Scripts\python.exe -m pytest <unten angegebene Testsdatei> -q --basetemp <eigener erzeugter Tasktemp>`. Erwartung erst im realen Lauf PASS/0; konkrete Assertions stehen je Paket. Verify-WPF bedeutet `dotnet test PBStudio.UI.Tests\PBStudio.UI.Tests.csproj -c Release --logger "trx;LogFileName=comfy-task.trx" --results-directory <eigener Tasktemp>` ausführen, `dotnet build PBStudio.UI\PBStudio.UI.csproj -c Release`, danach ausdrücklich sichtbaren Flow prüfen. Keine dieser Prüfungen jetzt ausführen. Genauer Temp-/Isolationsvertrag in Plan T.
 
 ## Paketindex
 
-| ID | Phase | Abhängigkeiten | Requirements | Ziel |
-|---|---|---|---|---|
-| T001 | P0 | keine | TR-001, RR-005, RR-006 | Policy, Source-Drift und offene Gates festhalten |
-| T002 | P0 | T001 | FR-005, RR-003, RR-004 | Golden Set, Native-Baseline und Qualityprofile |
-| T003 | P1 | T001 | FR-001, FR-002, TR-002 | Lesende Endpointbindung und Offlinefähigkeit |
-| T004 | P1 | T003 | FR-002, TR-004 | Capability-, Node- und Modellidentitäten |
-| T005 | P1 | T004 | FR-003, TR-003 | Workflowregistry, Revisionen und typed Mapping |
-| T006 | P1 | T005 | TR-001, OR-005 | Local-only, Trust, Egress und Redaction |
-| T007 | P1 | T002, T005, T006 | FR-009, RR-004 | Früher lokaler Hardware- und Medien-Smoke |
-| T008 | P2 | T005 | TR-005, TR-006, TR-012 | Result-, Zeit- und Embeddingvalidatoren |
-| T009 | P2 | T008, T010, T011 | TR-007, RR-003 | Immutable Analyse-Runs und Cacheidentität |
-| T010 | P2 | T001, T008 | TR-008, TR-009, OR-004 | Persistente Projektidentität und drei Automaten |
-| T011 | P2 | T007, T010 | TR-008, TR-009, RR-001 | Additiver Store, UUIDmapping und Migrationsvertrag |
-| T012 | P2 | T006, T007, T011, T015 | FR-013, TR-009, OR-003 | Scheduler, Submitoutbox und bounded Dispatch |
-| T013 | P2 | T012 | TR-009, OR-004, RR-002 | Remote-Beobachtung und Reconciliation |
-| T014 | P2 | T013, T010 | FR-013, OR-002, RR-002 | Own-Cancel, Pause, Retry und Priorität |
-| T015 | P2 | T001, T007, T011 | OR-001, OR-003 | Shared Admission, Budget und Ressourcenprofil |
-| T016 | OPTIONAL | T015, T014 | OR-001, OR-002 | Optionaler kooperativer Managed-GPU-Gate |
-| T017 | P2 | T005, T006, T011 | TR-011, OR-005 | Sicherer Input-/Outputtransport |
-| T018 | P2 | T002, T008, T017 | OR-007, TR-012 | Technische QC und rationale Medienzeit |
-| T019 | P2 | T010, T011, T017, T018, T009 | FR-010, FR-011, TR-010, OR-008 | Canonical Import, Provenance und Ownership |
-| T020 | P2 | T008, T019, T009 | TR-006, TR-010, RR-002 | Durable ADD-Vektorsaga im Native-SigLIP-Raum |
-| T021 | P2 | T013, T014, T019, T020 | OR-004, RR-001, RR-002 | Recoveryinventar, Remoteactivity und Shutdown |
-| T022 | P2 | T014, T019, T021 | TR-002, OR-006 | PB REST-, Snapshot- und SSE-Jobverträge |
-| T023 | P3 | T007, T022 | FR-002, FR-016, OR-006 | WPF Verbindung, Settings und Installationshilfe |
-| T024 | P3 | T023, T005, T019 | FR-003, FR-009, FR-016 | WPF Workflowlibrary und manuelle Generation |
-| T025 | P3 | T023, T024, T014 | FR-013, FR-016, OR-006 | WPF Jobs, Queue-Reorder und Herkunftsfilter |
-| T026 | P3a | T007, T009, T020, T021, T025 | FR-009, FR-010, RR-004, RR-005 | Integrierten lokalen Generation-MVP abnehmen |
-| T027 | P3b | T026, T019 | FR-009, FR-011, FR-012 | Varianten, Regenerate und weitere Inputfamilien |
-| T028 | P4 | T027 | FR-012, TR-012 | Upscale als qualifiziertes Derivat |
-| T029 | P4 | T027, T018 | FR-012, TR-012 | Interpolation und rationales FPS-Derivat |
-| T030 | P4 | T027, T018 | FR-012, TR-011, TR-012 | Begrenzter Reshot und Kontinuitätsprüfung |
-| T031 | P5 | T008, T009, T026 | FR-005, TR-005, TR-007 | Native Stageadapter und Consumerdurchleitung |
-| T032 | P5 | T002, T031 | FR-006, FR-005, RR-003 | Alternative Beat-/Downbeat-/Timingprovider |
-| T033 | P5 | T002, T031, T019 | FR-006, FR-007, RR-003 | Stems und Drumtriggerprovider |
-| T034 | P5 | T002, T031, T032 | FR-006, TR-005, RR-003 | Energie, Struktur, Harmonie und Longmixprovider |
-| T035 | P5 | T002, T031 | FR-008, TR-005, RR-003 | Alternative Caption-/Inhalts-/Moodprovider |
-| T036 | P5 | T002, T031, T018 | FR-008, TR-005, OR-007 | Szenen, Motion, Technik und Qualityprovider |
-| T037 | OPTIONAL | T002, T020, T031 | TR-006, RR-001 | Optionale alternative und segmentweise Embeddingräume |
-| T038 | P5 | T002, T009, T031 | FR-004, FR-005, RR-003 | Vergleichsmodus und Kohortenqualifikation |
-| T039 | P6 | T038, T031, T015 | FR-004, RR-003 | Qualifiziertes AUTO und sichtbares Degrade |
-| T040 | P7 | T026, T027, T031, T038, T043, T030 | FR-014, TR-012, RR-002 | Director Coverage, Asset-DAG und Timelinebindung |
-| T041 | P8 | T021, T026, T040, T043 | FR-015, OR-003, TR-012, RR-005 | Bounded Longform-Automation und Gesamtvideo |
-| T042 | OPTIONAL | T027, T038, T040 | FR-016, RR-003 | Optionales Generatorfeedback und Lernen |
-| T043 | P3/P8-PRE | T019, T020, T021 | OR-008, OR-003, RR-001 | Retention, Ownership, Archivierung und sichere GC |
-| T044 | OPTIONAL | T005, T023, T026 | FR-016, TR-004 | Optionaler Setupwizard und Entwicklerhilfe |
-| T045 | RECURRING | keine | RR-005, RR-006 | Phasenweise Regression, QC und Liefernachweis |
+| ID | Status | Phase | Abhängigkeiten | Requirements | Ziel |
+|---|---|---|---|---|---|
+| T001 | [X] Erledigt | P0 | keine | TR-001, RR-005, RR-006 | Policy, Source-Drift und offene Gates festhalten |
+| T002 | [ ] Teilweise | P0 | T001 | FR-005, RR-003, RR-004 | Golden Set, Native-Baseline und Qualityprofile |
+| T003 | [X] Erledigt | P1 | T001 | FR-001, FR-002, TR-002 | Lesende Endpointbindung und Offlinefähigkeit |
+| T004 | [X] Erledigt | P1 | T003 | FR-002, TR-004 | Capability-, Node- und Modellidentitäten |
+| T005 | [X] Erledigt | P1 | T004 | FR-003, TR-003 | Workflowregistry, Revisionen und typed Mapping |
+| T006 | [X] Erledigt | P1 | T005 | TR-001, OR-005 | Local-only, Trust, Egress und Redaction |
+| T007 | [ ] Offen | P1 | T002, T005, T006 | FR-009, RR-004 | Früher lokaler Hardware- und Medien-Smoke |
+| T008 | [X] Erledigt | P2 | T005 | TR-005, TR-006, TR-012 | Isolierte Result-, Zeit- und Embeddingvalidatoren |
+| T009 | [ ] Offen | P2 | T008, T010, T011 | TR-007, RR-003 | Immutable Analyse-Runs und Cacheidentität |
+| T010 | [ ] Offen | P2 | T001, T008 | TR-008, TR-009, OR-004 | Persistente Projektidentität und drei Automaten |
+| T011 | [ ] Offen | P2 | T007, T010 | TR-008, TR-009, RR-001 | Additiver Store, UUIDmapping und Migrationsvertrag |
+| T012 | [ ] Offen | P2 | T006, T007, T011, T015 | FR-013, TR-009, OR-003 | Scheduler, Submitoutbox und bounded Dispatch |
+| T013 | [ ] Offen | P2 | T012 | TR-009, OR-004, RR-002 | Remote-Beobachtung und Reconciliation |
+| T014 | [ ] Offen | P2 | T013, T010 | FR-013, OR-002, RR-002 | Own-Cancel, Pause, Retry und Priorität |
+| T015 | [ ] Offen | P2 | T001, T007, T011 | OR-001, OR-003 | Shared Admission, Budget und Ressourcenprofil |
+| T016 | [ ] Optional offen | OPTIONAL | T015, T014 | OR-001, OR-002 | Optionaler kooperativer Managed-GPU-Gate |
+| T017 | [ ] Offen | P2 | T005, T006, T011 | TR-011, OR-005 | Sicherer Input-/Outputtransport |
+| T018 | [ ] Offen | P2 | T002, T008, T017 | OR-007, TR-012 | Technische QC und rationale Medienzeit |
+| T019 | [ ] Offen | P2 | T010, T011, T017, T018, T009 | FR-010, FR-011, TR-010, OR-008 | Canonical Import, Provenance und Ownership |
+| T020 | [ ] Offen | P2 | T008, T019, T009 | TR-006, TR-010, RR-002 | Durable ADD-Vektorsaga im Native-SigLIP-Raum |
+| T021 | [ ] Offen | P2 | T013, T014, T019, T020 | OR-004, RR-001, RR-002 | Recoveryinventar, Remoteactivity und Shutdown |
+| T022 | [ ] Offen | P2 | T014, T019, T021 | TR-002, OR-006 | PB REST-, Snapshot- und SSE-Jobverträge |
+| T023 | [ ] Offen | P3 | T007, T022 | FR-002, FR-016, OR-006 | WPF Verbindung, Settings und Installationshilfe |
+| T024 | [ ] Offen | P3 | T023, T005, T019 | FR-003, FR-009, FR-016 | WPF Workflowlibrary und manuelle Generation |
+| T025 | [ ] Offen | P3 | T023, T024, T014 | FR-013, FR-016, OR-006 | WPF Jobs, Queue-Reorder und Herkunftsfilter |
+| T026 | [ ] Offen | P3a | T007, T009, T020, T021, T025 | FR-009, FR-010, RR-004, RR-005 | Integrierten lokalen Generation-MVP abnehmen |
+| T027 | [ ] Offen | P3b | T026, T019 | FR-009, FR-011, FR-012 | Varianten, Regenerate und weitere Inputfamilien |
+| T028 | [ ] Offen | P4 | T027 | FR-012, TR-012 | Upscale als qualifiziertes Derivat |
+| T029 | [ ] Offen | P4 | T027, T018 | FR-012, TR-012 | Interpolation und rationales FPS-Derivat |
+| T030 | [ ] Offen | P4 | T027, T018 | FR-012, TR-011, TR-012 | Begrenzter Reshot und Kontinuitätsprüfung |
+| T031 | [ ] Offen | P5 | T008, T009, T026 | FR-005, TR-005, TR-007 | Native Stageadapter und Consumerdurchleitung |
+| T032 | [ ] Offen | P5 | T002, T031 | FR-006, FR-005, RR-003 | Alternative Beat-/Downbeat-/Timingprovider |
+| T033 | [ ] Offen | P5 | T002, T031, T019 | FR-006, FR-007, RR-003 | Stems und Drumtriggerprovider |
+| T034 | [ ] Offen | P5 | T002, T031, T032 | FR-006, TR-005, RR-003 | Energie, Struktur, Harmonie und Longmixprovider |
+| T035 | [ ] Offen | P5 | T002, T031 | FR-008, TR-005, RR-003 | Alternative Caption-/Inhalts-/Moodprovider |
+| T036 | [ ] Offen | P5 | T002, T031, T018 | FR-008, TR-005, OR-007 | Szenen, Motion, Technik und Qualityprovider |
+| T037 | [ ] Optional offen | OPTIONAL | T002, T020, T031 | TR-006, RR-001 | Optionale alternative und segmentweise Embeddingräume |
+| T038 | [ ] Offen | P5 | T002, T009, T031 | FR-004, FR-005, RR-003 | Vergleichsmodus und Kohortenqualifikation |
+| T039 | [ ] Offen | P6 | T038, T031, T015 | FR-004, RR-003 | Qualifiziertes AUTO und sichtbares Degrade |
+| T040 | [ ] Offen | P7 | T026, T027, T031, T038, T043, T030 | FR-014, TR-012, RR-002 | Director Coverage, Asset-DAG und Timelinebindung |
+| T041 | [ ] Offen | P8 | T021, T026, T040, T043 | FR-015, OR-003, TR-012, RR-005 | Bounded Longform-Automation und Gesamtvideo |
+| T042 | [ ] Optional offen | OPTIONAL | T027, T038, T040 | FR-016, RR-003 | Optionales Generatorfeedback und Lernen |
+| T043 | [ ] Offen | P3/P8-PRE | T019, T020, T021 | OR-008, OR-003, RR-001 | Retention, Ownership, Archivierung und sichere GC |
+| T044 | [ ] Optional offen | OPTIONAL | T005, T023, T026 | FR-016, TR-004 | Optionaler Setupwizard und Entwicklerhilfe |
+| T045 | [ ] Teilweise | RECURRING | keine | RR-005, RR-006 | Phasenweise Regression, QC und Liefernachweis |
 
 ## Detaillierte Arbeitspakete
 
@@ -249,6 +249,8 @@ Verify-PY bedeutet nach Tests implementieren: `PYTHONPATH=src`, `.venv\Scripts\p
 - [ ] T007 [US1] {(FR-009)} {(RR-004)} Früher lokaler Hardware- und Medien-Smoke in `C:\Users\david\Documents\Pb_studio_AMD_version\workflows\generation\pilot\manifest.json`.
 
 **ID / Titel / Ziel:** T007 / Früher lokaler Hardware- und Medien-Smoke. Ergebnis: G1-Receipt, gebundene ResourceProfile/WorkflowBundle-Revision.
+
+Fortsetzung 2026-10-19: Nutzer ueberspringt T002 explizit fuer diese Arbeitsreihenfolge. Livevorpruefung begonnen, wechselnde fremde Runtime verhindert aktuelle Node-/Modellbindung und Pilot. Siehe t007-preflight-2026-10-19/report.md. T002/T007/G1 bleiben offen.
 **Abhängigkeiten / Gates:** T002, T005, T006. O03, bewusster separat autorisierter Smoke; nicht während Planung.
 **Aufwand:** groß; technisch bestimmt durch die unten benannten Dateien, Systemübergänge und Failure-/Abnahmefälle; keine Zeitschätzung.
 
@@ -278,7 +280,9 @@ Verify-PY bedeutet nach Tests implementieren: `PYTHONPATH=src`, `.venv\Scripts\p
 
 ### T008 — Result-, Zeit- und Embeddingvalidatoren
 
-- [ ] T008 [P] [US3] {(TR-005)} {(TR-006)} {(TR-012)} Result-, Zeit- und Embeddingvalidatoren in `C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\providers\contracts.py`.
+Arbeitsreihenfolge: Nutzer ueberspringt ComfyUI-Lauf T007; T008 wurde unabhaengig nach T005 isoliert abgeschlossen. T007/G1 bleiben offen und werden durch T008 nicht ersetzt.
+
+- [X] T008 [P] [US3] {(TR-005)} {(TR-006)} {(TR-012)} Result-, Zeit- und Embeddingvalidatoren in `C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\providers\contracts.py`.
 
 **ID / Titel / Ziel:** T008 / Result-, Zeit- und Embeddingvalidatoren. Ergebnis: ResultEnvelope/AnalysisRun/StageResult/EmbeddingPayload, validate_result/validate_embedding.
 **Abhängigkeiten / Gates:** T005. kein produktives Umschreiben bestehender APIfelder.
@@ -342,6 +346,8 @@ Verify-PY bedeutet nach Tests implementieren: `PYTHONPATH=src`, `.venv\Scripts\p
 ### T010 — Persistente Projektidentität und drei Automaten
 
 - [ ] T010 [US2] {(TR-008)} {(TR-009)} {(OR-004)} Persistente Projektidentität und drei Automaten in `C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\jobs\models.py`.
+
+Fortsetzung 2026-10-20: reine Q1/Q2/Q3-Vertragsfixtures, strikte Snapshot-/Wire-Validierung, Reparaturphasen-/Attempt-Receipt-/Job-Terminalevent-Bindung sowie Cancelintent und Analyse-Wartegrund; 34 isolierte Tests. Echte Receipt-Autoritaet, Persistenz, API-/WPF-Wire und Recoverypruefung fehlen; T010 bleibt offen. Siehe t010-contracts-2026-10-20/report.md. G1/Gmigration nicht umgangen.
 
 **ID / Titel / Ziel:** T010 / Persistente Projektidentität und drei Automaten. Ergebnis: ProjectIdentity, ProductionBatch-Minimalmodell, LogicalJobSnapshot, AttemptIdentity, ArtifactReceipt und Q-Transitions.
 **Abhängigkeiten / Gates:** T001, T008. O02-Betriebsregel bestätigt; technische Zustands-/Lifecycleabnahme offen.
@@ -1595,4 +1601,17 @@ T046/T047 sind Nacharbeiten unter T002, kein Abschluss des gesamten T002-Qualita
 - [X] T048 {FR-005} Dateizustandsisolation fuer wiederverwendete BeatNet-Instanzen in src/pb_studio/audio/ und Tests/test_beatnet_state.py implementieren.
 - [X] T049 {RR-003, RR-004} A01–A03 Wiederholungs-/Reihenfolgematrix, Review und Schutzbelege in t002-beatnet-state-fix-2026-10-19/ sichern.
 
-T048/T049 abgeschlossen; Scope-QC bestanden. Eine fruehe, nicht isolierte Testausfuehrung beruehrte APPDATA/Brain-Store-Seitendateien und entdeckte einen nicht lesbaren embedding_cache.db. Vorherhash fehlt; Zustand ist offengelegt und unangetastet gelassen. Siehe t002-beatnet-state-fix-2026-10-19/qc-report.md. Gesamt-T002 bleibt offen.
+T048/T049 abgeschlossen; Scope-QC bestanden. Eine fruehe, nicht isolierte Testausfuehrung beruehrte APPDATA/Brain-Store-Seitendateien und entdeckte einen nicht lesbaren embedding_cache.db. Vorherhash fehlt; Zustand ist offengelegt. Nachfolgende ausdruecklich autorisierte Cache-Wiederherstellung am 19.10.2026: siehe current-status.md. Siehe t002-beatnet-state-fix-2026-10-19/qc-report.md. Gesamt-T002 bleibt offen.
+
+
+## T002 — autonome Fortsetzung ohne Generierung
+
+- [X] T053 {RR-003, RR-004} V01-V06 gepruefte Referenzbilder durch nativen Caption-Wrapper analysieren; Live-Modellauswahl, Rohantworten, Schutzdateien und qualitative Gegenpruefung dokumentieren; t002-caption-2026-10-19/. Keine Vollclip- oder Holdoutabnahme.
+- [X] T054 {RR-003, RR-004} Caption-Prompt-/Parservergleich und belegte Reparaturen abgeschlossen: gemeinsames Budget12, Hautfilter, numerische Gruppenregel, neutralerer Prompt; 101 Tests und 84 echte Bildaufrufe dokumentiert in t054-caption-2026-10-19/report.md. Keine allgemeine Qualitaetsfreigabe.
+- [X] T055 {RR-003, RR-004} Restfehler V02/V03 mit42 Caption-Aufrufen untersucht; native Aufloesung/Transport/Reasoning getrennt,18 native Mehrzeitpunktbilder bis Clipmerge geprueft. V03 spaeterer Wasserfall erhalten; mittlere Einzelbild-/V02-Fehler bleiben Qualitaetsgrenze. SigLIP technisch durch42 DirectML-Inferenzen qualifiziert, keine semantische Gesamtfreigabe. Belege t055-vision-2026-10-19/report.md.
+
+- [X] T050 {RR-005} Masterplanstatus und KI-Hirn mit bestaetigten Belegen synchronisieren; current-status.md.
+- [X] T051 {RR-003, RR-004} Isolierte CPU-Spektral-/Strukturpruefung A01-A03 im bereits bewerteten Originalfenster 60-90 s durchfuehren; Wiederholung, Quellschutz und A02-Bereich 70-80 s beschreibend auswerten; t002-spectral-structure-2026-10-19/. Keine unabhaengige Musikqualitaetsabnahme daraus ableiten.
+- [X] T052 {RR-003, RR-004} Vollstaendige V01-V06 CPU-Szenenerkennung zweimal ausfuehren; Softwaredecode, Frameabdeckung, Zeitintervalle und Quellschutz pruefen; t002-scenes-2026-10-19/. Keine Caption-/Szenengrenzenqualitaet ohne Referenz behaupten.
+
+- [X] T056 {RR-003, RR-004} SigLIP-Normalisierung korrigiert und Identitaet onnx-dml-v2 durch Producer/Query/Kandidaten/Reuse/Persistenz/Reload/Backfill abgesichert. Keine Migration/Bestands-Neuberechnung; alte Projektorgewichte unveraendert verweigert.186 gezielte Tests bestanden, unabhaengiger Review, echte DirectML- und Schutzbelege in t055-vision-2026-10-19/. T002/G1/Gesamt-T045 bleiben offen.

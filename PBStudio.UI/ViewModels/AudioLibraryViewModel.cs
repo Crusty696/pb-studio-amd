@@ -434,6 +434,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task LoadAudioClipsAsync()
     {
+        var dispatcher = Application.Current?.Dispatcher
+            ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
         ProjectOperationContext projectContext;
         try
         {
@@ -443,40 +445,18 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        var previousId = SelectedClip?.Id;
         var clips = await _audioLibraryState.RefreshAsync();
         if (!_projectService.IsCurrent(projectContext))
             return;
         if (clips != null)
         {
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+            await dispatcher.InvokeAsync(() =>
             {
-                AudioClips.Clear();
-                foreach (var clipInfo in clips)
-                {
-                    AudioClips.Add(new AudioClipModel
-                    {
-                        Id = clipInfo.Id,
-                        Name = clipInfo.Name,
-                        Path = clipInfo.Path,
-                        DurationSeconds = clipInfo.DurationSeconds,
-                        SampleRate = clipInfo.SampleRate,
-                        Channels = clipInfo.Channels,
-                        Format = clipInfo.Format,
-                        Bpm = clipInfo.Bpm,
-                        Key = clipInfo.Key ?? "",
-                        BeatCount = clipInfo.BeatCount,
-                        IsAnalyzed = clipInfo.IsAnalyzed,
-                        AnalysisStatus = clipInfo.AnalysisStatus,
-                        StageErrors = clipInfo.StageErrors,
-                        // L-N2: Content-Hash fuer CACHED-Badge auf der Card.
-                        AudioHash = clipInfo.AudioHash,
-                        // L-N4: Stem-Paths fuer STEMS-Badge + Open-Folder-Button.
-                        StemsPaths = clipInfo.StemsPaths,
-                    });
-                }
-                if (previousId.HasValue)
-                    SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
+                // A project transition can occur after the request completes but
+                // before this queued UI publication runs.
+                if (!_projectService.IsCurrent(projectContext))
+                    return;
+                ReconcileAudioClips(clips);
                 StatusText = $"{clips.Count} Audio-Clips geladen";
                 AnalyzeAllCommand.NotifyCanExecuteChanged();
             });
@@ -485,6 +465,76 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         {
             StatusText = "Audio-Clips laden fehlgeschlagen";
         }
+    }
+
+    private void ReconcileAudioClips(IReadOnlyList<AudioClipInfo> clips)
+    {
+        // Keep bound instances so an ordinary refresh does not reset WPF's
+        // extended selection or rebuild every item container. Project transitions
+        // still clear the collection through ResetProjectState before IDs recur.
+        var existing = AudioClips.ToDictionary(clip => clip.Id);
+        var incomingIds = clips.Select(clip => clip.Id).ToHashSet();
+        for (var index = AudioClips.Count - 1; index >= 0; index--)
+        {
+            if (!incomingIds.Contains(AudioClips[index].Id))
+                AudioClips.RemoveAt(index);
+        }
+
+        for (var index = 0; index < clips.Count; index++)
+        {
+            var info = clips[index];
+            if (!existing.TryGetValue(info.Id, out var clip))
+            {
+                clip = new AudioClipModel { Id = info.Id };
+                ApplyClipInfo(clip, info);
+                AudioClips.Insert(index, clip);
+            }
+            else
+            {
+                ApplyClipInfo(clip, info);
+                if (!ReferenceEquals(AudioClips[index], clip))
+                    AudioClips.Move(AudioClips.IndexOf(clip), index);
+            }
+        }
+
+        for (var index = SelectedClips.Count - 1; index >= 0; index--)
+        {
+            if (!incomingIds.Contains(SelectedClips[index].Id))
+                SelectedClips.RemoveAt(index);
+        }
+        if (SelectedClip is { } selected)
+        {
+            if (!incomingIds.Contains(selected.Id))
+                SelectedClip = null;
+            else
+            {
+                // Instance identity no longer changes on refresh, so refresh the
+                // detail fields explicitly without discarding the selected beatgrid.
+                Bpm = selected.Bpm;
+                BeatCount = selected.BeatCount;
+                Key = selected.Key;
+                DurationSeconds = selected.DurationSeconds;
+            }
+        }
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    private static void ApplyClipInfo(AudioClipModel clip, AudioClipInfo info)
+    {
+        clip.Name = info.Name;
+        clip.Path = info.Path;
+        clip.DurationSeconds = info.DurationSeconds;
+        clip.SampleRate = info.SampleRate;
+        clip.Channels = info.Channels;
+        clip.Format = info.Format;
+        clip.Bpm = info.Bpm;
+        clip.Key = info.Key ?? "";
+        clip.BeatCount = info.BeatCount;
+        clip.IsAnalyzed = info.IsAnalyzed;
+        clip.AnalysisStatus = info.AnalysisStatus;
+        clip.StageErrors = info.StageErrors;
+        clip.AudioHash = info.AudioHash;
+        clip.StemsPaths = info.StemsPaths;
     }
 
     [RelayCommand]

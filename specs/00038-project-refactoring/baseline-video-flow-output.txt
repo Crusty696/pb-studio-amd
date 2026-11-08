@@ -1,0 +1,43 @@
+BASELINE SOURCE: C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\backend\routers\pacing_router.py
+BASELINE SOURCE: C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\src\pb_studio\pacing\clip_selector.py
+BASELINE SOURCE: C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\src\pb_studio\services\pacing_service.py
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+collected 1 item
+
+..\..\Tests\test_pacing_video_data_flow.py F                             [100%]
+
+================================== FAILURES ===================================
+___ test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding ___
+..\..\Tests\test_pacing_video_data_flow.py:64: in test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding
+    assert clip["has_embedding"] is True
+E   assert False is True
+============================== warnings summary ===============================
+src\pb_studio\audio\beat_detector.py:65
+  C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\src\pb_studio\audio\beat_detector.py:65: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources  # noqa: F401
+
+..\..\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+..\..\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(scipy_version) < LooseVersion("0.14"):
+
+..\..\.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `maximum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+..\..\.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `minimum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+Tests/test_pacing_video_data_flow.py::test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED ..\..\Tests\test_pacing_video_data_flow.py::test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding
+======================== 1 failed, 6 warnings in 0.94s ========================

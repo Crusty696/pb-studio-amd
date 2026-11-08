@@ -23,7 +23,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 AUDIO_ROUTER = REPO_ROOT / "backend" / "routers" / "audio_router.py"
 AUDIO_SCHEMAS = REPO_ROOT / "backend" / "schemas" / "audio_schemas.py"
 APP_STATE = REPO_ROOT / "backend" / "app_state.py"
-API_CLIENT = REPO_ROOT / "PBStudio.UI" / "Services" / "ApiClient.cs"
+API_RESPONSE_MODELS = REPO_ROOT / "PBStudio.UI" / "Services" / "ApiResponseModels.cs"
 VIEW_MODEL = REPO_ROOT / "PBStudio.UI" / "ViewModels" / "AudioLibraryViewModel.cs"
 VIEW = REPO_ROOT / "PBStudio.UI" / "Views" / "AudioLibraryView.xaml"
 SNAPSHOT = REPO_ROOT / "PBStudio.UI" / "openapi.snapshot.json"
@@ -180,7 +180,7 @@ def test_openapi_snapshot_contains_the_field() -> None:
 
 
 def test_csharp_record_and_transport_mapping() -> None:
-    source = API_CLIENT.read_text(encoding="utf-8")
+    source = API_RESPONSE_MODELS.read_text(encoding="utf-8")
     assert "BeatGrid" in source, "AudioAnalysisResult-Record hat kein BeatGrid"
     assert "ToJsonDictionary(value.Beat_grid)" in source, (
         "FromTransport uebertraegt Beat_grid nicht - das Feld kaeme leer an"

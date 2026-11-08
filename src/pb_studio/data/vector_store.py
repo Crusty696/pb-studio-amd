@@ -600,11 +600,19 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Fehler bei clean_tombstones: {e}", exc_info=True)
 
-    def search(self, query_embedding: np.ndarray, k=5, nprobe: Optional[int] = None):
+    def search(self, query_embedding: np.ndarray, k=5, nprobe: Optional[int] = None, *, query_identity=None):
         """Returns list of (metadata, score). Thread-safe."""
+        from pb_studio.embedding_identity import is_current_video_embedding
         with self._lock:
             self._ensure_open()
             if self.index is None or self.index.ntotal == 0:
+                return []
+            is_video_index = (
+                getattr(self, "index_name", None) == "video_index"
+                or getattr(getattr(self, "index_path", None), "stem", None) == "video_index"
+            )
+            if is_video_index and not is_current_video_embedding(query_identity):
+                logger.warning("Video vector search unavailable: query identity missing or incompatible")
                 return []
 
             # BUG-078 FIX: nprobe handling for IVF indexes
@@ -615,14 +623,19 @@ class VectorStore:
             q_copy = query_embedding.copy().reshape(1, -1)
             faiss.normalize_L2(q_copy)
             tombstoned = getattr(self, "_tombstoned_ids", set())
-            search_k = min(int(self.index.ntotal), max(int(k), int(k) + len(tombstoned)))
+            incompatible = {
+                int(idx) for idx, meta in self.metadata.items()
+                if is_video_index and not is_current_video_embedding(meta)
+            }
+            excluded = set(tombstoned) | incompatible
+            search_k = min(int(self.index.ntotal), max(int(k), int(k) + len(excluded)))
             D, I = self.index.search(q_copy, search_k)
 
             results = []
             for i, idx in enumerate(I[0]):
                 # Y6 / L-STATE-2: Tombstoned IDs (vector_map-cascade-removed)
                 # ausfiltern — sonst liefert FAISS Hits zu geloeschten Clips.
-                if idx != -1 and idx in self.metadata and int(idx) not in tombstoned:
+                if idx != -1 and idx in self.metadata and int(idx) not in excluded:
                     score = float(D[0][i])
                     meta = self.metadata[idx]
                     results.append((meta, score))
