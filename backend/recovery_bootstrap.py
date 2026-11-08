@@ -13,6 +13,7 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import time
 from typing import Any
 import uuid
 
@@ -29,6 +30,7 @@ JOURNAL_STATES = {
 DELETE_IF_PRESENT = "delete_if_present"
 RUNTIME_DIRTY_NAME = "RUNTIME_DIRTY"
 logger = logging.getLogger(__name__)
+_ATOMIC_REPLACE_DELAYS = (0.01, 0.03, 0.06)
 
 
 class RecoveryBootstrapError(RuntimeError):
@@ -98,7 +100,17 @@ def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
             json.dump(value, handle, ensure_ascii=False, sort_keys=True, indent=2)
             handle.write("\n")
             _fsync_file(handle)
-        os.replace(temporary, path)
+        for attempt, delay in enumerate((*_ATOMIC_REPLACE_DELAYS, None)):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                if (
+                    getattr(exc, "winerror", None) not in {5, 32}
+                    and getattr(exc, "errno", None) not in {5, 13}
+                ) or delay is None:
+                    raise
+                time.sleep(delay)
         _fsync_parent(path)
     finally:
         if temporary.exists():

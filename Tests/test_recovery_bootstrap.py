@@ -96,6 +96,30 @@ def test_atomic_json_write_uses_independent_temp_files_under_concurrency(
     assert json.loads(target.read_text(encoding="utf-8"))["writer"] in {0, 1}
 
 
+def test_atomic_json_write_retries_transient_windows_sharing_violation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "journal.json"
+    real_replace = recovery_bootstrap.os.replace
+    calls = 0
+
+    def transient_windows_lock(source: str | Path, destination: str | Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise PermissionError(5, "Access is denied")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(recovery_bootstrap.os, "replace", transient_windows_lock)
+    monkeypatch.setattr(recovery_bootstrap.time, "sleep", lambda _delay: None)
+
+    recovery_bootstrap._atomic_write_json(target, {"writer": 1})
+
+    assert calls == 3
+    assert json.loads(target.read_text(encoding="utf-8")) == {"writer": 1}
+
+
 def test_backend_runs_bootstrap_before_config_and_logging() -> None:
     source = (Path(__file__).parents[1] / "backend" / "main.py").read_text(
         encoding="utf-8"

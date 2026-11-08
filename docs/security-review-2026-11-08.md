@@ -122,3 +122,7 @@ Der erste vollstaendige PR-Lauf hatte 2237 Python-Tests bestanden, 35 genehmigte
 ## Zweiter CI-Nachlauf am 08.11.2026
 
 Der Fix fuer den optionalen madmom-Import beseitigte den ersten CI-Fehler. Der zweite volle Lauf bestand 2236 Tests und meldete danach WinError 5 in 	est_atomic_json_write_uses_independent_temp_files_under_concurrency, weil der Test %TEMP% statt des isolierten %LOCALAPPDATA%-Recovery-Control-Roots verwendete. Der Test nutzt jetzt ixed_control_root(); gezielter Windows-Test bestanden. Erneuter vollstaendiger CI-Lauf offen.
+
+## Dritter CI-Nachlauf am 08.11.2026
+
+Der Recovery-Concurrency-Fehler blieb auch am isolierten LOCALAPPDATA-Pfad reproduzierbar: Windows verweigerte einen zeitgleichen atomaren Replace (WinError 5). ackend/recovery_bootstrap.py wiederholt nun nur Access-Denied/Sharing-Violations begrenzt dreimal mit kurzen Verzoegerungen. Sonstige OSErrors werden unveraendert weitergereicht. Gezielte Regression mit zwei simulierten Sperren und anschliessendem Erfolg sowie Paralleltest bestanden lokal. Vollstaendige CI-Pruefung dieses Fixes steht aus.
