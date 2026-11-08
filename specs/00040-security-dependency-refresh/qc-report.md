@@ -17,3 +17,9 @@ Frischer SCA-Bericht: keine unfreigegebenen Befunde nach drei exakten Ausnahmen.
 
 Gezielte Tests der neuen Umgebung, finale acht CI-Checks und regulaerer Merge.
 Keine neue Produkt-/GUI-/Medienabnahme Gegenstand dieses Auftrags.
+
+## Python CI Nachlauf
+
+- CI auf 301d98c: 2237 passed, 35 skipped, 9 deselected, 1 failed. Ein echter PF-Decoder-Test importierte das optionale madmom ohne Guard.
+- Enger Skip ueber pytest.importorskip plus exakt passende, befristete Allowlist-Regel hinzugefuegt. Regressionstest fuer Gatevertraege: 8/8 bestanden. BeatNet-State-Tests lokal mit madmom: 9/9 bestanden.
+- CI-Nachweis nach Fix und Merge offen; Spec bleibt NOT RELEASE-READY.

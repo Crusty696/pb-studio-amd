@@ -114,3 +114,7 @@ Legacy-Skips bleiben explizite Testluecken, keine bestandenen Funktionstests.
   Finale GitHub-Suite prueft den neuen Dependency-Stand vollstaendig.
 - Keine Produktcodeaenderung, kein App-Neustart und keine neue GUI-/Medienabnahme.
   PR 34 bleibt bis gruenen Pflichtchecks ungemergt.
+
+## CI-Nachlauf am 08.11.2026
+
+Der erste vollstaendige PR-Lauf hatte 2237 Python-Tests bestanden, 35 genehmigte Skips, 9 Deselections und einen Fehler: der optionale madmom-Import im echten BeatNet-PF-State-Test war nicht abgefangen. Der Test ueberspringt diesen optionalen Fall nun, wenn madmom fehlt. Eine exakte Skip-Freigabe fuer diesen einzelnen Test ist bis 2026-12-08 befristet; synthetische State-Tests laufen weiter. Der Gatevertragstest besteht lokal 8/8; der BeatNet-State-Test besteht lokal 9/9 mit madmom installiert. Finale Clean-CI-Verifikation steht aus.

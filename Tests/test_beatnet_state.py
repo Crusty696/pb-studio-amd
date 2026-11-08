@@ -79,6 +79,7 @@ def test_microphone_stream_state_is_not_reset():
 
 
 def test_real_beatnet_pf_decoder_snapshot_restores_file_state_without_rewinding_rng():
+    pytest.importorskip("madmom")
     from BeatNet.BeatNet import BeatNet
 
     estimator = BeatNet(1, mode="realtime", inference_model="PF", plot=[], thread=False, device="cpu")

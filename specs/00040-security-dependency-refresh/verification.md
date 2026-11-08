@@ -19,3 +19,6 @@
 - Spec00028 und Spec00040 fuer offene Phase mit bestehendem Validator ohne
   Findings. Keine neue Abschlussbehauptung fuer offene DTO-/GUI-Abnahme.
 - GitHub-Gesamtlauf und Merge stehen noch aus; kein CI-PASS vorweggenommen.
+
+- GitHub-CI-Nachlauf: 2237 passed, 35 skipped, 9 deselected, 1 failure; Ursache ist ein ungeguardeter Import des optionalen madmom im echten PF-Decoder-Test. Der Test nutzt nun importorskip; die Skip-Ausnahme ist auf genau diesen Node begrenzt und laeuft 2026-12-08 ab.
+- Regressionen: Tests/test_release_ci_gate_regressions.py 8/8 bestanden. Die BeatNet-State-Tests bestehen lokal 9/9 mit installiertem madmom; der frische isolierte Dependency-Aufbau blieb unvollstaendig und wurde beendet, bevor der Skip im Clean-venv bestaetigt war. Vollstaendiger GitHub-Runner bleibt entscheidender Nachweis.

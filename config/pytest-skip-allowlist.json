@@ -2,6 +2,12 @@
   "schema_version": 1,
   "entries": [
     {
+      "nodeid": "Tests/test_beatnet_state.py::test_real_beatnet_pf_decoder_snapshot_restores_file_state_without_rewinding_rng",
+      "owner": "audio",
+      "expires_on": "2026-12-08",
+      "reason": "Real BeatNet PF decoder integration requires optional madmom; synthetic state isolation tests run in the locked default environment."
+    },
+    {
       "nodeid": "Tests/test_beat_detector_import_hygiene.py::test_missing_pyaudio_stub_does_not_leak_into_sys_modules",
       "owner": "audio",
       "expires_on": "2026-12-08",
