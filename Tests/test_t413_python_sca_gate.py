@@ -202,7 +202,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "2.11.0+cpu",
                 "alias": "GHSA-RRMF-RVHW-RF47",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-10-31",
+                "expires_on": "2026-12-08",
                 "reason": (
                     "Affected torch.jit.script is absent in the shipped repository; "
                     "fresh-target compatibility and runtime tests remain required."
@@ -214,39 +214,37 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "81.0.0",
                 "alias": "GHSA-H35F-9H28-MQ5C",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-10-31",
+                "expires_on": "2026-12-08",
                 "reason": (
                     "The release target is Windows x64 with wheel-only installation, "
                     "which defeats the macOS sdist precondition."
                 ),
             },
             {
-                "id": "T413-TRANSFORMERS-CVE-2026-9856",
-                "package": "transformers",
-                "version": "5.5.4",
-                "alias": "GHSA-XRQW-3RRV-VX5W",
+                "id": "T413-SETUPTOOLS-GHSA-XMJ3-9GF7-H52W",
+                "package": "setuptools",
+                "version": "81.0.0",
+                "alias": "GHSA-XMJ3-9GF7-H52W",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-10-31",
+                "expires_on": "2026-12-08",
                 "reason": (
-                    "The only production save_pretrained call was removed; all "
-                    "remaining Transformers loads are local_files_only and no "
-                    "affected serialization sink remains reachable."
+                    "Legacy Wheel.install_as_egg is absent from product/setup paths; "
+                    "installation uses modern pip with exact wheel hashes. "
+                    "CPU torch 2.11.0 requires setuptools<82; re-evaluate with its upgrade."
                 ),
             },
         ],
     }
-    # Die Ausnahmen sind am 2026-10-01 erneut ausgestellt worden, nachdem die
-    # Frist vom 2026-08-30 (+ 30 Tage = 2026-09-29) auslief. Das 30-Tage-Fenster
-    # ist die eigentliche Zusicherung dieser Zeile - eine Verlaengerung darf
-    # es nicht stillschweigend dehnen.
-    assert date.fromisoformat("2026-10-31") - date(2026, 10, 1) == timedelta(days=30)
+    # Revalidated with user approval on 2026-11-08; retain the 30-day bound.
+    # The real loader below still rejects expiration rather than freezing time.
+    assert date.fromisoformat("2026-12-08") - date(2026, 11, 8) == timedelta(days=30)
     assert len(security_gate._load_python_sca_exceptions(SCA_EXCEPTIONS)) == 3
 
     lock = tmp_path / "approved-exceptions.lock"
     lock.write_text(
         "setuptools==81.0.0 --hash=sha256:" + "1" * 64 + "\n"
         "torch==2.11.0+cpu --hash=sha256:" + "2" * 64 + "\n"
-        "transformers==5.5.4 --hash=sha256:" + "3" * 64 + "\n",
+        "transformers==5.10.4 --hash=sha256:" + "3" * 64 + "\n",
         encoding="utf-8",
     )
     report = tmp_path / "approved-exceptions-report.json"
@@ -263,6 +261,11 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                             "id": "GHSA-h35f-9h28-mq5c",
                             "aliases": ["CVE-2026-59890", "PYSEC-2026-3447"],
                             "fix_versions": ["83.0.0"],
+                        },
+                        {
+                            "id": "GHSA-xmj3-9gf7-h52w",
+                            "aliases": [],
+                            "fix_versions": ["84.1.0"],
                         }
                     ],
                 },
@@ -279,14 +282,8 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 },
                 {
                     "name": "transformers",
-                    "version": "5.5.4",
-                    "vulns": [
-                        {
-                            "id": "GHSA-xrqw-3rrv-vx5w",
-                            "aliases": ["CVE-2026-9856", "PYSEC-2026-3929"],
-                            "fix_versions": ["5.10.0"],
-                        }
-                    ],
+                    "version": "5.10.4",
+                    "vulns": [],
                 },
             ],
             "fixes": [],
@@ -307,9 +304,26 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
         entry["id"] for entry in receipt_payload["applied_exceptions"]
     ] == [
         "T413-SETUPTOOLS-CVE-2026-59890",
+        "T413-SETUPTOOLS-GHSA-XMJ3-9GF7-H52W",
         "T413-TORCH-CVE-2025-3000",
-        "T413-TRANSFORMERS-CVE-2026-9856",
     ]
+
+    # The retired Transformers exception must no longer approve its old sink.
+    lock.write_text(lock.read_text().replace("5.10.4", "5.5.4"))
+    vulnerable_report = json.loads(report.read_text())
+    vulnerable_report["dependencies"][-1].update(
+        version="5.5.4",
+        vulns=[{
+            "id": "GHSA-xrqw-3rrv-vx5w",
+            "aliases": ["CVE-2026-9856"],
+            "fix_versions": ["5.10.0"],
+        }],
+    )
+    _write_json(report, vulnerable_report)
+    with pytest.raises(ValueError, match="contains vulnerabilities"):
+        security_gate._pip_audit_report(
+            _args(report, lock, receipt, expect_clean=True, exceptions=SCA_EXCEPTIONS)
+        )
 
 
 @pytest.mark.parametrize(

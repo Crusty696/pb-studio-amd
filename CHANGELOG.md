@@ -1,5 +1,12 @@
 # CHANGELOG - PB Studio AMD Edition
 
+## 2026-11-08 - Sicherheitsrefresh nach Bereinigung
+
+- Acht Python-Pakete hashgebunden aktualisiert; CPU-PyTorch und NumPy 1.26.4 erhalten. 130 Pakete im neuen Lock, isolierte Vollinstallation und pip check bestanden.
+- Frischer SCA-Lauf: keine unfreigegebenen Befunde; drei exakt begrenzte Ausnahmen bis 08.12.2026. Transformers-Ausnahme entfernt, setuptools-Legacyinstallationsbefund nach Pfadpruefung aufgenommen (Torch verlangt setuptools<82).
+- Skip-Liste revalidiert, drei ueberholte Eintraege entfernt. 149 gezielte Tests bestanden, 1 Skip; finale CI-Checks vor Merge erforderlich. Details: `docs/security-review-2026-11-08.md`.
+- Abgeschlossene Dokumentbereinigung und ehrlicher offener Spec00028-Status separat gesichert; keine neue GUI-/Medienabnahme.
+
 ## 2026-11-08 - Git-Synchronisierung des vorhandenen Projektstands
 
 - Vorhandene Caption-/Embedding-Vertraege, ComfyUI-Vertraege, Refaktorierung 00038 und Bereinigungsbelege 00039 fuer GitHub und `main` zusammengefuehrt.
