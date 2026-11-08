@@ -1,0 +1,54 @@
+{
+  "purpose": "Unver\u00e4nderte historische Originale vor Statuskorrektur; keine neue Abnahme.",
+  "files": [
+    {
+      "path": "spec.md",
+      "sha256": "985fed95bb31c0283e9bc5a10181f567add3617fd25d59bf528cc8dc8b145216"
+    },
+    {
+      "path": "plan.md",
+      "sha256": "fa6bae8f258d2715980075dd8ca238cd16b72da6727cc673012ee2dd65774e7d"
+    },
+    {
+      "path": "tasks.md",
+      "sha256": "2b02bbf5def4de8b55e85e457b2cfd09d2da039eae7605e4cc0ec8a7d6168840"
+    },
+    {
+      "path": "qc-report.md",
+      "sha256": "b9406148d39a639395acf7c2bdefaec10bfb73a8451de178ff673f925f21ba4d"
+    },
+    {
+      "path": ".completed",
+      "sha256": "77f58e19db9f532eb282163ff282f1d2548cd9982c641a2a6ccd2874d803acb0"
+    },
+    {
+      "path": ".qc-passed",
+      "sha256": "9638b6b2949c62559e7386cad91b01e904641fbcc304db6eaf60773966504104"
+    },
+    {
+      "path": "baseline.md",
+      "original_path": "evidence/baseline.md",
+      "sha256": "ca8f6c9aa115bdf8a3a0711e2264d3183535ffa9acde213e23d11bf170236ccb"
+    },
+    {
+      "path": "design-review.md",
+      "original_path": "evidence/design-review.md",
+      "sha256": "5cc62d6ca6250d88f3dbf40490909a3c3a45d81a976fcb5c8f90ce89fe260b45"
+    },
+    {
+      "path": "final-checks.md",
+      "original_path": "evidence/final-checks.md",
+      "sha256": "bc75375537d8c7a75723a67b91d2f3b91429e5f7d6e265698a05bb73d505e1b5"
+    },
+    {
+      "path": "requirements-matrix.md",
+      "original_path": "evidence/requirements-matrix.md",
+      "sha256": "ad9e050aca2f2ee95ce7068e366a08a2725b927905bf73600ff42ba6efe1e166"
+    },
+    {
+      "path": "review.md",
+      "original_path": "evidence/review.md",
+      "sha256": "fd4fd48e76519504ed3183b075fdfecf5c15bac096d0a19b7469f7f654f5f80d"
+    }
+  ]
+}

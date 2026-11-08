@@ -1,3 +1,5 @@
+> Historischer Beleg: Aussagen und PASS-/VERIFIZIERT-Wertungen im folgenden Originaltext gelten für den damaligen Dokumentationsstand, nicht als aktuelle vollständige Abnahme. Aktueller Status: REOPENED / NOT RELEASE-READY; siehe `../remediation-report.md` und `../qc-report.md`. Originalbytes: `legacy-2026-11-08/review.md`.
+
 # Review: DTO-Konsolidierung (Spec 00028)
 
 Datum: 2026-09-12

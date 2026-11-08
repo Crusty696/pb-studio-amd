@@ -1,5 +1,7 @@
 # Team-Briefing: Read-only Voll-Review PB Studio (2026-10-04)
 
+> **Historische Auftragsvorlage, eingeordnet am 08.11.2026:** Die folgenden Rollen, Branch-/Dateistände und Arbeitsaufträge gelten für das Review vom 04.10.2026. Das Lesen dieser Quelle startet keinen neuen Vollreview und erteilt keine Schreib- oder Ausführungsfreigabe. Aktueller Nutzerauftrag, AGENTS.md und die zuständige Spec bestimmen heutige Arbeit. Die dokumentierte Recovery-Gefahr beim Backend-Import bleibt ein zu berücksichtigender Sicherheitsbefund; ihr heutiger Implementierungsstand ist hier nicht erneut geprüft.
+
 Repo: `C:\Users\david\Documents\Pb_studio_AMD_version` · Branch `codex/full-audit-remediation` · HEAD `e51e798`
 Auftrag des Nutzers: Projekt reviewen, toten Code und Redundanz finden, Refactoring vorbereiten.
 **In dieser Phase wird NICHTS am Code geändert.** Jede Datei, jede Zeile prüfen. Keine Annahmen.

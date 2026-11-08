@@ -1,17 +1,13 @@
 # QC Report: DTO-Konsolidierung
 
-## Ergebnis
+## Authoritative OBJ-1 Gate
 
-PASS — fokussierte QC am 2026-09-24.
+- **Overall result:** **REOPENED / NOT RELEASE-READY**.
+- Stand: 2026-11-08. Statuskorrektur und Strukturmigration; keine neue Produktabnahme.
+- `evidence/live.md` fehlt, obwohl die historische Aufgabe T006 sichtbare Backend-/GUI-Abnahme verlangte und als erledigt markiert war.
+- Historische Test-/Buildberichte bleiben erhalten. Ihre damaligen Aussagen belegen weder eine aktuelle Laufabnahme noch den fehlenden GUI-Nachweis.
+- Aktive Revalidierung T001–T008 offen. Keine aktive `.completed` oder `.qc-passed`, solange vollständige Belege und commitgebundene Manifeste fehlen.
 
-## Verifikation
+## Historische Provenienz
 
-- `PYTHONPATH=src .venv\Scripts\python.exe -m pytest Tests\test_openapi_snapshot_drift.py -q`
-- Ergebnis im sequenziellen Featurelauf: 4/4 Tests bestanden.
-- Bestehende C#-Evidence: 64/64 Transport-/Unit-Tests bestanden.
-- OpenAPI-Snapshot driftfrei; Release-Build 0 Fehler, 0 Warnungen.
-- Vollsuite: 1855 passed, 12 skipped, 0 failed.
-
-## Restbefund
-
-Keine bekannten Vertragsfehler.
+Der unveränderte Bericht vom 24.09.2026, die damalige Aufgabenliste und beide Klartextmarker liegen unter `evidence/legacy-2026-11-08/`; Originalhashes stehen in dessen `manifest.json`. Das dortige PASS ist eine historische Aussage und keine aktuelle Freigabe. Die Originalinhalte der fuenf Evidence-Dokumente bleiben erhalten und sind in den aktiven Dateien mit einem vorangestellten historischen Statushinweis versehen; ihre unveränderten Originalbytes liegen ebenfalls im Archiv.

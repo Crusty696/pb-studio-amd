@@ -1,6 +1,6 @@
 # Plan: C#-Transporttypen auf NSwag konsolidieren
 
-**Status:** PLANNED, 2026-09-07. **Basis:** spec.md.
+**Status:** REVALIDATION OPEN, 2026-11-08. **Basis:** spec.md.
 
 ## Voraussetzungen und Clarify
 Spec gelesen; Umfang durch FR/TR-IDs begrenzt. Konkrete vorgeschlagene Entscheidungen stehen in spec.md. Kein Nutzerwunsch wird als bereits getestet ausgegeben. Vor Implementation prüft Parent das vorgelagerte OBJ-75-Gate sowie neue Architektur-/API-Entscheidungen; keine stillschweigende Umgehung.
@@ -20,3 +20,7 @@ Unvollständige Consumer-Inventare, Nebenläufigkeit und Wire-Compatibility expl
 ## Fertigstellung
 Tasks erst nach belegter Umsetzung abhaken. .completed erst nach vollständiger Implementation, qc-report.md und .qc-passed erst nach bestandener tatsächlicher QC. Brain-Log durch Parent aktualisieren.
 
+
+## Statuskorrektur 2026-11-08
+
+Historische Umsetzung nicht erneut pauschal ausführen. Zuerst vorhandene Belege den neuen Revalidierungsaufgaben zuordnen; nur verbleibende Lücken prüfen. Die alte Aufgabenliste und Marker bleiben bytegleich unter `evidence/legacy-2026-11-08/`. Aktive Completion-/QC-Marker fehlen bewusst: insbesondere `evidence/live.md` fehlt. Keine aktuelle Produkt-, GUI- oder Releaseabnahme aus der Dokumentmigration ableiten.

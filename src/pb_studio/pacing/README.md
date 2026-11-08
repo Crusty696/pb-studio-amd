@@ -277,6 +277,6 @@ When contributing to the pacing engine:
 ## Support
 
 For issues, questions, or feature requests:
-- Check `docs/pacing_engine_integration.md`
+- Check `docs/architecture/ai-runtime-contracts.md`
 - Review examples in `docs/examples/pacing_example.py`
 - See main project README for support channels
