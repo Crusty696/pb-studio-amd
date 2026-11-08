@@ -126,3 +126,7 @@ Der Fix fuer den optionalen madmom-Import beseitigte den ersten CI-Fehler. Der z
 ## Dritter CI-Nachlauf am 08.11.2026
 
 Der Recovery-Concurrency-Fehler blieb auch am isolierten LOCALAPPDATA-Pfad reproduzierbar: Windows verweigerte einen zeitgleichen atomaren Replace (WinError 5). ackend/recovery_bootstrap.py wiederholt nun nur Access-Denied/Sharing-Violations begrenzt dreimal mit kurzen Verzoegerungen. Sonstige OSErrors werden unveraendert weitergereicht. Gezielte Regression mit zwei simulierten Sperren und anschliessendem Erfolg sowie Paralleltest bestanden lokal. Vollstaendige CI-Pruefung dieses Fixes steht aus.
+
+## Skip-Gate-Nachlauf am 08.11.2026
+
+Der dritte vollstaendige Python-Lauf bestand 2238 Tests, scheiterte danach allein an 20 ungefreigebenen Skips in 	est_beatnet_compat.py. Alle Faelle nutzen madmom.features.downbeats.DBNDownBeatTrackingProcessor; madmom ist laut optionaler Requirements-Datei eine source-built optionale Abhaengigkeit. Fuer genau dieses Modul wurde eine befristete Ausnahme bis 2026-12-08 dokumentiert und eine Gate-Regression ergaenzt. Erneuter vollstaendiger CI-Lauf offen.

@@ -27,3 +27,5 @@ Keine neue Produkt-/GUI-/Medienabnahme Gegenstand dieses Auftrags.
 - Zweiter CI-Lauf beseitigte den optionalen madmom-Importfehler, fand danach einen WinError 5 im Recovery-Paralleltest unter %TEMP%. Testziel auf den isolierten LOCALAPPDATA-Control-Root umgestellt; gezielter Windows-Test bestanden. Vollstaendiger GitHub-Nachweis noch offen.
 
 - Dritter CI-Nachlauf reproduzierte WinError 5 beim parallelen Replace auch unter isoliertem LOCALAPPDATA. Begrenzter Retry fuer Windows Access-Denied/Sharing-Violation implementiert. Simulierte Retry-Regression und Konkurrenztest lokal bestanden; finale CI-Verifikation offen.
+
+- Dritter voller Lauf bestand 2238 Tests; Gate stoppte bei 20 nicht freigegebenen optionalen madmom-Skips des DBN-Adaptermoduls. Modulregel eng und befristet aufgenommen; Regression sichert Owner, Ablaufdatum und Grund. Erneuter Voll-CI-Lauf offen.

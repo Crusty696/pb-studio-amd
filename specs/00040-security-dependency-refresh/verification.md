@@ -26,3 +26,5 @@
 - Zweiter GitHub-Lauf: madmom-Testfehler beseitigt; 2236 passed, 36 skipped, 9 deselected, danach scheiterte der Recovery-Concurrency-Test an WinError 5 beim Ersetzen unter %TEMP%. Der Test schrieb entgegen der festgelegten Testisolation nicht in %LOCALAPPDATA%. Test nun auf ecovery_bootstrap.fixed_control_root() umgestellt; gezielter Windows-Lauf bestanden.
 
 - Dritter GitHub-Lauf reproduzierte WinError 5 auch unter dem isolierten LOCALAPPDATA-Root. _atomic_write_json wiederholt Windows Access-Denied/Sharing-Violation (WinError 5/32; errno 5/13) mit drei kurzen begrenzten Verzoegerungen; sonstige Fehler bleiben sofort sichtbar. Regression mit zwei simulierten Sperren plus erfolgreichem Replace und Paralleltest lokal bestanden.
+
+- Dritter voller Lauf: 2238 passed, 36 skipped, 9 deselected. Fehler war einzig der Skip-Guard: 20 	est_beatnet_compat.py-Faelle nutzen madmom-Decoderobjekte, und die fruehere Modulregel war im Skip-Audit nicht freigegeben. Exakte Modulwildcard bis 2026-12-08 mit Begruendung aufgenommen und Policy-Regression hinzugefuegt; lokale gezielte Gate-/Kompatibilitaetspruefung laeuft.

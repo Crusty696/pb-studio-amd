@@ -9,3 +9,4 @@
 - [X] T007 [OBJ-1] {TR-001} CI-Ursache des optionalen madmom-Imports beheben, Python-Skip-Guard und Allowlist bis 2026-12-08 nachweisen; finale Checks und Merge fortsetzen.
 - [X] T008 [OBJ-1] {TR-001} Recovery-Concurrency-Test an den isolierten LOCALAPPDATA-Control-Root anbinden; gezielter Windows-Test bestanden.
 - [X] T009 [OBJ-1] {TR-001} Transiente Windows-Sharing-/Zugriffsfehler bei atomarem Recovery-JSON-Replace dreimal begrenzt wiederholen; Regression und Paralleltest bestanden.
+- [X] T010 [OBJ-1] {TR-001} Vollsuite-Skipbericht auswerten und optionale BeatNet-DBN-Adaptertests eng am 	est_beatnet_compat.py-Modul bis 2026-12-08 freigeben; Regression hinzufuegen.

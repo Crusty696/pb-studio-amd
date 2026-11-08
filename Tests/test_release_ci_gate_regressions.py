@@ -55,6 +55,16 @@ def test_python_quality_governs_generated_dto_skips() -> None:
         assert "Windows .NET/NSwag lane" in entry["reason"]
 
 
+def test_beatnet_compat_skip_is_scoped_to_optional_madmom_module() -> None:
+    policy = json.loads(_read("config/pytest-skip-allowlist.json"))
+    entries = {entry["nodeid"]: entry for entry in policy["entries"]}
+    entry = entries["Tests/test_beatnet_compat.py::*"]
+
+    assert entry["owner"] == "audio"
+    assert entry["expires_on"] == "2026-12-08"
+    assert "optional source-built dependency" in entry["reason"]
+
+
 def test_expected_wrong_hash_failure_returns_success_to_github() -> None:
     workflow = _read(".github/workflows/security.yml")
     tracked_requirements = _read(

@@ -2,6 +2,12 @@
   "schema_version": 1,
   "entries": [
     {
+      "nodeid": "Tests/test_beatnet_compat.py::*",
+      "owner": "audio",
+      "expires_on": "2026-12-08",
+      "reason": "The DBN adapter contract tests construct madmom DBNDownBeatTrackingProcessor instances; madmom is an explicitly optional source-built dependency."
+    },
+    {
       "nodeid": "Tests/test_beatnet_state.py::test_real_beatnet_pf_decoder_snapshot_restores_file_state_without_rewinding_rng",
       "owner": "audio",
       "expires_on": "2026-12-08",
