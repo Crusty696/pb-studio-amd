@@ -537,7 +537,7 @@
       }
     ]
   },
-  "report_sha256": "9f221f426d39733088e88afcf843ff250b103dfdc3b65cc0b5aa0a12c39aca48",
+  "report_sha256": "effdc2f46c64327cec02175e447f54c7b449906f22096c6722a42b395cc29ac3",
   "vulnerabilities": [
     {
       "package": "setuptools",
