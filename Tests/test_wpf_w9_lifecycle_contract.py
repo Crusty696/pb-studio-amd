@@ -70,7 +70,7 @@ def test_audio_stems_and_pacing_use_project_generation_and_cancellation():
 
 
 def test_embedding_status_flows_from_list_dto_to_view():
-    api = _read("Services/ApiClient.cs")
+    api = _read("Services/ApiResponseModels.cs")
     model = _read("Models/VideoClip.cs")
     view_model = _read("ViewModels/VideoLibraryViewModel.cs")
     view = _read("Views/VideoLibraryView.xaml")
@@ -111,7 +111,8 @@ def test_brain_selection_and_navigation_controls_are_reachable():
     assert "SelectedCutId = value?.CutId ?? 0;" in brain_vm
     assert 'SelectedItem="{Binding SelectedLearningSessionCut, Mode=TwoWay}"' in brain_view
 
-    assert '<views:MediaIngestView/>' in main
+    # INGEST tab removed 2026-10-01 (duplicate of AUDIO/VIDEO import, never requested).
+    assert '<views:MediaIngestView/>' not in main
     assert '<views:AnchorView/>' in main
     assert 'Command="{Binding PreviousCutCommand}"' in timeline_view
     assert 'Command="{Binding NextCutCommand}"' in timeline_view

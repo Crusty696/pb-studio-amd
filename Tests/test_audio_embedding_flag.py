@@ -20,6 +20,15 @@ class _State:
     def get_audio_analysis(self, _clip_id):
         return None
 
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def project_operation(self):
+        yield self
+
+    def require_project_context_current(self, _context):
+        pass
+
 
 def test_list_clips_derives_embedding_flag_from_current_cache(monkeypatch):
     audio_router = importlib.import_module("backend.routers.audio_router")

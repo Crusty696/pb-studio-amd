@@ -207,6 +207,137 @@ public sealed class ProjectSwitchUiPublicationTests
     }
 
     [TestMethod]
+    public async Task BrainSuggestions_ProjectTransitionRejectsLateResult()
+    {
+        var suggestionsStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var suggestions = new TaskCompletionSource<BrainSuggestResponse?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectA = new ProjectInfo("A", @"C:\Projects\A", 1, 1, false);
+        var projectB = new ProjectInfo("B", @"C:\Projects\B", 1, 1, false);
+        var nextProject = projectA;
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(nextProject))
+            .Handle(nameof(IApiClient.BrainSuggestAsync), _ =>
+            {
+                suggestionsStarted.TrySetResult(true);
+                return suggestions.Task;
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(projectA.Path));
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        using var viewModel = new DirectorViewModel(
+            api.Client,
+            new AudioLibraryStateService(
+                api.Client,
+                NullLogger<AudioLibraryStateService>.Instance),
+            new VideoLibraryStateService(
+                api.Client,
+                NullLogger<VideoLibraryStateService>.Instance),
+            sse,
+            projects)
+        {
+            SelectedAudioClip = new AudioClipModel { Id = 8, Name = "A audio" },
+        };
+        viewModel.AvailableVideoClips.Add(new SelectableVideoClip
+        {
+            Id = 9,
+            Name = "A video",
+            IsSelected = true,
+        });
+
+        var command = viewModel.LoadBrainSuggestionsCommand.ExecuteAsync(null);
+        await suggestionsStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        WeakReferenceMessenger.Default.UnregisterAll(viewModel);
+        nextProject = projectB;
+        await SwitchProjectAsync(projects, projectB);
+        viewModel.SuggestionsStatus = "Projekt B aktiv";
+        suggestions.SetResult(new BrainSuggestResponse([
+            new BrainSuggestion(1, "clip_9", 0, 1, 0.9, []),
+        ]));
+        await command.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.AreEqual(0, viewModel.BrainSuggestions.Count);
+        Assert.AreEqual("Projekt B aktiv", viewModel.SuggestionsStatus);
+        Assert.IsFalse(viewModel.IsLoadingSuggestions);
+    }
+
+    [TestMethod]
+    public async Task PacingProgress_IgnoresDifferentRequestWithSameAudioId()
+    {
+        var pacingStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var pacing = new TaskCompletionSource<CutListResponse?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        PacingConfig? capturedConfig = null;
+        var project = new ProjectInfo("A", @"C:\Projects\A", 1, 1, false);
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(project))
+            .Handle(nameof(IApiClient.GenerateCutListAsync), arguments =>
+            {
+                capturedConfig = (PacingConfig)arguments![0]!;
+                pacingStarted.TrySetResult(true);
+                return pacing.Task;
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(project.Path));
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        using var viewModel = new DirectorViewModel(
+            api.Client,
+            new AudioLibraryStateService(
+                api.Client,
+                NullLogger<AudioLibraryStateService>.Instance),
+            new VideoLibraryStateService(
+                api.Client,
+                NullLogger<VideoLibraryStateService>.Instance),
+            sse,
+            projects)
+        {
+            SelectedAudioClip = new AudioClipModel { Id = 8, Name = "audio" },
+        };
+        viewModel.AvailableVideoClips.Add(new SelectableVideoClip
+        {
+            Id = 9,
+            Name = "video",
+            IsSelected = true,
+        });
+        viewModel.UpdateSelectedCount();
+
+        var command = viewModel.GenerateCutListCommand.ExecuteAsync(null);
+        await pacingStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var requestId = capturedConfig?.GetType().GetProperty("RequestId")
+            ?.GetValue(capturedConfig)?.ToString();
+        Assert.IsFalse(string.IsNullOrWhiteSpace(requestId));
+
+        var handler = typeof(DirectorViewModel).GetMethod(
+            "OnSseProgressReceived",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        handler.Invoke(viewModel, [null, new ProgressEventArgs
+        {
+            EventType = "pacing_progress",
+            TaskId = "pacing:stale-request",
+            ClipId = 8,
+            Percent = 75,
+        }]);
+
+        Assert.AreEqual(0.0, viewModel.GenerationProgress);
+        pacing.SetResult(null);
+        await command.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+
+    [TestMethod]
     public async Task VideoAnalysis_ProjectTransitionRejectsLateError()
     {
         var analysisStarted = new TaskCompletionSource<bool>(
@@ -358,8 +489,81 @@ public sealed class ProjectSwitchUiPublicationTests
         await command.WaitAsync(TimeSpan.FromSeconds(3));
 
         Assert.AreEqual("Projekt B aktiv", viewModel.Status);
-        Assert.AreEqual(41, viewModel.SelectedCutId);
+        Assert.AreEqual(0, viewModel.SelectedCutId);
         Assert.AreEqual(0, viewModel.TotalClicks);
+    }
+
+    [TestMethod]
+    public async Task ProjectInfoRefresh_ProjectSwitchRejectsLateResponse()
+    {
+        var refreshStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var delayedInfo = new TaskCompletionSource<ProjectInfo?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectA = new ProjectInfo("A", @"C:\Projects\A", 1, 0, false);
+        var projectB = new ProjectInfo("B", @"C:\Projects\B", 2, 0, false);
+        var nextProject = projectA;
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(nextProject))
+            .Handle(nameof(IApiClient.GetProjectInfoAsync), _ =>
+            {
+                refreshStarted.TrySetResult(true);
+                return delayedInfo.Task;
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(projectA.Path));
+
+        var refresh = projects.RefreshProjectInfoAsync();
+        await refreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        nextProject = projectB;
+        Assert.IsTrue(await projects.OpenProjectAsync(projectB.Path));
+        delayedInfo.SetResult(new ProjectInfo("A stale", projectA.Path, 99, 0, false));
+
+        Assert.IsFalse(await refresh.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.AreEqual(projectB.Path, projects.CurrentProject?.Path);
+        Assert.AreEqual("B", projects.CurrentProject?.Name);
+    }
+
+    [TestMethod]
+    public async Task ProjectSave_ProjectSwitchRejectsLateInfoResponse()
+    {
+        var infoStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var delayedInfo = new TaskCompletionSource<ProjectInfo?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectA = new ProjectInfo("A", @"C:\Projects\A", 1, 0, false);
+        var projectB = new ProjectInfo("B", @"C:\Projects\B", 2, 0, false);
+        var nextProject = projectA;
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(nextProject))
+            .Handle(
+                nameof(IApiClient.SaveProjectAsync),
+                _ => Task.FromResult<StatusResponse?>(new StatusResponse(true, "ok")))
+            .Handle(nameof(IApiClient.GetProjectInfoAsync), _ =>
+            {
+                infoStarted.TrySetResult(true);
+                return delayedInfo.Task;
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(projectA.Path));
+
+        var save = projects.SaveProjectAsync();
+        await infoStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        nextProject = projectB;
+        Assert.IsTrue(await projects.OpenProjectAsync(projectB.Path));
+        delayedInfo.SetResult(new ProjectInfo("A stale", projectA.Path, 99, 0, false));
+
+        Assert.IsFalse(await save.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.AreEqual(projectB.Path, projects.CurrentProject?.Path);
+        Assert.AreEqual("B", projects.CurrentProject?.Name);
     }
 
     private static async Task SwitchProjectAsync(

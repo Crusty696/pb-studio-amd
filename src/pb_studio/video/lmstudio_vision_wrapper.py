@@ -28,6 +28,7 @@ from typing import Any, Callable, Optional
 
 import numpy as np
 from pb_studio.ai.config_loader import load_ai_config as _load_ai_config
+from pb_studio.caption_contract import CAPTION_TAG_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,15 @@ _WARM_WINDOW_SECONDS = 600.0
 _WARM_MODELS: dict[tuple[str, str], float] = {}
 _LOAD_BUDGET_SPENT: set[tuple[str, str]] = set()
 _TASK_UNAVAILABLE_UNTIL: dict[str, float] = {}
+# Ein erfolgreicher Vision-Kandidat bleibt fuer den gesamten Prozess an
+# Task+Modus gebunden. Dadurch waehlt die Clip-/Frame-Schleife nicht bei jedem
+# Bild erneut und LM Studio kann genau dieses Modell warm halten. Ein Wechsel
+# erfolgt nur nach einem echten Provider-/Timeout-Fehler; inhaltlich leere
+# Antworten eines einzelnen Frames sind kein Grund, das Modell zu entladen.
+_PINNED_TASK_MODELS: dict[tuple[str, str], tuple[str, str]] = {}
+_TASK_LEASE_COUNTS: dict[str, int] = {}
+_TASK_LEASE_IDLE_UNTIL: dict[str, float] = {}
+_TASK_LEASE_IDLE_GRACE_SECONDS = 15.0
 _COLD_START_STATE_LOCK = threading.RLock()
 _COLD_START_LOCKS: dict[tuple[str, str], threading.Lock] = {}
 _COLD_START_LOCK_POLL_SECONDS = 0.05
@@ -98,6 +108,59 @@ def _ist_warm(model_key: tuple[str, str]) -> bool:
 def _cold_start_lock_for(model_key: tuple[str, str]) -> threading.Lock:
     with _COLD_START_STATE_LOCK:
         return _COLD_START_LOCKS.setdefault(model_key, threading.Lock())
+
+
+def begin_vision_task_lease(task: str = DEFAULT_TASK) -> None:
+    """Protect one complete video request from external model switches."""
+    with _COLD_START_STATE_LOCK:
+        _TASK_LEASE_COUNTS[task] = _TASK_LEASE_COUNTS.get(task, 0) + 1
+        _TASK_LEASE_IDLE_UNTIL.pop(task, None)
+
+
+def end_vision_task_lease(task: str = DEFAULT_TASK) -> None:
+    """Keep a short inter-request grace so GUI batches retain one model."""
+    with _COLD_START_STATE_LOCK:
+        remaining = max(0, _TASK_LEASE_COUNTS.get(task, 0) - 1)
+        if remaining:
+            _TASK_LEASE_COUNTS[task] = remaining
+            return
+        _TASK_LEASE_COUNTS.pop(task, None)
+        _TASK_LEASE_IDLE_UNTIL[task] = (
+            time.monotonic() + _TASK_LEASE_IDLE_GRACE_SECONDS
+        )
+
+
+def active_vision_task_lease(task: str = DEFAULT_TASK) -> dict[str, Any] | None:
+    """Return the active/pending batch lease, if model switching is unsafe."""
+    with _COLD_START_STATE_LOCK:
+        active = _TASK_LEASE_COUNTS.get(task, 0)
+        idle_until = _TASK_LEASE_IDLE_UNTIL.get(task, 0.0)
+        if active <= 0 and idle_until <= time.monotonic():
+            _TASK_LEASE_IDLE_UNTIL.pop(task, None)
+            return None
+        pinned = next(
+            (
+                value
+                for (pinned_task, _mode), value in _PINNED_TASK_MODELS.items()
+                if pinned_task == task
+            ),
+            (None, None),
+        )
+        return {
+            "task": task,
+            "active_requests": active,
+            "provider": pinned[0],
+            "model": pinned[1],
+            "grace_seconds": max(0.0, idle_until - time.monotonic()),
+        }
+
+
+def reset_pinned_vision_models(task: str | None = None) -> None:
+    """Apply a deliberate post-batch model/provider choice to the next job."""
+    with _COLD_START_STATE_LOCK:
+        for key in list(_PINNED_TASK_MODELS):
+            if task is None or key[0] == task:
+                _PINNED_TASK_MODELS.pop(key, None)
 
 
 async def _acquire_cold_start_lock(lock: threading.Lock) -> None:
@@ -132,13 +195,67 @@ def _publish_status(model: str, provider: str, status: str, percent: float) -> N
     except Exception as exc:  # noqa: BLE001 - Status ist rein kosmetisch
         logger.debug("llm_status publish fehlgeschlagen: %s", exc)
 
-# Deutscher Prompt — Tags kommagetrennt, knapp, keine Erklaerung.
+# T054: conditionally describe figures and prioritize concrete scene content.
+# Real-frame A/B reduced invented groups; semantic quality remains limited.
 DEFAULT_PROMPT = (
-    "Analysiere dieses Video-Frame. Gib 5-10 praegnante Tags zurueck, "
-    "kommagetrennt, deutsch. Beispiel: 'tanzen, club, neonlicht, gruppe, "
-    "energetisch'. Nur die Tags, keine Erklaerung, keine Aufzaehlung mit "
-    "Nummern."
+    'Analysiere den sichtbaren Inhalt dieses einzelnen Video-Frames. '
+    'Pruefe Vordergrund, Bildmitte und Hintergrund. '
+    'Gib bis zu 12 kurze deutsche Tags kommagetrennt aus; weniger sind erlaubt. '
+    'Nenne eindeutig sichtbare Personen oder Wesen mit ihrer Anzahl und sichtbarer Kleidung. '
+    'Falls keine eindeutig erkennbar sind, erfinde keine Personen oder Gruppe. '
+    'Bei mehr als drei eindeutig erkennbaren Figuren schreibe gruppe. '
+    'Erfasse ausserdem die wichtigsten konkreten Objekte, die Umgebung, Lichtquellen und Farben. '
+    'Bevorzuge diese Bildinhalte gegenueber allgemeinen Stimmungswoertern. '
+    'Keine Bewegung oder Handlung aus einer Pose ableiten, keine Geschichte erfinden. '
+    'Lasse unsichere Details weg. '
+    'Keine Hautfarbe. '
+    'Nur Tags, keine Erklaerung oder Nummerierung.'
 )
+
+# T014 (2026-10-01, Davids Entscheid): Hautfarbe wird unter farbigem Licht und
+# im Gegenlicht geraten (4 von 5 Fehlern in zwei Pruefrunden). Immer filtern,
+# nicht nur bei schwierigem Licht - das Licht im Frame zuverlaessig zu
+# erkennen waere selbst eine Schaetzung. Der Prompt bittet zusaetzlich darum.
+_SKIN_TONE_RE = re.compile(
+    r"h(?:ä|ae)utig"                                   # dunkelhaeutig, hellhäutige
+    r"|\bhaut(?:farbe|ton|t(?:ö|oe)ne)"                # hautfarbe, hautton
+    r"|\bteint\b|\bskin\b|\bskinned\b"
+    r"|\b(?:dunk\w*|schwarz\w*|hell\w*|wei(?:ß|ss)\w*|braun\w*|gebr(?:ä|ae)unt\w*"
+    r"|blass\w*|oliv\w*|bronze\w*|karamell\w*|ebenholz\w*|rosig\w*)\s+haut\b",
+    re.IGNORECASE,
+)
+
+# Kopfzahlen ueber drei sind meist falsch gezaehlt (T014: 'vier figuren' bei
+# deutlich mehr Figuren, 'vier'/'drei' Frauen im selben Clip).
+_LARGE_COUNT_WORDS = frozenset({
+    "vier", "fünf", "fuenf", "sechs", "sieben", "acht", "neun", "zehn", "elf",
+    "zwölf", "zwoelf", "dutzend", "mehrere", "viele",
+})
+_PERSON_NOUN_PREFIXES = (
+    "frau", "männer", "maenner", "person", "mensch", "figur", "tänzer", "taenzer",
+    "gestalt", "silhouett", "wesen", "mädchen", "maedchen", "kinder", "leute",
+)
+
+
+def _normalize_tag(tag: str) -> str | None:
+    """None for skin-tone tags; 'gruppe von ...' instead of counts above three."""
+    if _SKIN_TONE_RE.search(tag):
+        return None
+    # Some VLMs emit the count after the noun: "Menschen (5)". Treat it
+    # like a leading count; never generalize counts of non-person objects.
+    suffix_count = re.fullmatch(r"(.+?)\s*\((\d+)\)", tag)
+    if suffix_count and int(suffix_count[2]) > 3:
+        subject = suffix_count[1].strip()
+        if any(w.startswith(_PERSON_NOUN_PREFIXES) for w in subject.split()):
+            return "gruppe von " + subject
+    words = tag.split()
+    if (
+        len(words) >= 2
+        and (words[0] in _LARGE_COUNT_WORDS or (words[0].isdigit() and int(words[0]) > 3))
+        and any(w.startswith(_PERSON_NOUN_PREFIXES) for w in words[1:])
+    ):
+        return "gruppe von " + " ".join(words[1:])
+    return tag
 
 _STOPWORDS = frozenset({
     "und", "oder", "die", "der", "das", "ein", "eine", "ist", "sind", "war",
@@ -193,7 +310,17 @@ def _looks_like_prose(
     *,
     has_list_prefix: bool,
 ) -> bool:
+    if has_list_prefix and len(parts) == 1:
+        # A model can put "Tags:" before a whole sentence. Preserve the
+        # existing keyword recovery without reviving filtered list entries.
+        return len(re.findall(r"[^\W\d_]+", parts[0], flags=re.UNICODE)) > 4
     if has_list_prefix or re.search(r"(?m)^\s*(?:[-*]|\d+[.)])\s+", text):
+        return False
+    # Three or more comma items are a tag list even if one item is long or the
+    # answer ends with a period. Treating it as prose split every multi-word
+    # tag into single words ('fuenf', 'traditionelle', 'kleidung'; T013
+    # 2026-09-30). The over-long item is dropped by _parse_tags instead.
+    if sum(1 for part in parts if part) >= 3:
         return False
     word_counts = [
         len(re.findall(r"[^\W\d_]+", part, flags=re.UNICODE))
@@ -208,7 +335,7 @@ def _looks_like_prose(
     )
 
 
-def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
+def _parse_tags(raw: str, *, max_tags: int = CAPTION_TAG_LIMIT) -> list[str]:
     """Parsed kommagetrennte (oder Zeilen-getrennte) Tags zu sauberer Liste.
 
     Defensive: Vision-Modelle koennen Bullet-Listen, Punkte am Ende, etc.
@@ -233,14 +360,25 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
     seen: set[str] = set()
     stem_counts: dict[str, int] = defaultdict(int)
     prose = _looks_like_prose(text, parts, has_list_prefix=has_list_prefix)
+    # Filter whole clauses before prose tokenization. Otherwise "dunkle Haut"
+    # becomes harmless-looking individual words and bypasses the phrase rule.
+    # Conservatively discard a clause containing a forbidden description;
+    # other comma-separated clauses remain available.
+    prose_text = ", ".join(
+        part for part in parts if _normalize_tag(part.lower()) is not None
+    ) if prose else text
     candidates = (
-        re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE)
+        re.findall(r"[^\W\d_]+", prose_text.lower(), flags=re.UNICODE)
         if prose
         else parts
     )
     for candidate in candidates:
         # entferne fuehrende Bulletpoints/Nummern (-, *, 1., usw.)
-        cleaned = candidate.lstrip("-*0123456789. )").strip(".;:!?\"'()[]")
+        # Strip list numbering ("1. tag"), not subject counts ("5 menschen").
+        cleaned = re.sub(r"^\s*(?:[-*]\s*|\d+[.)](?!\d)\s*)", "", candidate)
+        cleaned = cleaned.strip().strip(".;:!?\"'[]")
+        if cleaned.startswith("(") and cleaned.endswith(")"):
+            cleaned = cleaned[1:-1].strip()
         cleaned = cleaned.strip().lower()
         if not cleaned or len(cleaned) < 3:
             continue
@@ -252,6 +390,10 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         # Mehr-Wort-Tags begrenzen
         if len(cleaned.split()) > 4:
             continue
+        normalized = _normalize_tag(cleaned)
+        if normalized is None or normalized in seen:
+            continue
+        cleaned = normalized
         # Audit 2026-08-07: VLMs geraten bei Tag-Listen in Wortschleifen —
         # live beobachtet 'fetisch, fetischkleidung, fetischmode, fetischlook,
         # fetischtanz, fetischparty, ...' (8 von 10 Tags mit gleichem Stamm).
@@ -264,19 +406,8 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         seen.add(cleaned)
         if len(tags) >= max_tags:
             break
-    if not tags and not prose:
-        for word in re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE):
-            if len(word) < 3 or word in _STOPWORDS or word in seen:
-                continue
-            # Gleiche Bremse wie oben — sonst ist dieser Pfad ein Schlupfloch.
-            stem = word[:_STEM_LEN]
-            if stem_counts[stem] >= _MAX_PER_STEM:
-                continue
-            stem_counts[stem] += 1
-            tags.append(word)
-            seen.add(word)
-            if len(tags) >= max_tags:
-                break
+    # Prose is already tokenized above. Never resurrect deliberately rejected
+    # list entries (e.g. a skin-tone phrase) by splitting them into words.
     return tags
 
 
@@ -349,6 +480,22 @@ async def _async_extract_tags(
     ai_cfg = _load_ai_config()
     registry = ModelRegistry(ai_cfg)
 
+    pin_key = (task, mode)
+    with _COLD_START_STATE_LOCK:
+        pinned_provider, pinned_model = _PINNED_TASK_MODELS.get(
+            pin_key,
+            (None, None),
+        )
+    if model_override:
+        requested_model = model_override
+        requested_provider = None
+    elif pinned_model:
+        requested_model = pinned_model
+        requested_provider = pinned_provider
+    else:
+        requested_model = None
+        requested_provider = None
+
     class _NoUsableTagsError(RuntimeError):
         pass
 
@@ -368,7 +515,7 @@ async def _async_extract_tags(
         cache_key = (
             _frame_hash(frame_rgb),
             f"{receipt.provider}:{receipt.model_id}",
-            mode,
+            f"{mode}:{hashlib.blake2b(prompt.encode(), digest_size=8).hexdigest()}",
         )
         cached = _cache_get(cache_key)
         if cached:
@@ -468,13 +615,22 @@ async def _async_extract_tags(
             task,
             mode,
             _call,
+            # Eine leere/ungeeignete Antwort kann am Bildinhalt liegen. Sie
+            # darf keinen Modellwechsel mitten im Clip oder Batch ausloesen;
+            # der Aufrufer nutzt fuer genau diesen Frame Moondream als Fallback.
             is_retryable=lambda exc: isinstance(
                 exc,
                 (asyncio.TimeoutError, LMStudioError, _NoUsableTagsError),
             ),
             is_provider_failure=is_provider_failure,
-            explicit_model=model_override,
+            explicit_model=requested_model,
+            explicit_provider=requested_provider,
         )
+        with _COLD_START_STATE_LOCK:
+            _PINNED_TASK_MODELS[pin_key] = (
+                receipt.provider,
+                receipt.model_id,
+            )
         return tags, receipt.model_id
     except ModelFailoverExhaustedError as exc:
         with _COLD_START_STATE_LOCK:
@@ -526,7 +682,7 @@ async def extract_tags_and_model_via_lmstudio_async(
 
     Returns:
         Tuple aus:
-            - Liste von max 10 Tags (lowercased, Stopwords gefiltert)
+            - Liste von max 12 Tags (lowercased, Stopwords gefiltert)
             - Name des benutzten Modells (z.B. "qwen3-vl-8b" oder "none")
     """
     if frame_rgb is None:
@@ -613,7 +769,7 @@ def extract_tags_via_lmstudio(
         timeout_seconds: HTTP-Timeout fuer den Chat-Call.
 
     Returns:
-        Liste von max 10 Tags (lowercased, Stopwords gefiltert).
+        Liste von max 12 Tags (lowercased, Stopwords gefiltert).
     """
     tags, _ = extract_tags_and_model_via_lmstudio(
         frame_rgb,
@@ -633,7 +789,10 @@ def clear_tag_cache() -> None:
         _WARM_MODELS.clear()
         _LOAD_BUDGET_SPENT.clear()
         _TASK_UNAVAILABLE_UNTIL.clear()
+        _PINNED_TASK_MODELS.clear()
         _COLD_START_LOCKS.clear()
+        _TASK_LEASE_COUNTS.clear()
+        _TASK_LEASE_IDLE_UNTIL.clear()
 
 
 # Backwards-compatibility-Alias: alter Name funktioniert noch (Deprecated).
@@ -647,6 +806,10 @@ __all__ = [
     "extract_tags_via_lmstudio",
     "extract_tags_via_ollama",  # deprecated alias
     "clear_tag_cache",
+    "begin_vision_task_lease",
+    "end_vision_task_lease",
+    "active_vision_task_lease",
+    "reset_pinned_vision_models",
     "DEFAULT_TASK",
     "DEFAULT_MODE",
     "DEFAULT_PROMPT",

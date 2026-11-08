@@ -13,6 +13,7 @@ Endpoints:
 
 import asyncio
 import logging
+import os
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -55,6 +56,16 @@ from pb_studio.audio.band_params import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio"])
+
+
+def _same_audio_source(left: str | Path, right: str | Path) -> bool:
+    """Compare canonical local audio identities with Windows case semantics."""
+    try:
+        return os.path.normcase(str(Path(left).resolve())) == os.path.normcase(
+            str(Path(right).resolve())
+        )
+    except (OSError, ValueError):
+        return False
 
 # Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
 _beat_detector: "Any | None" = None
@@ -686,50 +697,52 @@ async def list_clips(
     state: AppState = Depends(get_app_state),
 ) -> list[AudioClipInfo]:
     """Gibt die Audio-Clip-Liste zurück (paginiert)."""
-    clips = list(state.get_audio_clips_snapshot().values())
-    start = (page - 1) * limit
-    end = start + limit
+    try:
+        async with state.project_operation() as context:
+            clips = list(state.get_audio_clips_snapshot().values())
+            start = (page - 1) * limit
+            end = start + limit
 
-    items: list[AudioClipInfo] = []
-    for clip in clips[start:end]:
-        analysis = state.get_audio_analysis(clip["id"])
-        merged = dict(clip)
-        merged["has_audio_embedding"] = _has_current_audio_embedding(
-            merged.get("audio_hash")
-        )
-        merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
-        merged["key"] = analysis.get("key") if analysis else clip.get("key")
-        merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
-        cached_status = analysis.get("_analysis_status") if analysis else None
-        merged["analysis_status"] = cached_status or (
-            "completed" if bool(clip.get("is_analyzed", False)) else "unavailable"
-        )
-        merged["stage_status"] = (
-            dict(analysis.get("_stage_status") or {}) if analysis else {}
-        )
-        merged["stage_errors"] = (
-            dict(analysis.get("_stage_errors") or {}) if analysis else {}
-        )
-        merged["is_analyzed"] = (
-            cached_status == "completed"
-            if cached_status is not None
-            else bool(clip.get("is_analyzed", False))
-        )
-        # L-N4: stems_paths kann JSON-String oder dict sein (pacing_router-Logik analog).
-        # Pydantic-Schema erwartet Dict[str,str] -> normalisieren.
-        raw_stems = merged.get("stems_paths")
-        if isinstance(raw_stems, str):
-            try:
-                import json as _json
-                parsed = _json.loads(raw_stems)
-                merged["stems_paths"] = parsed if isinstance(parsed, dict) else None
-            except Exception:
-                merged["stems_paths"] = None
-        elif raw_stems is not None and not isinstance(raw_stems, dict):
-            merged["stems_paths"] = None
-        items.append(AudioClipInfo(**merged))
-
-    return items
+            items: list[AudioClipInfo] = []
+            for clip in clips[start:end]:
+                analysis = state.get_audio_analysis(clip["id"])
+                merged = dict(clip)
+                merged["has_audio_embedding"] = _has_current_audio_embedding(
+                    merged.get("audio_hash")
+                )
+                merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
+                merged["key"] = analysis.get("key") if analysis else clip.get("key")
+                merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
+                cached_status = analysis.get("_analysis_status") if analysis else None
+                merged["analysis_status"] = cached_status or (
+                    "completed" if bool(clip.get("is_analyzed", False)) else "unavailable"
+                )
+                merged["stage_status"] = (
+                    dict(analysis.get("_stage_status") or {}) if analysis else {}
+                )
+                merged["stage_errors"] = (
+                    dict(analysis.get("_stage_errors") or {}) if analysis else {}
+                )
+                merged["is_analyzed"] = (
+                    cached_status == "completed"
+                    if cached_status is not None
+                    else bool(clip.get("is_analyzed", False))
+                )
+                raw_stems = merged.get("stems_paths")
+                if isinstance(raw_stems, str):
+                    try:
+                        import json as _json
+                        parsed = _json.loads(raw_stems)
+                        merged["stems_paths"] = parsed if isinstance(parsed, dict) else None
+                    except Exception:
+                        merged["stems_paths"] = None
+                elif raw_stems is not None and not isinstance(raw_stems, dict):
+                    merged["stems_paths"] = None
+                items.append(AudioClipInfo(**merged))
+            state.require_project_context_current(context)
+            return items
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -743,10 +756,16 @@ async def delete_clip(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Loescht einen einzelnen Audio-Clip aus In-Memory + SQLite."""
-    if state.delete_audio_clip(clip_id):
-        await publish_log(f"Audio-Clip {clip_id} geloescht", level="info", source="audio.delete")
-        return DeleteResponse(deleted_count=1, not_found_ids=[])
-    return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    try:
+        async with state.project_operation() as context:
+            with state.project_commit(context):
+                deleted = state.delete_audio_clip(clip_id)
+            if deleted:
+                await publish_log(f"Audio-Clip {clip_id} geloescht", level="info", source="audio.delete")
+                return DeleteResponse(deleted_count=1, not_found_ids=[])
+            return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -760,13 +779,18 @@ async def delete_clips_batch(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Batch-Delete: loescht alle in clip_ids aufgefuehrten Audio-Clips."""
-    deleted = 0
-    not_found = []
-    for cid in request.clip_ids:
-        if state.delete_audio_clip(cid):
-            deleted += 1
-        else:
-            not_found.append(cid)
+    try:
+        async with state.project_operation() as context:
+            deleted = 0
+            not_found = []
+            with state.project_commit(context):
+                for cid in request.clip_ids:
+                    if state.delete_audio_clip(cid):
+                        deleted += 1
+                    else:
+                        not_found.append(cid)
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if deleted:
         await publish_log(
             f"{deleted} Audio-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
@@ -1130,6 +1154,8 @@ def _audio_plan_has_work(request: AudioAnalyzeRequest) -> bool:
 
 def _audio_stream_resume_checkpoints(analysis: dict[str, Any]) -> dict[str, dict]:
     """Extract only structurally eligible per-pass checkpoints from cache."""
+    from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
+
     evidence = analysis.get("_chunk_evidence")
     if not isinstance(evidence, dict):
         evidence = analysis.get("chunk_evidence")
@@ -1144,7 +1170,8 @@ def _audio_stream_resume_checkpoints(analysis: dict[str, Any]) -> dict[str, dict
         checkpoint = pass_evidence.get("checkpoint")
         if (
             isinstance(checkpoint, dict)
-            and checkpoint.get("schema_version") == 2
+            and checkpoint.get("schema_version")
+            == StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION
             and isinstance(checkpoint.get("chunks"), list)
         ):
             checkpoints[pass_name] = checkpoint
@@ -1161,11 +1188,14 @@ def _merge_audio_chunk_checkpoint_evidence(
     """Merge one durable pass snapshot without deleting sibling evidence."""
     import copy
 
+    from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
+
     if (
         pass_name not in {"primary", "mix_energy"}
         or not isinstance(source_role, str)
         or not isinstance(checkpoint, dict)
-        or checkpoint.get("schema_version") != 2
+        or checkpoint.get("schema_version")
+        != StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION
         or not isinstance(checkpoint.get("window_count"), int)
         or not isinstance(checkpoint.get("chunks"), list)
     ):
@@ -1687,11 +1717,16 @@ async def get_beats(
     state: AppState = Depends(get_app_state),
 ) -> list[BeatData]:
     """Gibt Beat-Daten für einen Clip zurück."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    beats = analysis.get("beats", [])
-    return [BeatData(**b) if isinstance(b, dict) else b for b in beats]
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "beats")
+            beats = analysis.get("beats") or []
+            state.require_project_context_current(context)
+            return [BeatData(**b) if isinstance(b, dict) else b for b in beats]
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1705,10 +1740,16 @@ async def get_onsets(
     state: AppState = Depends(get_app_state),
 ) -> list[float]:
     """Gibt Onset-Daten für einen Clip zurück (Thread-safe)."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    return [float(value) for value in analysis.get("onset_times", [])]
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "beats")
+            values = [float(value) for value in analysis.get("onset_times", [])]
+            state.require_project_context_current(context)
+            return values
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1726,17 +1767,34 @@ async def get_waveform(
     state: AppState = Depends(get_app_state),
 ) -> WaveformData:
     """Gibt Waveform-Daten für einen Clip zurück."""
-    clip = state.get_audio_clip(clip_id)
-    if clip is None:
-        raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
     try:
-        waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
-        return WaveformData(
-            clip_id=clip_id,
-            sample_rate=44100,
-            bands=waveform,
-            duration_seconds=clip["duration_seconds"],
-        )
+        async with state.project_operation() as context:
+            clip = state.get_audio_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
+            audio_path = Path(str(clip["path"]))
+            if not audio_path.is_file():
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Audio-Datei nicht gefunden: {str(audio_path)!r}",
+                )
+            waveform = await asyncio.to_thread(_extract_waveform, str(audio_path), bands)
+            state.require_project_context_current(context)
+            if not waveform or any(not band for band in waveform):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Waveform für Clip {clip_id} konnte nicht extrahiert werden",
+                )
+            return WaveformData(
+                clip_id=clip_id,
+                sample_rate=int(clip.get("sample_rate", 44100) or 44100),
+                bands=waveform,
+                duration_seconds=float(clip.get("duration_seconds", 0.0) or 0.0),
+            )
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Waveform-Extraktion fehlgeschlagen: {e}")
 
@@ -2001,11 +2059,16 @@ async def get_structure(
     state: AppState = Depends(get_app_state),
 ) -> list[StructureSegment]:
     """Gibt Struktur-Segmente für einen Clip zurück."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    segments = analysis.get("structure_segments", [])
-    return [StructureSegment(**s) if isinstance(s, dict) else s for s in segments]
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "structure")
+            segments = analysis.get("structure_segments") or []
+            state.require_project_context_current(context)
+            return [StructureSegment(**s) if isinstance(s, dict) else s for s in segments]
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -2022,20 +2085,78 @@ async def get_spectral(
     state: AppState = Depends(get_app_state),
 ) -> SpectralData:
     """Gibt Spektral-Analyse Daten zurück."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    spectral = analysis.get("spectral_data", {}) or {}
-    if spectral.get("clip_id") != clip_id:
-        spectral = {**spectral, "clip_id": clip_id}
-    return SpectralData(**spectral)
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "spectral")
+            spectral = analysis.get("spectral_data") or {}
+            if not spectral:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Spektraldaten für Clip {clip_id} fehlen",
+                )
+            if spectral.get("clip_id") != clip_id:
+                spectral = {**spectral, "clip_id": clip_id}
+            state.require_project_context_current(context)
+            return SpectralData(**spectral)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 # --- Private Hilfsfunktionen (blockierend, werden via to_thread aufgerufen) ---
 
+def _require_completed_audio_stage(
+    state: AppState,
+    clip_id: int,
+    stage: str,
+) -> dict[str, Any]:
+    """Return one truthful stage payload or fail instead of fabricating empties."""
+    if state.get_audio_clip(clip_id) is None:
+        raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
+    analysis = state.get_audio_analysis(clip_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
+    stage_status = dict(analysis.get("_stage_status") or {})
+    legacy_payload_available = (
+        stage not in stage_status
+        and analysis.get("_analysis_status") == "completed"
+        and _legacy_audio_stage_payload_available(stage, analysis)
+    )
+    if stage_status.get(stage) != "completed" and not legacy_payload_available:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Audio-Stufe '{stage}' für Clip {clip_id} ist nicht vollständig verfügbar",
+        )
+    return analysis
+
+
+def _legacy_audio_stage_payload_available(
+    stage: str,
+    analysis: dict[str, Any],
+) -> bool:
+    """Infer old completed records only from payloads persisted before stage status."""
+    if stage == "beats":
+        bpm = analysis.get("bpm")
+        beats = analysis.get("beats")
+        return (
+            isinstance(bpm, (int, float))
+            and not isinstance(bpm, bool)
+            and float(bpm) > 0.0
+            and isinstance(beats, list)
+            and bool(beats)
+        )
+    if stage == "structure":
+        return bool(analysis.get("structure_segments"))
+    if stage == "spectral":
+        spectral = analysis.get("spectral_data")
+        return isinstance(spectral, dict) and bool(spectral.get("times"))
+    return False
+
 def _probe_audio_info(path: str) -> dict[str, Any]:
     """Ermittelt Audio-Dauer, Sample-Rate und Channels via ffprobe."""
     import json
+    import math
     import subprocess
     cmd = [
         str(config.ffprobe_path), "-v", "error",
@@ -2048,6 +2169,8 @@ def _probe_audio_info(path: str) -> dict[str, Any]:
     data = json.loads(res)
 
     duration = float(data.get("format", {}).get("duration", 0.0))
+    if not math.isfinite(duration) or duration < 0.0:
+        raise ValueError("ffprobe lieferte keine gültige Audio-Dauer")
 
     # Sample-Rate und Channels aus dem ersten Audio-Stream
     sample_rate = 44100  # Fallback
@@ -2063,6 +2186,9 @@ def _probe_audio_info(path: str) -> dict[str, Any]:
             channels = int(stream.get("channels", 2))
         except (ValueError, TypeError):
             pass
+
+    if sample_rate <= 0 or channels <= 0:
+        raise ValueError("ffprobe lieferte ungültige Audio-Stream-Metadaten")
 
     return {"duration": duration, "sample_rate": sample_rate, "channels": channels}
 
@@ -2194,6 +2320,12 @@ def _run_audio_analysis(
     _stream_features = None
     _stream_stage_errors: dict[str, list[str]] = {}
     _stream_chunk_evidence: dict = {}
+    feature_source_path = audio_path
+    feature_source_role = "original_mix"
+    feature_coverage = 1.0 if not _use_streaming else 0.0
+    feature_covered_seconds = _probe_dur if not _use_streaming else 0.0
+    key_source_role: str | None = None
+    key_coverage = 0.0
     _stage_status: dict[str, str] = {}
     _stage_errors: dict[str, str] = {}
 
@@ -2321,6 +2453,10 @@ def _run_audio_analysis(
                 "hihat_times": list(_stream_res.hihat_times),
             }
             _stream_features = _stream_res
+            feature_source_path = analysis_path
+            feature_source_role = primary_source_role
+            feature_coverage = _stream_res.feature_coverage
+            feature_covered_seconds = _stream_res.feature_covered_seconds
             _stream_stage_errors = dict(_stream_res.stage_errors)
             _stream_chunk_evidence = {
                 "schema_version": 2,
@@ -2339,26 +2475,40 @@ def _run_audio_analysis(
             if analysis_path != audio_path:
                 try:
                     _emit_analysis_progress(_loop, "energy_mix", 45.0, "Energy-Kurve vom Original-Mix…")
-                    _energy_res = StreamingAudioAnalyzer().analyze(
+                    _mix_features = StreamingAudioAnalyzer().analyze(
                         audio_path,
                         energy_only=True,
                         resume_checkpoint=(stream_resume or {}).get("mix_energy"),
                         on_chunk_checkpoint=lambda checkpoint: _stream_checkpoint(
                             "mix_energy",
-                            "original_mix_energy",
+                            "original_mix_features_and_energy",
                             checkpoint,
                         ),
                         checkpoint_guard=_stream_guard,
                     )
-                    _stream_energy = list(_energy_res.energy_curve)
+                    _stream_energy = list(_mix_features.energy_curve)
                     _stream_chunk_evidence["mix_energy"] = {
-                        "source_role": "original_mix_energy",
-                        "window_count": _energy_res.window_count,
-                        "chunks": list(_energy_res.chunk_evidence),
-                        "checkpoint": dict(_energy_res.resume_checkpoint),
+                        "source_role": "original_mix_features_and_energy",
+                        "window_count": _mix_features.window_count,
+                        "chunks": list(_mix_features.chunk_evidence),
+                        "checkpoint": dict(_mix_features.resume_checkpoint),
                     }
-                    for stage_name, errors in _energy_res.stage_errors.items():
+                    for stage_name, errors in _mix_features.stage_errors.items():
                         _stream_stage_errors.setdefault(stage_name, []).extend(errors)
+                    _stream_features = _mix_features
+                    feature_source_path = audio_path
+                    feature_source_role = "original_mix"
+                    feature_coverage = _mix_features.feature_coverage
+                    feature_covered_seconds = _mix_features.feature_covered_seconds
+                    logger.info(
+                        "Streaming spectral/key features use original mix: %s",
+                        feature_source_path,
+                    )
+                    if _mix_features.feature_coverage < 0.999:
+                        _stream_stage_errors.setdefault("features", []).append(
+                            "original mix feature coverage is incomplete: "
+                            f"{_mix_features.feature_coverage:.3f}"
+                        )
                 except (
                     _AudioAnalysisInterrupted,
                     ProjectContextChangedError,
@@ -2367,10 +2517,13 @@ def _run_audio_analysis(
                     raise
                 except Exception as energy_e:
                     logger.warning(
-                        f"Mix-Energy-Pass fehlgeschlagen ({energy_e}) — verwende Stem-Energy als Fallback"
+                        f"Mix-Feature/Energy-Pass fehlgeschlagen ({energy_e})"
                     )
                     _stream_stage_errors.setdefault("energy", []).append(
                         f"mix_energy: {energy_e}"
+                    )
+                    _stream_stage_errors.setdefault("features", []).append(
+                        f"mix_features: {energy_e}"
                     )
 
             # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
@@ -2399,6 +2552,8 @@ def _run_audio_analysis(
             logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
             raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")
         duration = float(len(y)) / sr if sr > 0 else 0.0
+        feature_coverage = min(1.0, duration / _probe_dur) if _probe_dur > 0 else 0.0
+        feature_covered_seconds = duration
 
     _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
     _stage_status["load"] = "completed"
@@ -2861,9 +3016,38 @@ def _run_audio_analysis(
             # (600.0 > 600 = False) nie erreichbar war.
             structure_analyzer = StructureAnalyzer()
             if _use_streaming:
+                structure_feature_source_matches = bool(
+                    _stream_features is not None
+                    and _same_audio_source(feature_source_path, audio_path)
+                )
+                structure_features_available = bool(
+                    structure_feature_source_matches
+                    and _stream_features.feature_coverage >= 0.999
+                    and len(_stream_features.spectral_times)
+                    == len(_stream_features.chroma_features)
+                    and len(_stream_features.chroma_features) >= 2
+                )
                 struct_result = structure_analyzer.analyze_streaming_energy(
                     list(_stream_energy or []),
                     duration,
+                    feature_times=(
+                        list(_stream_features.spectral_times)
+                        if structure_features_available
+                        else None
+                    ),
+                    chroma_features=(
+                        list(_stream_features.chroma_features)
+                        if structure_features_available
+                        else None
+                    ),
+                    feature_coverage=(
+                        float(_stream_features.feature_coverage)
+                        if structure_feature_source_matches
+                        else 0.0
+                    ),
+                    feature_source_role=(
+                        feature_source_role if structure_feature_source_matches else None
+                    ),
                 )
             else:
                 struct_result = structure_analyzer.analyze_song_structure(
@@ -2895,8 +3079,14 @@ def _run_audio_analysis(
                 add_aggregate_bands,
             )
             if _use_streaming:
+                if not _same_audio_source(feature_source_path, audio_path):
+                    raise RuntimeError(
+                        "Mix-Spektralfeatures fehlen; Beat-Stem darf nicht als Mix-Featurequelle dienen"
+                    )
                 if _stream_features is None or not _stream_features.spectral_times:
                     raise RuntimeError("Streaming-Spektralrepräsentation ist leer")
+                if _stream_features.feature_coverage < 0.999:
+                    raise RuntimeError("Streaming-Spektralrepräsentation ist unvollständig")
                 band_arrays = {
                     name: np.asarray(values, dtype=np.float64)
                     for name, values in _stream_features.spectral_bands.items()
@@ -2961,12 +3151,27 @@ def _run_audio_analysis(
             key_detector = KeyDetector()
 
             def _detect_original_mix_key() -> str:
+                nonlocal key_source_role, key_coverage
                 if _use_streaming:
+                    if not _same_audio_source(feature_source_path, audio_path):
+                        raise RuntimeError(
+                            "Mix-Key-Chroma fehlen; Beat-Stem darf nicht als Mix-Keyquelle dienen"
+                        )
                     if _stream_features is None or not _stream_features.chroma_mean:
                         raise RuntimeError("Streaming-Chromarepräsentation ist leer")
+                    if _stream_features.feature_coverage < 0.999:
+                        raise RuntimeError(
+                            "Streaming-Key-Chroma ist unvollständig: "
+                            f"{_stream_features.feature_covered_seconds:.1f}/"
+                            f"{_stream_features.duration_seconds:.1f} s"
+                        )
+                    key_coverage = _stream_features.feature_coverage
+                    key_source_role = "original_mix"
                     return key_detector.detect_key_from_chroma(
                         _stream_features.chroma_mean
                     )
+                key_source_role = "original_mix"
+                key_coverage = feature_coverage
                 return key_detector.detect_key(y, sr)
 
             instrumental_is_valid = bool(
@@ -2990,6 +3195,9 @@ def _run_audio_analysis(
                             "verwende Original-Mix"
                         )
                         key = _detect_original_mix_key()
+                    else:
+                        key_source_role = "instrumental_stem"
+                        key_coverage = min(1.0, 600.0 / duration) if duration > 0 else 1.0
                 except Exception as instrumental_error:
                     logger.warning(
                         "Instrumental-Key-Quelle unbrauchbar (%s); "
@@ -3055,6 +3263,16 @@ def _run_audio_analysis(
         "energy_curve": energy_curve,
         "structure_segments": structure_segments,
         "spectral_data": spectral_data,
+        "feature_provenance": {
+            "spectral_source_role": feature_source_role,
+            "spectral_coverage": feature_coverage,
+            "spectral_covered_seconds": feature_covered_seconds,
+            "spectral_source": "original_mix" if _same_audio_source(
+                feature_source_path, audio_path
+            ) else "beat_source",
+            "key_source_role": key_source_role,
+            "key_coverage": key_coverage,
+        },
         "onset_times": onset_times,
         "kick_times": kick_times,
         "snare_times": snare_times,
@@ -3291,8 +3509,11 @@ def _run_stem_separation(
                         output_file.write(mixed)
                         remaining -= frame_count
                     output_file.flush()
-            with temp_inst_path.open("rb") as completed_file:
-                os.fsync(completed_file.fileno())
+            # The SoundFile writer is already closed/flushed here.  Calling
+            # fsync() on a read-only Windows descriptor raises EBADF/WinError 9
+            # and falsely turns a valid synthesized stem into a failed stem.
+            if temp_inst_path.stat().st_size <= 44:
+                raise ValueError("Synthetisierter Instrumental-Stem ist leer")
             _validated_stem_output_record(
                 Path(audio_path),
                 output_dir,

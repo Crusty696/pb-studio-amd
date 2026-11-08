@@ -20,10 +20,12 @@ public sealed class TransportContractTests
     {
         var evidence = JsonSerializer.Deserialize<JsonElement>(
             """{"chunk_0":{"status":"completed"}}""");
+        var suspectBeatGrid = JsonSerializer.Deserialize<JsonElement>(
+            """{"status":"suspect","method":"segmented_beat_grid","suspect_count":1}""");
         var transport = new Generated.AudioAnalysisResult(
             analysis_status: "partial",
             beat_count: null,
-            beat_grid: null,
+            beat_grid: suspectBeatGrid,
             beat_grid_provenance: null,
             beats: [new Generated.BeatData("kick", 0.75, 1.25)],
             bpm: null,
@@ -34,6 +36,8 @@ public sealed class TransportContractTests
             downbeats: [0.5],
             duration_seconds: 42.0,
             energy_curve: [0.1, 0.9],
+            feature_provenance: JsonSerializer.Deserialize<JsonElement>(
+                """{"bpm":"beat_detector","key":"streaming_mix","coverage":1.0}"""),
             hihat_times: null,
             key: "Am",
             kick_times: [1.25],
@@ -53,10 +57,17 @@ public sealed class TransportContractTests
         Assert.AreEqual(1, result.BeatCount);
         Assert.AreEqual("kick", result.Beats.Single().BeatType);
         Assert.AreEqual("partial", result.AnalysisStatus);
+        Assert.AreEqual("streaming_mix",
+            result.FeatureProvenance!["key"].GetString());
+        Assert.AreEqual(1.0,
+            result.FeatureProvenance["coverage"].GetDouble());
         Assert.AreEqual("beat_this_onnx_native",
             result.DownbeatProvenance!["method"].GetString());
         Assert.AreEqual(120.0, result.DownbeatProvenance["legacy_bpm"].GetDouble());
         Assert.AreEqual("fixture", result.DownbeatProvenance["model_revision"].GetString());
+        Assert.AreEqual("suspect", result.BeatGrid!["status"].GetString());
+        Assert.AreEqual("segmented_beat_grid", result.BeatGrid["method"].GetString());
+        Assert.AreEqual(1, result.BeatGrid["suspect_count"].GetInt32());
         Assert.AreEqual("completed", result.StageStatus!["beats"]);
         Assert.AreEqual("unavailable", result.StageErrors!["spectral"]);
         Assert.AreEqual(

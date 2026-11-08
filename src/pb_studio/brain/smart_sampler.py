@@ -20,7 +20,7 @@ Konvergenz aus dem Cold-Start.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Literal
+from typing import Iterable, Literal, Optional
 
 from .bridge_dimensions import BRIDGE_AXES
 from .weight_store import WeightStore
@@ -30,6 +30,7 @@ from .weight_store import WeightStore
 class CutForSampling:
     cut_id: int
     context_keys: list[str]
+    available_axes: Optional[tuple[str, ...]] = None
 
 
 SamplingStrategy = Literal["stratified", "uncertainty"]
@@ -137,7 +138,12 @@ class SmartSampler:
         out: list[tuple[float, CutForSampling]] = []
         for cut in cuts:
             total = 0.0
-            for axis in BRIDGE_AXES:
+            axes = (
+                cut.available_axes
+                if cut.available_axes is not None
+                else BRIDGE_AXES
+            )
+            for axis in axes:
                 total += float(self.weights.get_variance(axis, cut.context_keys))
             out.append((total, cut))
         return out

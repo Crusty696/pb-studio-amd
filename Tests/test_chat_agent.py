@@ -153,6 +153,7 @@ def _chat_model(
     name: str,
     *,
     loaded: bool = False,
+    capabilities: tuple[str, ...] = ("chat",),
 ) -> ModelInventoryEntry:
     return ModelInventoryEntry(
         provider=provider,
@@ -161,7 +162,7 @@ def _chat_model(
         loaded=loaded,
         downloadable=False,
         usable=True,
-        capabilities=("chat",),
+        capabilities=capabilities,
         inventory_sources=(f"{provider}:frozen",),
         verified_at="2026-07-30T06:00:00+00:00",
         status_reason="frozen chat model",
@@ -577,10 +578,12 @@ def test_agent_string_arguments_parsed_as_json():
 
 def test_agent_legacy_ollama_client_alias_still_works(monkeypatch):
     """Backwards-compat: alte Callsites mit ``ollama_client=...`` funktionieren noch."""
+    monkeypatch.setattr("pb_studio.ai.llm_provider.get_provider", lambda: "ollama")
     fake = FakeLMStudioClient(
         responses=[{"message": {"role": "assistant", "content": "OK"}}],
         installed=["qwen3.5-9b-uncensored-hauhaucs-aggressive"],
     )
+    fake.provider = "ollama"
     http = _mock_backend({})
     _install_chat_inventory(
         monkeypatch,
@@ -595,7 +598,7 @@ def test_agent_legacy_ollama_client_alias_still_works(monkeypatch):
         async with ChatAgent(
             ollama_client=fake,
             http_client=http,
-            model_registry=ModelRegistry({}, client=fake),
+            model_registry=ModelRegistry({"provider": "ollama"}, client=fake),
         ) as agent:
             async for _ in agent.process_message("Hi"):
                 pass
@@ -606,46 +609,48 @@ def test_agent_legacy_ollama_client_alias_still_works(monkeypatch):
 
 
 def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
-    """Wenn im Chat ein LMStudioError auftritt, weicht der Agent autonom auf den anderen Provider aus."""
-    # Erste Client: wirft Fehler beim chat()
+    """Wenn im Chat ein LMStudioError auftritt, weicht der Agent autonom auf den naechsten Kandidaten des Providers aus."""
+    # Erste Client: wirft Fehler beim chat() nur fuer failed-model
     class FailingLMStudioClient(FakeLMStudioClient):
         def __init__(self):
-            super().__init__(responses=[])
+            super().__init__(
+                responses=[{"message": {"role": "assistant", "content": "Hallo! Erstes Modell hatte ein Problem, aber ich bin da."}}],
+                installed=["failed-model", "gemma-4-e4b"],
+            )
 
         async def list_models(self):
-            return [LMStudioModelInfo(name="failed-model", size_bytes=1, modified_at="", digest="")]
+            return [
+                LMStudioModelInfo(name="failed-model", size_bytes=1, modified_at="", digest=""),
+                LMStudioModelInfo(name="gemma-4-e4b", size_bytes=1, modified_at="", digest=""),
+            ]
 
-        async def chat(self, *args, **kwargs):
-            raise LMStudioConnectionError("Connection refused by LM Studio")
+        async def chat(self, model, messages, **kwargs):
+            if model == "failed-model":
+                raise LMStudioConnectionError("Connection refused by LM Studio")
+            return await super().chat(model, messages, **kwargs)
 
         async def aclose(self):
             pass
 
     failing_client = FailingLMStudioClient()
 
-    # Zweite Client (Ollama): funktioniert
-    working_fallback = FakeLMStudioClient(
-        responses=[{"message": {"role": "assistant", "content": "Hallo von Ollama! LM Studio hatte ein Problem, aber ich bin da."}}],
-        installed=["gemma-4-e4b"],
-    )
-    # Setze base_url auf Ollama
-    working_fallback.base_url = "http://localhost:11434/v1"
     _install_chat_inventory(
         monkeypatch,
-        _chat_model("lmstudio", "failed-model", loaded=True),
-        _chat_model("ollama", "gemma-4-e4b"),
+        _chat_model(
+            "lmstudio", "failed-model", loaded=True,
+            capabilities=("chat", "tool_calls"),
+        ),
+        _chat_model("lmstudio", "gemma-4-e4b"),
+    )
+    import pb_studio.ai.chat_agent as chat_agent_module
+    monkeypatch.setitem(
+        chat_agent_module._PINNED_CHAT_MODELS,
+        "balance",
+        ("lmstudio", "failed-model"),
     )
 
-    # Mocke get_llm_client und get_base_url aus llm_provider
     import pb_studio.ai.llm_provider as llm_provider
-    monkeypatch.setattr(llm_provider, "get_base_url", lambda provider: "http://localhost:11434/v1" if provider == "ollama" else "http://127.0.0.1:1234/v1")
-
-    def mock_get_llm_client(provider=None, **kwargs):
-        if provider == "ollama":
-            return working_fallback
-        return failing_client
-
-    monkeypatch.setattr(llm_provider, "get_llm_client", mock_get_llm_client)
+    monkeypatch.setattr(llm_provider, "get_base_url", lambda provider: "http://127.0.0.1:1234/v1")
 
     async def go():
         events = []
@@ -667,18 +672,17 @@ def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
     assert "error" in types
     error_event = next(e for e in events if e.type == "error")
     assert "fallback" in error_event.payload["stage"]
-    assert "Wechsle automatisch auf ollama" in error_event.payload["message"]
+    assert "weiter erreichbar" in error_event.payload["message"]
 
     # Pruefe, ob das neue Modell vermeldet wurde
     model_events = [e for e in events if e.type == "model"]
     assert len(model_events) >= 2  # Erstes Modell, dann nach Fallback das zweite Modell
     assert model_events[-1].payload["model"] == "gemma-4-e4b"
-    assert model_events[-1].payload["provider"] == "ollama"
-    assert model_events[-1].payload["selection_receipt"]["provider"] == "ollama"
+    assert model_events[-1].payload["selection_receipt"]["provider"] == "lmstudio"
 
-    # Pruefe, ob der Text von Ollama geliefert wurde
+    # Pruefe, ob der Text von zweitem Modell geliefert wurde
     text_event = next(e for e in events if e.type == "text")
-    assert "Hallo von Ollama" in text_event.payload["content"]
+    assert "Erstes Modell hatte ein Problem" in text_event.payload["content"]
     assert events[-1].type == "done"
 
 
@@ -1110,7 +1114,7 @@ def test_chat_fragmented_tool_calls_assembled_and_executed_once():
 
     async def mock_handler(args, http_client=None):
         calls.append(args)
-        return {"result": "success"}
+        return {"result": "success", "error": None}
 
     reg = ToolRegistry()
     reg.register(Tool(
@@ -1140,13 +1144,18 @@ def test_chat_fragmented_tool_calls_assembled_and_executed_once():
     events = _run(go())
     tool_calls = [e for e in events if e.type == "tool_call"]
     tool_results = [e for e in events if e.type == "tool_result"]
+    tool_errors = [
+        e for e in events
+        if e.type == "error" and e.payload.get("stage") == "tool_dispatch"
+    ]
 
     assert len(tool_calls) == 1
     assert tool_calls[0].payload["id"] == "call_123"
     assert tool_calls[0].payload["name"] == "test_tool"
 
     assert len(tool_results) == 1
-    assert tool_results[0].payload["result"] == {"result": "success"}
+    assert tool_results[0].payload["result"] == {"result": "success", "error": None}
+    assert tool_errors == []
     assert len(calls) == 1
     assert calls[0] == {"query": "pb_studio"}
 

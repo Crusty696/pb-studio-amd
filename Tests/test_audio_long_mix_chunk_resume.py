@@ -55,6 +55,7 @@ def _configure_fast_pipeline(
             "bands": {name: [value] for name in band_names},
             "centroids": [100.0 + start],
             "chroma_mean": [value] * 12,
+            "chroma_points": [[value] * 12],
             "chroma_weight": 2,
         }
 
@@ -243,7 +244,7 @@ def test_router_checkpoint_merge_preserves_sibling_pass_and_private_payload() ->
     )
 
     primary = {
-        "schema_version": 2,
+        "schema_version": StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION,
         "window_count": 1,
         "chunks": [{"chunk_index": 0, "payload": {"energy_frames": [0.5]}}],
     }
@@ -252,7 +253,10 @@ def test_router_checkpoint_merge_preserves_sibling_pass_and_private_payload() ->
         "audit_marker": "keep",
         "mix_energy": {
             "source_role": "original_mix_energy",
-            "checkpoint": {"schema_version": 2, "chunks": []},
+            "checkpoint": {
+                "schema_version": StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION,
+                "chunks": [],
+            },
         },
     }
 
@@ -286,7 +290,7 @@ def test_mix_energy_failure_preserves_checkpoint_and_marks_beats_partial(
     source.write_bytes(b"source")
     drums.write_bytes(b"drums")
     mix_checkpoint = {
-        "schema_version": 2,
+        "schema_version": StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION,
         "source": {"path": str(source), "size": 6, "mtime_ns": 1},
         "config": {},
         "duration_seconds": 601.0,
@@ -310,7 +314,7 @@ def test_mix_energy_failure_preserves_checkpoint_and_marks_beats_partial(
         hihat_times=[1.4],
         chunk_evidence=[],
         resume_checkpoint={
-            "schema_version": 2,
+            "schema_version": StreamingAudioAnalyzer.CHECKPOINT_SCHEMA_VERSION,
             "window_count": 0,
             "chunks": [],
         },

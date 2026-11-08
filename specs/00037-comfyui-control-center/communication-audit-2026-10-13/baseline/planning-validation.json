@@ -1,0 +1,169 @@
+{
+  "verified_utc": "2026-10-13T01:28:13.442746+00:00",
+  "validation_kind": "planning-document structure and traceability only; no product execution",
+  "requirements": 42,
+  "findings": 40,
+  "original_sections": 82,
+  "open_work_packages": 45,
+  "acyclic_dependencies": true,
+  "topological_order": [
+    "T001",
+    "T045",
+    "T002",
+    "T003",
+    "T004",
+    "T005",
+    "T006",
+    "T008",
+    "T007",
+    "T010",
+    "T011",
+    "T009",
+    "T015",
+    "T017",
+    "T012",
+    "T018",
+    "T013",
+    "T019",
+    "T014",
+    "T020",
+    "T016",
+    "T021",
+    "T022",
+    "T043",
+    "T023",
+    "T024",
+    "T025",
+    "T026",
+    "T027",
+    "T031",
+    "T044",
+    "T028",
+    "T029",
+    "T030",
+    "T032",
+    "T033",
+    "T035",
+    "T036",
+    "T037",
+    "T038",
+    "T034",
+    "T039",
+    "T040",
+    "T041",
+    "T042"
+  ],
+  "future_modify_paths_with_creator": [
+    {
+      "task": "T016",
+      "file": "src/pb_studio/jobs/admission.py",
+      "creator": "T015"
+    },
+    {
+      "task": "T027",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": "T011"
+    },
+    {
+      "task": "T041",
+      "file": "src/pb_studio/jobs/scheduler.py",
+      "creator": "T012"
+    },
+    {
+      "task": "T043",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": "T011"
+    }
+  ],
+  "source_hash_changes": [],
+  "spec_bytes": 10030,
+  "confirmed_decisions": [
+    "D01 external Comfy AMD/ROCm; PB DirectML",
+    "D02 PB local scope; external service configuration only in separate ComfyUI",
+    "O01 observed_shared first, managed later qualified",
+    "O02 pause/close/cancel policy",
+    "O03 representative authorized media + Native baseline + untouched Holdout methodology",
+    "O04 additive existing catalog/API direction"
+  ],
+  "open_gates": [
+    "O03 concrete media inventory/authorization/labels/quality and resource values",
+    "O04 concrete SQL/API contract and migration/API-change approvals",
+    "optional managed installation/client cooperation/technical qualification"
+  ],
+  "peer_review_corrections": [
+    "separate Job/Attempt/Import states",
+    "prepared Cancel and persistent Unknown Cancelintent",
+    "late-output quarantine and terminal integrity records",
+    "typed interfaces and ImportCommitResult",
+    "writer intake freeze/drain outside locks",
+    "P3a vs P3b removes semantic gate cycle"
+  ],
+  "files": [
+    {
+      "name": "plan.md",
+      "bytes": 118002,
+      "sha256": "62c0c80cc7a6a219bc39aa6c4bd8e07607737242a15d79b0766644281dfa3bc3"
+    },
+    {
+      "name": "spec.md",
+      "bytes": 10030,
+      "sha256": "589263dffde1517489ca8cfe1fde79b2b471a5be749ec9f36b2faa837ff76453"
+    },
+    {
+      "name": "tasks.md",
+      "bytes": 138675,
+      "sha256": "5a50a0fb12c7835c622fff36b74968314f4435b060000f3b9daedffca657ae2c"
+    },
+    {
+      "name": "traceability.md",
+      "bytes": 45222,
+      "sha256": "aeb149b88ad25eacd8ad438a4aadf73126631fde9c3a66dd61b041ef94f88f5e"
+    },
+    {
+      "name": "work-packages.json",
+      "bytes": 57409,
+      "sha256": "3999e7ff944de90ee813fbd6966e3110d749d9ae17673e021291718ce17781a5"
+    },
+    {
+      "name": "clarifications.md",
+      "bytes": 4399,
+      "sha256": "40e6a63cc291d073ac164170af5d3df4102005a1aedfc6a859e789917f77ed8b"
+    },
+    {
+      "name": "countercheck-report.md",
+      "bytes": 13772,
+      "sha256": "3bd6d075a68e5954c529ec5890d1ec40ce57701b7b8e25f06b6aee18cd9db353"
+    },
+    {
+      "name": "countercheck-findings.json",
+      "bytes": 9391,
+      "sha256": "d68fa35073c3ca1c66ec6fa8fd7ab91d24a97a6cfc42eb8c403ba97107424f45"
+    },
+    {
+      "name": "countercheck-evidence.json",
+      "bytes": 7306,
+      "sha256": "0ab5b9aced0ddac29945c9486e0620fe79f2578f8b07638e1f10a17d818a284d"
+    },
+    {
+      "name": "decision-validation-2026-10-13.json",
+      "bytes": 2828,
+      "sha256": "79d141ddd1825f63bee9cfad1d714486bcc98a2d6d7e2b65b2d0cbf0d0d3ce1a"
+    }
+  ],
+  "source_hashes_checked": 254,
+  "additional_countercheck_findings": 19,
+  "baseline_counterchecks_executed": 12,
+  "corrected_counterchecks_passed": 12,
+  "targeted_additional_document_checks": {
+    "local_import_reconciliation_has_no_remote_attempt_prerequisite": true,
+    "obsolete_after_catalog_preserves_logical_job_status": true,
+    "pause_policy_confirmed": true,
+    "policy_assurance_is_explicit": true,
+    "batch_storage_precedes_consumer": true,
+    "generated_workflow_bundles": true
+  },
+  "task_dependency_index_and_blocks_match": true,
+  "existing_document_links_checked": 13,
+  "broken_document_links": [],
+  "current_decision_validation": "decision-validation-2026-10-13.json"
+}

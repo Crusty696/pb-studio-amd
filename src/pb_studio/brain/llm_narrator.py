@@ -108,15 +108,20 @@ USER_PROMPT_TEMPLATE = (
 
 
 # Sehr leichter Prozess-lokaler Cache (LRU-ish).
-# Key = (cut_id, content_hash, mode), Value = narrative-Text.
-_NARRATIVE_CACHE: dict[tuple[int, str, str], str] = {}
+# Key = (cut_id, content_hash, mode, provider, model), Value = narrative-Text.
+_NARRATIVE_CACHE: dict[tuple[int, str, str, str, str], str] = {}
+_PINNED_NARRATOR_MODELS: dict[str, tuple[str, str]] = {}
 
 
-def _cache_get(key: tuple[int, str, str]) -> Optional[str]:
+def reset_pinned_narrator_models() -> None:
+    _PINNED_NARRATOR_MODELS.clear()
+
+
+def _cache_get(key: tuple[int, str, str, str, str]) -> Optional[str]:
     return _NARRATIVE_CACHE.get(key)
 
 
-def _cache_put(key: tuple[int, str, str], value: str) -> None:
+def _cache_put(key: tuple[int, str, str, str, str], value: str) -> None:
     if len(_NARRATIVE_CACHE) >= CACHE_MAX:
         # einfache FIFO-Eviction
         try:
@@ -129,6 +134,7 @@ def _cache_put(key: tuple[int, str, str], value: str) -> None:
 def clear_narrative_cache() -> None:
     """Test-Helper: leert den Cache vollstaendig."""
     _NARRATIVE_CACHE.clear()
+    _PINNED_NARRATOR_MODELS.clear()
 
 
 def _humanize_axis(axis: str) -> str:
@@ -300,13 +306,32 @@ async def _async_generate_explanation(
     )
 
     ai_cfg = _load_ai_config()
+    configured_model = str(
+        (ai_cfg.get("task_overrides") or {}).get(task) or ""
+    ).strip()
+    configured_provider = str(
+        (ai_cfg.get("task_provider_overrides") or {}).get(task) or ""
+    ).strip().lower()
+    pinned_provider, pinned_model = _PINNED_NARRATOR_MODELS.get(
+        mode,
+        ("", ""),
+    )
+    automatic_pin = bool(not model_override and not configured_model and pinned_model)
+    effective_model = model_override or (pinned_model if automatic_pin else "")
+    effective_provider = pinned_provider if automatic_pin else ""
     chash = _content_hash(
         segment_type=segment_type,
         top_axes=top_axes,
         bottom_axes=bottom_axes,
         final_score=final_score,
     )
-    cache_key = (int(cut_id), chash, mode)
+    cache_key = (
+        int(cut_id),
+        chash,
+        mode,
+        configured_provider or effective_provider or "auto",
+        configured_model or effective_model or "auto",
+    )
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
@@ -461,25 +486,61 @@ async def _async_generate_explanation(
         return text
 
     try:
-        text, _receipt, _attempts = await execute_with_model_failover(
+        text, receipt, _attempts = await execute_with_model_failover(
             registry,
             task,
             mode,
             _call,
             is_retryable=lambda exc: isinstance(
                 exc,
-                (asyncio.TimeoutError, LMStudioError, _EmptyNarrativeError),
+                (asyncio.TimeoutError, LMStudioError),
             ),
             is_provider_failure=is_provider_failure,
-            explicit_model=model_override,
+            explicit_model=effective_model or None,
+            explicit_provider=effective_provider or None,
         )
-    except ModelFailoverExhaustedError as exc:
+    except _EmptyNarrativeError as exc:
         logger.warning(
-            "LLM-Narrator: Receipt-Failover erschöpft (%s) — Offline-Text",
+            "LLM-Narrator: leere Antwort ohne Modellwechsel (%s) — Offline-Text",
             exc,
         )
         return get_offline_explanation()
-    _cache_put(cache_key, text)
+    except ModelFailoverExhaustedError as exc:
+        if automatic_pin and not exc.receipts:
+            _PINNED_NARRATOR_MODELS.pop(mode, None)
+            try:
+                text, receipt, _attempts = await execute_with_model_failover(
+                    registry,
+                    task,
+                    mode,
+                    _call,
+                    is_retryable=lambda error: isinstance(
+                        error,
+                        (asyncio.TimeoutError, LMStudioError),
+                    ),
+                    is_provider_failure=is_provider_failure,
+                )
+            except ModelFailoverExhaustedError as retry_exc:
+                logger.warning(
+                    "LLM-Narrator: Receipt-Failover erschöpft (%s) — Offline-Text",
+                    retry_exc,
+                )
+                return get_offline_explanation()
+        else:
+            logger.warning(
+                "LLM-Narrator: Receipt-Failover erschöpft (%s) — Offline-Text",
+                exc,
+            )
+            return get_offline_explanation()
+    if not model_override and not configured_model:
+        _PINNED_NARRATOR_MODELS[mode] = (
+            receipt.provider,
+            receipt.model_id,
+        )
+    _cache_put(
+        (int(cut_id), chash, mode, receipt.provider, receipt.model_id),
+        text,
+    )
     return text
 
 

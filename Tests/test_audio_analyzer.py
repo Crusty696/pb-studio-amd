@@ -93,6 +93,31 @@ class TestAudioAnalyzerAnalysis:
 
         assert result["bpm"] == 0
 
+    def test_analyze_falls_back_when_beatnet_fails_on_short_audio(self):
+        """Short/irregular audio must return structured analysis, not hard error."""
+        from pb_studio.audio.analyzer import AudioAnalyzer
+
+        analyzer = AudioAnalyzer.__new__(AudioAnalyzer)
+        analyzer.model_loaded = True
+        analyzer.estimator = MagicMock()
+        analyzer.estimator.process.side_effect = ValueError("ragged madmom output")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            with patch("os.path.exists", return_value=True):
+                with patch("os.path.getsize", return_value=1000):
+                    with patch("os.remove"):
+                        with patch("librosa.load", return_value=(np.zeros(22050), 22050)):
+                            with patch(
+                                "librosa.beat.beat_track",
+                                return_value=(120.0, np.array([10, 20])),
+                            ):
+                                result = analyzer.analyze_file("short.wav")
+
+        assert "error" not in result
+        assert result["count"] == 2
+        assert result["bpm"] > 0
+
     def test_analyze_returns_warning_for_silent_video(self):
         """Verify warning for videos without audio stream."""
         from pb_studio.audio.analyzer import AudioAnalyzer

@@ -16,6 +16,7 @@ Features:
 import inspect
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -23,6 +24,7 @@ import threading
 import time
 import queue
 import uuid
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, List, Dict, Optional, Callable
 from pb_studio.storage.recovery_barrier import recovery_write_operation
@@ -45,6 +47,25 @@ from pb_studio.video.encoder_utils import (
 logger = logging.getLogger(__name__)
 
 
+def _fps_fraction(fps: float | str | Fraction) -> Fraction:
+    """Return the exact cadence used by FFmpeg and render frame accounting."""
+    if isinstance(fps, Fraction):
+        value = fps
+    elif isinstance(fps, str) and "/" in fps:
+        numerator, denominator = fps.split("/", 1)
+        value = Fraction(int(numerator), int(denominator))
+    else:
+        value = Fraction(str(fps)).limit_denominator(1_000_000)
+    if value <= 0:
+        raise ValueError("Render-FPS muss positiv sein")
+    return value
+
+
+def _expected_frame_count(duration: float, fps: float | str | Fraction) -> int:
+    rate = _fps_fraction(fps)
+    return max(int(round(Fraction(str(max(duration, 0.0))) * rate)), 0)
+
+
 def _get_clip_path_str(clip: dict) -> Optional[str]:
     """Extrahiert den Clip-Pfad als String (Top-Level und metadata)."""
     for key in ("clip_path", "file_path", "path", "video_path"):
@@ -61,6 +82,31 @@ def _get_clip_path_str(clip: dict) -> Optional[str]:
                 if Path(val).is_file():
                     return str(val)
     return None
+
+
+def _get_clip_source_range(clip: dict) -> tuple[float, float]:
+    """Return valid clip boundaries at FFmpeg concat's microsecond resolution."""
+    raw_in = clip.get("in_point")
+    if raw_in is None:
+        raw_in = clip.get("in", 0.0)
+    try:
+        source_in = float(raw_in)
+        raw_out = clip.get("out_point")
+        if raw_out is None:
+            raw_out = clip.get("out", source_in + 2.0)
+        source_out = float(raw_out)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Clip hat ungueltige Segmentgrenzen") from exc
+    if not math.isfinite(source_in) or not math.isfinite(source_out):
+        raise ValueError("Clip hat nicht-endliche Segmentgrenzen")
+
+    # The concat demuxer parses timestamps on a microsecond time base. Keep
+    # persisted provenance and actual FFmpeg input ranges identical.
+    source_in = float(f"{source_in:.6f}")
+    source_out = float(f"{source_out:.6f}")
+    if source_in < 0.0 or source_out <= source_in:
+        raise ValueError("Clip-Segmentgrenzen muessen einen positiven Bereich bilden")
+    return source_in, source_out
 
 
 class RenderService:
@@ -80,7 +126,7 @@ class RenderService:
     _ARTIFACT_DECODE_TIMEOUT_FLOOR_SECONDS = 300.0
     _ARTIFACT_FRAME_TOLERANCE = 1
     _ARTIFACT_MIN_DURATION_TOLERANCE_SECONDS = 0.05
-    _AAC_PRE_ENCODE_GAIN_DB = -2.0
+    _AAC_PRE_ENCODE_GAIN_DB = -4.0
     _AAC_TRUE_PEAK_LIMIT_DBTP = -1.0
     _END_SILENCE_THRESHOLD_DB = -60
     _END_SILENCE_MIN_SECONDS = 1.0
@@ -109,6 +155,11 @@ class RenderService:
         self.run_id = ""
         self.temp_dir = self.temp_root / self.job_token
         self._encoder_override = encoder_override
+        self._render_rate = Fraction(30, 1)
+        self._evidence_run_id: Optional[str] = None
+        self._progress_evidence_run_id: Optional[str] = None
+        self._final_evidence_run_id: Optional[str] = None
+        self._concat_input_sha256: Optional[str] = None
 
     @classmethod
     def _register_process(cls, process: subprocess.Popen) -> None:
@@ -304,10 +355,13 @@ class RenderService:
             if include_audio
             else None
         )
-        total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
+        target_rate = _fps_fraction(target_fps)
+        self._render_rate = target_rate
+        total_frames = _expected_frame_count(total_duration, target_rate)
         render_start = time.monotonic()
 
         self.run_id = uuid.uuid4().hex
+        self._concat_input_sha256 = None
         self.temp_dir = self.temp_root / self.job_token / self.run_id
         self.temp_dir.mkdir(exist_ok=False, parents=True)
         final_output = self.output_dir / output_filename
@@ -346,6 +400,10 @@ class RenderService:
             )
             concat_list_path = self.temp_dir / "concat_list.txt"
             self._generate_concat_file(normalized_clips, concat_list_path)
+            self._concat_input_sha256 = hashlib.sha256(
+                concat_list_path.read_bytes()
+            ).hexdigest()
+            self._persist_segment_manifest(timeline)
 
             self._emit_progress(
                 progress_callback,
@@ -363,9 +421,30 @@ class RenderService:
                 bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start,
                 audio_dur=audio_dur,
                 include_audio=include_audio,
+                target_rate=target_rate,
             )
             if not staging_output.exists() or staging_output.stat().st_size == 0:
                 raise RuntimeError("FFmpeg hat keine vollständige Render-Ausgabe erzeugt")
+            self._emit_progress(
+                progress_callback,
+                "Pruefe Render-Ausgabe...",
+                98,
+                total_frames=total_frames,
+                current_frame=last_telemetry.get("current_frame", 0)
+                if last_telemetry else 0,
+                fps=last_telemetry.get("fps", 0.0) if last_telemetry else 0.0,
+                elapsed_seconds=max(time.monotonic() - render_start, 0.0),
+                eta_seconds=0.0,
+                validation_status="running",
+            )
+            self._persist_validation_evidence(
+                status="running",
+                metrics={
+                    "phase": "probe_and_full_decode",
+                    "expected_frames": total_frames,
+                    "fps": f"{target_rate.numerator}/{target_rate.denominator}",
+                },
+            )
             try:
                 artifact_metrics = self._validate_render_artifact(
                     staging_output,
@@ -376,6 +455,7 @@ class RenderService:
                     include_audio=include_audio,
                     expected_end_silence=expected_end_silence,
                     cancel_callback=cancel_callback,
+                    progress_callback=progress_callback,
                 )
             except Exception as exc:
                 self._persist_validation_evidence(error=exc)
@@ -419,12 +499,11 @@ class RenderService:
             self._cleanup_temp(normalized_clips)
 
     def _calculate_timeline_duration(self, timeline: List[Dict]) -> float:
-        total = 0.0
+        total_microseconds = 0
         for clip in timeline:
-            in_pt = clip.get("in_point") or clip.get("in", 0.0)
-            out_pt = clip.get("out_point") or clip.get("out", in_pt + 2.0)
-            total += out_pt - in_pt
-        return max(total, 1.0)
+            in_pt, out_pt = _get_clip_source_range(clip)
+            total_microseconds += round((out_pt - in_pt) * 1_000_000)
+        return max(total_microseconds / 1_000_000, 1.0)
 
     @staticmethod
     def _validate_timeline_clips(timeline: List[Dict]) -> None:
@@ -433,6 +512,11 @@ class RenderService:
         if missing:
             indexes = ", ".join(str(index) for index in missing)
             raise FileNotFoundError(f"Timeline-Clip(s) fehlen oder sind nicht lesbar: {indexes}")
+        for index, clip in enumerate(timeline):
+            try:
+                _get_clip_source_range(clip)
+            except ValueError as exc:
+                raise ValueError(f"Timeline-Clip {index}: {exc}") from exc
 
     def _normalize_clips(
         self, timeline: List[Dict], w: int, h: int, fps: float,
@@ -688,7 +772,11 @@ class RenderService:
         cancel_callback: Optional[Callable[[], bool]] = None,
     ):
         # BUG-026 Fix: fps als float formatiert (z.B. 23.976 → "23.976")
-        vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
+        rate = _fps_fraction(fps)
+        vf_filter = (
+            f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={rate.numerator}/{rate.denominator}"
+        )
         primary = self._active_encoder()
 
         chain = [primary]
@@ -780,8 +868,7 @@ class RenderService:
     def _generate_concat_file(self, timeline: List[Dict], list_path: Path):
         with open(list_path, "w", encoding="utf-8") as f:
             for clip in timeline:
-                in_pt = clip.get("in_point") if clip.get("in_point") is not None else clip.get("in", 0.0)
-                out_pt = clip.get("out_point") if clip.get("out_point") is not None else clip.get("out", in_pt + 2.0)
+                in_pt, out_pt = _get_clip_source_range(clip)
                 p = _get_clip_path_str(clip)
                 if not p:
                     raise FileNotFoundError(
@@ -791,8 +878,8 @@ class RenderService:
                 # FFmpeg concat protocol: single quotes required (double quotes treated as literal chars)
                 p_escaped = p_str.replace("'", "'\\''")
                 f.write(f"file '{p_escaped}'\n")
-                f.write(f"inpoint {in_pt:.3f}\n")
-                f.write(f"outpoint {out_pt:.3f}\n")
+                f.write(f"inpoint {in_pt:.6f}\n")
+                f.write(f"outpoint {out_pt:.6f}\n")
 
     def _build_render_cmd(
         self, list_path: Path, audio_path: Optional[str], output_path: Path,
@@ -800,8 +887,10 @@ class RenderService:
         total_duration: float, encoder: str,
         audio_dur: Optional[float] = None,
         include_audio: bool = True,
+        target_rate: Optional[Fraction] = None,
     ) -> tuple[list[str], float]:
         """Baut FFmpeg-Kommando fuer einen bestimmten Encoder. Gibt (cmd, effective_duration) zurueck."""
+        render_rate = target_rate or getattr(self, "_render_rate", _fps_fraction(30.0))
         cmd = [
             _get_ffmpeg_path(), "-y",
             *get_amf_device_args(),
@@ -820,7 +909,19 @@ class RenderService:
             cmd.extend(["-map", "0:v", "-map", "1:a"])
         else:
             cmd.extend(["-map", "0:v"])
-        cmd.extend(["-vf", "select=concatdec_select,setpts=N/FR/TB"])
+        cmd.extend([
+            "-vf",
+            (
+                "select=concatdec_select,"
+                "settb=AVTB,setpts=PTS-STARTPTS,"
+                f"fps=fps={render_rate.numerator}/{render_rate.denominator}"
+            ),
+        ])
+        # Preserve concat presentation-time gaps through selection, then create
+        # the requested rational cadence. Rebuilding PTS from N after selection
+        # compressed dropped boundary frames out of the timeline; real segmented
+        # exports then ended short despite -frames:v requesting the full budget.
+        cmd.extend(["-r", f"{render_rate.numerator}/{render_rate.denominator}"])
 
         if encoder == "hevc_amf":
             cmd.extend(["-c:v", "hevc_amf", "-rc", "cbr", "-quality", preset, "-b:v", bitrate])
@@ -833,7 +934,9 @@ class RenderService:
 
         if include_audio:
             cmd.extend([
-                "-filter:a", f"volume={self._AAC_PRE_ENCODE_GAIN_DB:.1f}dB",
+                "-filter:a",
+                f"volume={self._AAC_PRE_ENCODE_GAIN_DB:.1f}dB,"
+                "alimiter=limit=0.89125:level=disabled",
                 "-c:a", "aac",
                 "-b:a", "320k",
             ])
@@ -850,8 +953,13 @@ class RenderService:
         if audio_dur and audio_dur > 0:
             render_dur = min(audio_dur, total_duration) if total_duration > 0 else audio_dur
         if render_dur and render_dur > 0:
-            cmd.extend(["-t", f"{render_dur:.3f}"])
             total_duration = render_dur
+            cmd.extend([
+                "-frames:v",
+                str(_expected_frame_count(render_dur, render_rate)),
+                "-t",
+                f"{render_dur:.3f}",
+            ])
 
         cmd.append(str(output_path))
         return cmd, total_duration
@@ -867,6 +975,7 @@ class RenderService:
         include_audio: bool,
         expected_end_silence: Optional[float] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        progress_callback: Optional[Callable[..., None]] = None,
     ) -> dict[str, Any]:
         """Validiert Streams und dekodiert das vollstaendige Staging-Artefakt."""
         probe_cmd = [
@@ -878,6 +987,11 @@ class RenderService:
             str(artifact_path),
         ]
         try:
+            if progress_callback:
+                progress_callback(
+                    "Validiere Container und Streams...", 98,
+                    {"validation_status": "running", "validation_phase": "container_probe"},
+                )
             probe = self._run_capture_process(
                 probe_cmd,
                 timeout=self._ARTIFACT_PROBE_TIMEOUT_SECONDS,
@@ -961,7 +1075,13 @@ class RenderService:
             expected_duration=expected_duration,
             cancel_callback=cancel_callback,
         )
-        expected_frames = int(round(expected_duration * target_fps))
+        if progress_callback:
+            progress_callback(
+                "Dekodiere Video zur Vollvalidierung...", 98,
+                {"validation_status": "running", "validation_phase": "video_decode"},
+            )
+        render_rate = getattr(self, "_render_rate", _fps_fraction(target_fps))
+        expected_frames = _expected_frame_count(expected_duration, render_rate)
         decoded_frames = int(video_decode.get("frame", "0") or 0)
         if abs(decoded_frames - expected_frames) > self._ARTIFACT_FRAME_TOLERANCE:
             raise RuntimeError(
@@ -979,6 +1099,11 @@ class RenderService:
         true_peak_dbtp: Optional[float] = None
         end_silence: Optional[float] = None
         if include_audio:
+            if progress_callback:
+                progress_callback(
+                    "Dekodiere Audio zur Vollvalidierung...", 98,
+                    {"validation_status": "running", "validation_phase": "audio_decode"},
+                )
             audio_decode = self._decode_artifact_stream(
                 artifact_path,
                 stream_selector="0:a:0",
@@ -1226,6 +1351,7 @@ class RenderService:
         render_start_time: Optional[float] = None,
         audio_dur: Optional[float] = None,
         include_audio: bool = True,
+        target_rate: Optional[Fraction] = None,
     ) -> dict[str, Any]:
         """Finaler Render mit Echtzeit-Progress über AMD AMF."""
         # BUG-070 FIX: Guard gegen Path(None)
@@ -1248,6 +1374,7 @@ class RenderService:
                 bitrate, preset, audio_offset, total_duration, encoder,
                 audio_dur=audio_dur,
                 include_audio=include_audio,
+                target_rate=target_rate,
             )
 
             startupinfo = subprocess.STARTUPINFO()
@@ -1268,6 +1395,7 @@ class RenderService:
                     progress_callback,
                     cancel_callback,
                     render_start_time=render_start_time,
+                    target_rate=target_rate,
                 )
                 return result
             except RenderCancelledError:
@@ -1316,12 +1444,13 @@ class RenderService:
         progress_callback: Optional[Callable[..., None]],
         cancel_callback: Optional[Callable[[], bool]] = None,
         render_start_time: Optional[float] = None,
+        target_rate: Optional[Fraction] = None,
     ) -> dict[str, Any]:
         """Liest FFmpegs `-progress`-Protokoll und persistiert Rohbelege."""
         progress_queue: queue.Queue[str] = queue.Queue()
         progress_lines: list[str] = []
         stderr_lines: list[str] = []
-
+        pending_progress_lines: list[str] = []
         def read_pipe(
             pipe: Any,
             lines: list[str],
@@ -1350,7 +1479,8 @@ class RenderService:
         stdout_thread.start()
         stderr_thread.start()
 
-        total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
+        render_rate = target_rate or _fps_fraction(target_fps)
+        total_frames = _expected_frame_count(total_duration, render_rate)
         last_progress = 60
         last_publish_at = 0.0
         last_frame = 0
@@ -1380,12 +1510,18 @@ class RenderService:
                     break
                 continue
 
+            pending_progress_lines.append(line)
             key, separator, value = line.strip().partition("=")
             if not separator:
                 continue
             progress_block[key] = value
             if key != "progress":
                 continue
+
+            self._append_render_progress_evidence(
+                "".join(pending_progress_lines)
+            )
+            pending_progress_lines.clear()
 
             last_machine_progress = dict(progress_block)
             progress_end = value == "end"
@@ -1507,17 +1643,29 @@ class RenderService:
         total_duration: float,
         total_frames: int,
     ) -> Path:
-        evidence_dir = (
-            self.output_dir
-            / ".render_evidence"
-            / self.job_token
-            / self.run_id
-        )
-        evidence_dir.mkdir(parents=True, exist_ok=False)
+        evidence_dir = self._ensure_render_evidence_dir()
+        record_path = evidence_dir / "result.json"
+        if self._final_evidence_run_id == self.run_id or record_path.exists():
+            raise FileExistsError(record_path)
+
         progress_path = evidence_dir / "ffmpeg.progress.log"
         stderr_path = evidence_dir / "ffmpeg.stderr.log"
-        self._atomic_write_text(progress_path, progress_log)
-        self._atomic_write_text(stderr_path, stderr_log)
+        if self._progress_evidence_run_id == self.run_id:
+            if not progress_path.is_file():
+                raise FileNotFoundError(progress_path)
+            persisted_progress = progress_path.read_text(encoding="utf-8")
+            if not progress_log.startswith(persisted_progress):
+                raise RuntimeError(
+                    "Final FFmpeg progress differs from durable run evidence"
+                )
+            remaining_progress = progress_log[len(persisted_progress) :]
+            if remaining_progress:
+                with progress_path.open("a", encoding="utf-8", newline="") as stream:
+                    stream.write(remaining_progress)
+                    stream.flush()
+        else:
+            self._create_evidence_file(progress_path, progress_log)
+        self._create_evidence_file(stderr_path, stderr_log)
 
         normalized_tail = re.sub(
             r"0x[0-9a-fA-F]+",
@@ -1555,38 +1703,195 @@ class RenderService:
             ).hexdigest(),
             "recorded_at_epoch": time.time(),
         }
-        record_path = evidence_dir / "result.json"
-        self._atomic_write_text(
+        if self._concat_input_sha256 is not None:
+            record["concat_input_sha256"] = self._concat_input_sha256
+        manifest_path = evidence_dir / "segments.json"
+        if manifest_path.is_file():
+            manifest_bytes = manifest_path.read_bytes()
+            manifest = json.loads(manifest_bytes)
+            if (
+                manifest.get("job_id") != self.job_token
+                or manifest.get("run_id") != self.run_id
+            ):
+                raise RuntimeError("Render segment manifest belongs to a different run")
+            segments = manifest.get("segments")
+            if not isinstance(segments, list):
+                raise RuntimeError("Render segment manifest has no valid segments list")
+            canonical_segments = json.dumps(
+                segments,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+            timeline_sha256 = hashlib.sha256(canonical_segments).hexdigest()
+            if manifest.get("timeline_sha256") != timeline_sha256:
+                raise RuntimeError("Render segment manifest timeline hash is invalid")
+            record["segment_manifest_sha256"] = hashlib.sha256(
+                manifest_bytes
+            ).hexdigest()
+            record["timeline_sha256"] = timeline_sha256
+        self._create_evidence_file(
             record_path,
             json.dumps(record, indent=2, sort_keys=True) + "\n",
         )
+        self._final_evidence_run_id = self.run_id
         return record_path
 
-    def _persist_validation_evidence(
-        self,
-        *,
-        metrics: Optional[dict[str, Any]] = None,
-        error: Optional[Exception] = None,
-    ) -> Path:
+    def _persist_segment_manifest(self, timeline: List[Dict]) -> Path:
+        """Persist ordered cut ranges without exposing raw source paths."""
+        evidence_dir = self._ensure_render_evidence_dir()
+        manifest_path = evidence_dir / "segments.json"
+        segments: list[dict[str, Any]] = []
+        timeline_cursor_microseconds = 0
+
+        for index, clip in enumerate(timeline):
+            source_path = _get_clip_path_str(clip)
+            if not source_path:
+                raise FileNotFoundError(
+                    f"Timeline-Clip {index} fehlt beim Segmentbeleg"
+                )
+            try:
+                source_in, source_out = _get_clip_source_range(clip)
+            except ValueError as exc:
+                raise ValueError(f"Timeline-Clip {index}: {exc}") from exc
+
+            source_identity = os.path.normcase(
+                os.path.normpath(os.path.abspath(source_path))
+            )
+            source_in_microseconds = round(source_in * 1_000_000)
+            source_out_microseconds = round(source_out * 1_000_000)
+            duration_microseconds = source_out_microseconds - source_in_microseconds
+            timeline_end_microseconds = (
+                timeline_cursor_microseconds + duration_microseconds
+            )
+            segments.append({
+                "index": index,
+                "source_path_sha256": hashlib.sha256(
+                    source_identity.encode("utf-8")
+                ).hexdigest(),
+                "source_in_seconds": source_in,
+                "source_out_seconds": source_out,
+                "timeline_start_seconds": timeline_cursor_microseconds / 1_000_000,
+                "timeline_end_seconds": timeline_end_microseconds / 1_000_000,
+            })
+            timeline_cursor_microseconds = timeline_end_microseconds
+
+        canonical_segments = json.dumps(
+            segments,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        manifest = {
+            "schema_version": 1,
+            "job_id": self.job_token,
+            "run_id": self.run_id,
+            "timeline_sha256": hashlib.sha256(canonical_segments).hexdigest(),
+            "segments": segments,
+        }
+        content = json.dumps(
+            manifest, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False
+        ) + "\n"
+        self._create_evidence_file_atomic(manifest_path, content)
+        return manifest_path
+
+    def _append_render_progress_evidence(self, progress_block: str) -> None:
+        """Flush complete progress blocks to this run's exclusive evidence path."""
+        if not progress_block:
+            return
+        evidence_dir = self._ensure_render_evidence_dir()
+        path = evidence_dir / "ffmpeg.progress.log"
+        if self._progress_evidence_run_id == self.run_id:
+            if not path.is_file():
+                raise FileNotFoundError(path)
+            mode = "a"
+        else:
+            mode = "x"
+        with path.open(mode, encoding="utf-8", newline="") as evidence_file:
+            evidence_file.write(progress_block)
+            evidence_file.flush()
+        self._progress_evidence_run_id = self.run_id
+
+    def _ensure_render_evidence_dir(self) -> Path:
+        """Claim a run directory once; never attach to another run's evidence."""
+        if not self.run_id:
+            raise RuntimeError("Render evidence requires an active run_id")
         evidence_dir = (
             self.output_dir
             / ".render_evidence"
             / self.job_token
             / self.run_id
         )
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+        if self._evidence_run_id == self.run_id:
+            if not evidence_dir.is_dir():
+                raise FileNotFoundError(evidence_dir)
+            return evidence_dir
+        evidence_dir.mkdir(parents=True, exist_ok=False)
+        self._evidence_run_id = self.run_id
+        return evidence_dir
+
+    @staticmethod
+    def _create_evidence_file(path: Path, content: str) -> None:
+        """Create a small run artifact without replacing prior evidence."""
+        with path.open("x", encoding="utf-8", newline="") as evidence_file:
+            evidence_file.write(content)
+            evidence_file.flush()
+            os.fsync(evidence_file.fileno())
+
+    @staticmethod
+    def _create_evidence_file_atomic(path: Path, content: str) -> None:
+        """Publish a durable evidence file atomically without replacing prior data."""
+        temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+        temporary_created = False
+        try:
+            with temporary_path.open("x", encoding="utf-8", newline="") as stream:
+                temporary_created = True
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.rename(temporary_path, path)
+        except Exception:
+            if temporary_created:
+                temporary_path.unlink(missing_ok=True)
+            raise
+
+    def _persist_validation_evidence(
+        self,
+        *,
+        status: Optional[str] = None,
+        metrics: Optional[dict[str, Any]] = None,
+        error: Optional[Exception] = None,
+    ) -> Path:
+        evidence_dir = self._ensure_render_evidence_dir()
         error_text = f"{type(error).__name__}: {error}" if error is not None else None
         fingerprint = (
             hashlib.sha256(error_text.encode("utf-8", errors="replace")).hexdigest()
             if error_text is not None
             else None
         )
-        if error is None:
+        if status is not None:
+            validation_status = status
+        elif error is None:
             validation_status = "passed"
         elif isinstance(error, RenderCancelledError):
             validation_status = "cancelled"
         else:
             validation_status = "failed"
+        path = evidence_dir / "validation.json"
+        previous: dict[str, Any] = {}
+        if path.is_file():
+            try:
+                previous = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                previous = {}
+        history = list(previous.get("history") or [])
+        history.append({
+            "status": validation_status,
+            "phase": (metrics or {}).get("phase"),
+            "recorded_at_epoch": time.time(),
+        })
         record = {
             "schema_version": 1,
             "job_id": self.job_token,
@@ -1596,8 +1901,8 @@ class RenderService:
             "error": error_text,
             "failure_fingerprint": fingerprint,
             "recorded_at_epoch": time.time(),
+            "history": history,
         }
-        path = evidence_dir / "validation.json"
         self._atomic_write_text(
             path,
             json.dumps(record, indent=2, sort_keys=True) + "\n",

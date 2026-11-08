@@ -139,6 +139,7 @@ class GridSegment:
     contrast: float
     status: str
     window_count: int
+    coverage: dict[str, Any] | None = None
 
     @property
     def duration_s(self) -> float:
@@ -354,6 +355,7 @@ def _merge_short_segments(segments: list[GridSegment]) -> list[GridSegment]:
                 contrast=target.contrast,
                 status=target.status,
                 window_count=target.window_count + segment.window_count,
+                coverage=target.coverage or segment.coverage,
             )
             low, high = sorted((index, target_index))
             result = result[:low] + [merged] + result[high + 1:]
@@ -615,23 +617,32 @@ def segment_beat_grids_from_file(
     )
 
     windows: list[tuple[float, float, BeatGrid]] = []
+    attempted_windows = 0
+    successful_windows = 0
+    stop_reason: str | None = None
     # Huellkurven je Fenster aufheben - gebraucht, falls nach dem
     # Vielfach-Konsens die Phase neu bestimmt werden muss. Billig genug,
     # um ein zweites Laden der Datei zu ersparen.
     envelopes: list[tuple[np.ndarray, np.ndarray]] = []
 
     offset = 0.0
-    while offset + segment_seconds <= duration + 1e-9 and len(windows) < max_windows:
+    while offset < duration - 1e-9 and attempted_windows < max_windows:
+        window_duration = min(segment_seconds, duration - offset)
+        if window_duration < 5.0:
+            stop_reason = "tail_below_minimum_window"
+            break
+        attempted_windows += 1
         try:
             chunk, actual_sr = librosa.load(
                 str(audio_path), sr=sr, mono=True,
-                offset=offset, duration=segment_seconds,
+                offset=offset, duration=window_duration,
             )
         except Exception as exc:  # noqa: BLE001 - ein Fenster darf den Lauf nicht stoppen
             logger.warning("Fenster bei %.1f s nicht ladbar: %s", offset, exc)
             offset += segment_seconds
             continue
         if chunk.size < actual_sr * 5:
+            stop_reason = "decoded_window_below_minimum"
             break
         window_end = offset + float(chunk.size) / actual_sr
 
@@ -663,8 +674,32 @@ def segment_beat_grids_from_file(
                 octave_checked=grid.octave_checked,
             ),
         ))
+        successful_windows += 1
         del chunk
-        offset += segment_seconds
+        offset += window_duration
+
+    covered_until = max((end for _, end, _ in windows), default=0.0)
+    uncovered_tail = max(0.0, duration - covered_until)
+    capped = attempted_windows >= max_windows and offset < duration - 1e-6
+    if stop_reason is None:
+        if capped:
+            stop_reason = "window_cap"
+        elif attempted_windows > successful_windows:
+            stop_reason = "complete_with_window_failures"
+        else:
+            stop_reason = "complete"
+    coverage = {
+        "duration_seconds": duration,
+        "examined_until_seconds": min(max(offset, covered_until), duration),
+        "attempted_windows": attempted_windows,
+        "successful_windows": successful_windows,
+        "failed_or_skipped_windows": attempted_windows - successful_windows,
+        "window_cap": max_windows,
+        "capped": capped,
+        "stop_reason": stop_reason,
+        "covered_until_seconds": covered_until,
+        "uncovered_tail_seconds": round(uncovered_tail, 6),
+    }
 
     if not windows:
         return []
@@ -700,6 +735,8 @@ def segment_beat_grids_from_file(
 
     segments = _chain_windows(windows, segment_seconds)
     merged = _merge_short_segments(segments)
+    if merged:
+        merged[-1].coverage = coverage
     logger.info(
         "Segmentiertes Beatgrid (%s): %d Fenster -> %d Abschnitte, Tempi %s",
         audio_path, len(windows), len(merged),
@@ -721,11 +758,20 @@ def segments_as_payload(segments: list[GridSegment]) -> dict[str, Any]:
     longest = max(segments, key=lambda s: s.duration_s)
     tempi = sorted({round(s.bpm, 1) for s in segments})
     plausible = sum(1 for s in segments if s.status == "plausible")
+    suspect = sum(1 for s in segments if s.status != "plausible")
+    coverage = next((s.coverage for s in reversed(segments) if s.coverage), None)
+    incomplete = bool(coverage and (
+        coverage["capped"]
+        or coverage["failed_or_skipped_windows"] > 0
+        or coverage["covered_until_seconds"] < coverage["duration_seconds"] - 1e-3
+    ))
     return {
-        "status": "plausible" if plausible else "suspect",
+        "status": "plausible" if plausible and not suspect and not incomplete else "suspect",
         "method": "segmented_beat_grid",
         "segment_count": len(segments),
         "plausible_count": plausible,
+        "suspect_count": suspect,
+        "coverage": coverage,
         "dominant_bpm": round(longest.bpm, 4),
         "dominant_span_s": round(longest.duration_s, 3),
         "distinct_tempi": tempi,

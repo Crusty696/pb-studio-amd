@@ -1,0 +1,7 @@
+# T002: Offline-Pruefung des Referenzmanifests (20.10.2026)
+
+`src/pb_studio/providers/benchmark_manifest.py` prueft Quellkennungen/Hashes, die eindeutige Split-Zuordnung und Quellfamilien ueber Splitgrenzen. Ein `QUALIFIED`-Status ohne dokumentierte Voraussetzungen wird abgewiesen. Der Pruefer liest keine Medien, startet keine App und belegt keine Echtheit der eingetragenen Receipts.
+
+RED: Der geplante Test konnte das fehlende Pruefmodul nicht importieren. Adversariale Tests reproduzierten `TypeError` fuer eine unhashbare Quellkennung und eine falsche Bereitschaft bei plausiblen, aber nicht authentifizierten Receipt-Strings; danach repariert. GREEN: neun gezielte Tests bestanden, darunter doppelter Split, gespaltene A01-A03-Familie, gefaelschtes `QUALIFIED`, ungueltige Hashes und Platzhalter-Evidenz. Mit Result-/Workflow-Policy-Vertraegen insgesamt 50 Tests bestanden. Pruefung mit isoliertem APPDATA/LOCALAPPDATA und `--noconftest`.
+
+Aktuelles `reference-manifest.json`: strukturell konsistent; `qualification_ready=false` mit `holdout_missing`, `labels_missing`, `profiles_missing`, `measurements_missing`. Alle neun Quellen sind Development/Regression. Selbst ein ausgefuelltes v1-Manifest bleibt mit `external_evidence_unverified` gesperrt, solange kein vertrauenswuerdiger Belegpruefer existiert. Unabhaengige Referenzen, Familienherkunft, Native-/Ressourcenbaseline, freigegebene Grenzwerte, Full-Product- und GUI-Abnahme fehlen weiterhin. Der Offline-Pruefer ist kein produktiver QualityProfile-DTO oder Release-Gate. T002 bleibt offen. Kein ComfyUI-Lauf.

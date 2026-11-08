@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +20,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_ADAPTER_INDEX = 1
-EXPECTED_ADAPTER_LUID = "0x00000000_0x00012a2a"
+EXPECTED_ADAPTER_LUID = "0x00000000_0x000119f1"
 HARDWARE_PROBE_ENV = "PBSTUDIO_RUN_T357_HARDWARE"
 
 DIRECTML_CONSUMERS = (
@@ -275,13 +276,38 @@ def test_physical_directml_and_lhm_identity_is_rx7800xt(monkeypatch):
         contract["active"]["library_sha256"],
     )
 
+    adapters = directml_adapter.enumerate_dxgi_adapters()
     adapter = directml_adapter.get_directml_adapter(refresh=True)
-    assert adapter.device_id == EXPECTED_ADAPTER_INDEX
-    assert adapter.luid == EXPECTED_ADAPTER_LUID
+    enumerated = next(
+        candidate
+        for candidate in adapters
+        if candidate.device_id == adapter.device_id
+    )
+    assert enumerated.luid == adapter.luid
+    assert enumerated.name == adapter.name
     assert "RX 7800 XT" in adapter.name
+    assert adapter.vendor_id == 0x1002
+    assert adapter.is_discrete
+    assert adapter.selection_policy == "highest_vram_amd"
+    highest_vram_adapter = max(
+        (
+            candidate
+            for candidate in adapters
+            if candidate.vendor_id == 0x1002
+            and candidate.is_discrete
+            and not candidate.is_software
+        ),
+        key=lambda candidate: (
+            candidate.dedicated_vram_bytes,
+            -candidate.device_id,
+        ),
+    )
+    assert adapter.device_id == highest_vram_adapter.device_id
+    assert adapter.luid == highest_vram_adapter.luid
+    assert adapter.dedicated_vram_bytes == highest_vram_adapter.dedicated_vram_bytes
     assert directml_adapter.get_directml_provider() == (
         "DmlExecutionProvider",
-        {"device_id": EXPECTED_ADAPTER_INDEX},
+        {"device_id": adapter.device_id},
     )
 
     previous = system_monitor.SystemMonitor._instance
@@ -290,9 +316,9 @@ def test_physical_directml_and_lhm_identity_is_rx7800xt(monkeypatch):
         system_monitor.SystemMonitor._instance = None
         monitor = system_monitor.SystemMonitor()
         stats = monitor.get_stats()
-        assert monitor.selected_adapter_luid == EXPECTED_ADAPTER_LUID
-        assert stats["adapter_index"] == EXPECTED_ADAPTER_INDEX
-        assert stats["adapter_luid"] == EXPECTED_ADAPTER_LUID
+        assert monitor.selected_adapter_luid == adapter.luid
+        assert stats["adapter_index"] == adapter.device_id
+        assert stats["adapter_luid"] == adapter.luid
         assert stats["monitoring_status"] == "ready"
     finally:
         if monitor is not None:
@@ -349,7 +375,7 @@ def test_gpu_status_api_reports_selected_identity_and_monitoring_truth(monkeypat
 
 
 def test_settings_gui_binds_every_additive_gpu_truth_field():
-    dto = _read("PBStudio.UI/Services/ApiClient.cs")
+    dto = _read("PBStudio.UI/Services/ApiResponseModels.cs")
     view_model = _read("PBStudio.UI/ViewModels/SettingsViewModel.cs")
     view = _read("PBStudio.UI/Views/SettingsView.xaml")
     schema = json.loads(_read("PBStudio.UI/openapi.snapshot.json"))
@@ -504,7 +530,10 @@ def test_model_manager_uses_live_truth_labels_without_static_ghost_cards():
         "private void ApplyInstalled",
         "private void ApplyAvailable",
     )
-    assert "foreach (var entry in resp.Models" in apply_installed
+    # Live inventory only; since 2026-09-30 filtered by IsAppRelevant, the
+    # source is still resp.Models (no curated or static list).
+    assert "var visible = resp.Models" in apply_installed
+    assert "foreach (var entry in visible)" in apply_installed
     assert "CURATED" not in apply_installed.upper()
     assert "Loaded = entry.Loaded;" in view_model
     assert "Usable = entry.Usable;" in view_model
@@ -522,7 +551,20 @@ def test_model_manager_uses_live_truth_labels_without_static_ghost_cards():
 
 def test_model_provider_identity_is_forwarded_from_card_to_backend():
     interface = _read("PBStudio.UI/Services/IApiClient.cs")
-    client = _read("PBStudio.UI/Services/ApiClient.cs")
+    # Inspect every partial: the owner-capability prohibition is class-wide.
+    client = "\n".join(
+        _read(f"PBStudio.UI/Services/{name}")
+        for name in (
+            "ApiClient.cs",
+            "ApiClient.Health.cs",
+            "ApiClient.Projects.cs",
+            "ApiClient.Media.cs",
+            "ApiClient.PacingRender.cs",
+            "ApiClient.Brain.cs",
+            "ApiClient.Models.cs",
+            "ApiClient.Chat.cs",
+        )
+    )
     owner_handler = _read(
         "PBStudio.UI/Services/OwnerCapabilityRequestHandler.cs"
     )
@@ -551,8 +593,8 @@ def test_model_provider_identity_is_forwarded_from_card_to_backend():
     assert "AcquireRequestLeaseAsync" in owner_handler
     assert "TryAddWithoutValidation" in owner_handler
     assert "BackendOwnerCapability.HeaderName" in owner_handler
-    assert "ActivateModelAsync(card.Name, card.Provider)" in view_model
-    assert "TestModelAsync(card.Name, card.Provider)" in view_model
+    assert re.search(r"ActivateModelAsync\(\s*card\.Name,\s*card\.Provider", view_model)
+    assert re.search(r"TestModelAsync\(\s*card\.Name,\s*card\.Provider", view_model)
     assert "provider: Optional[str]" in router
     assert "if not provider or model.provider == provider" in router
     assert "provider=requested_provider" in router
@@ -601,7 +643,7 @@ def test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts():
     assert "SceneInfo(double? @confidence" in generated_scene
     assert "public double? Confidence { get; }" in generated_scene
 
-    handwritten = _read("PBStudio.UI/Services/ApiClient.cs")
+    handwritten = _read("PBStudio.UI/Services/ApiResponseModels.cs")
     assert (
         "record SceneInfo(double StartTime, double EndTime, "
         "string SceneType, double? Confidence)"
@@ -609,52 +651,51 @@ def test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts():
 
 
 @pytest.mark.parametrize(
-    ("method_marker", "next_marker", "status_prefix"),
+    ("method_marker", "next_marker", "label"),
     (
         (
             "private async Task AnalyzeMarkedAsync()",
             "private void UpdateAnalyzedCounts()",
-            "Markierte fertig:",
+            "Markierte",
         ),
         (
             "private async Task AnalyzeAllAsync()",
             "private async Task LoadAllThumbnailsAsync(",
-            "Batch fertig:",
+            "Batch",
         ),
     ),
 )
 def test_video_batch_retries_requested_stages_and_counts_success_only_after_non_null_analysis(
     method_marker: str,
     next_marker: str,
-    status_prefix: str,
+    label: str,
 ):
     source = _read("PBStudio.UI/ViewModels/VideoLibraryViewModel.cs")
-    dto = _read("PBStudio.UI/Services/ApiClient.cs")
+    dto = _read("PBStudio.UI/Services/ApiResponseModels.cs")
     method = _method_block(source, method_marker, next_marker)
+    batch_runner = _method_block(
+        source,
+        "private async Task RunBatchAnalysisAsync(",
+        "private bool ApplyAnalysisResult(",
+    )
 
     assert 'string Status = "completed"' in dto
     assert "Dictionary<string, string>? StageStatus = null" in dto
     assert "Dictionary<string, string>? StageErrors = null" in dto
 
-    null_branch = method.index("if (result == null)")
-    failure_increment = method.index("failed++;", null_branch)
-    partial_branch = method.index(
-        "else if (!IsCompleted(result))",
-        failure_increment,
-    )
-    partial_failure = method.index("failed++;", partial_branch)
-    else_branch = method.index("else", partial_failure)
-    success_increment = method.index("succeeded++;", else_branch)
-    apply_result = method.index("ApplyAnalysisResult(", failure_increment)
+    assert "RunBatchAnalysisAsync(scope, " in method
+    assert f'"{label}"' in method
 
-    assert null_branch < failure_increment < partial_branch < partial_failure
-    assert partial_failure < else_branch
-    assert apply_result < partial_branch < success_increment
+    null_branch = batch_runner.index("if (result == null)")
+    apply_result = batch_runner.index("ApplyAnalysisResult(scope, target, result, out _)", null_branch)
+    completed_branch = batch_runner.index("if (!IsCompleted(result))", apply_result)
+    success_increment = batch_runner.index("succeeded++;", completed_branch)
+
+    assert null_branch < apply_result < completed_branch < success_increment
     assert "clip.IsAnalyzed = IsCompleted(result);" in source
-    assert method.count("failed++;") >= 3
-    assert "if (target.IsAnalyzed)" not in method
-    assert "skipped++" not in method
-    assert status_prefix in method
-    assert "{succeeded} erfolgreich" in method
-    assert "{failed} fehlgeschlagen" in method
-    assert "{skipped}" not in method
+    assert "if (target.IsAnalyzed)" not in batch_runner
+    assert "skipped++" not in batch_runner
+    assert "{label} fertig:" in batch_runner
+    assert "{succeeded} erfolgreich" in batch_runner
+    assert "{targets.Count - succeeded} fehlgeschlagen" in batch_runner
+    assert "{skipped}" not in batch_runner

@@ -64,9 +64,15 @@ class _TempConfigManager:
 
 
 class _GenerationClient:
-    def __init__(self, provider: str, calls: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        provider: str,
+        calls: list[dict[str, Any]],
+        response: dict[str, str] | None = None,
+    ) -> None:
         self.provider = provider
         self.calls = calls
+        self.response = response or {"response": "ok"}
 
     async def __aenter__(self) -> "_GenerationClient":
         return self
@@ -89,7 +95,7 @@ class _GenerationClient:
                 "options": options,
             }
         )
-        return {"response": "ok"}
+        return self.response
 
 
 def _provider(
@@ -454,6 +460,7 @@ def test_activate_persists_model_and_provider_then_invalidates_inventory(
         config_copy,
         {
             "ai": {
+                "provider": "ollama",
                 "task_overrides": {"video_captioning": "legacy-vision"},
                 "task_provider_overrides": {},
             }
@@ -462,6 +469,10 @@ def test_activate_persists_model_and_provider_then_invalidates_inventory(
     monkeypatch.setattr(
         "pb_studio.config_manager.ConfigManager",
         lambda: manager,
+    )
+    monkeypatch.setattr(
+        "pb_studio.ai.llm_provider.get_provider",
+        lambda: "ollama",
     )
 
     response = client.post(
@@ -520,6 +531,62 @@ def test_activate_requires_provider_when_model_name_is_ambiguous(
     assert service.refresh_calls == 1
 
 
+@pytest.mark.parametrize(
+    ("capabilities", "expected_status"),
+    [(("chat",), 400), (("chat", "tool_calls"), 200)],
+)
+def test_activate_chat_tool_use_requires_verified_tool_capability(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capabilities: tuple[str, ...],
+    expected_status: int,
+) -> None:
+    service = _install_inventory(
+        monkeypatch,
+        _snapshot(
+            _model(
+                "ollama",
+                "tool-candidate",
+                capabilities=capabilities,
+            )
+        ),
+    )
+    config_copy = tmp_path / "config.json"
+    manager = _TempConfigManager(
+        config_copy,
+        {"ai": {"task_overrides": {}, "task_provider_overrides": {}}},
+    )
+    monkeypatch.setattr(
+        "pb_studio.config_manager.ConfigManager",
+        lambda: manager,
+    )
+    monkeypatch.setattr(
+        "pb_studio.ai.llm_provider.get_provider",
+        lambda: "ollama",
+    )
+
+    response = client.post(
+        "/models/activate",
+        json={
+            "name": "tool-candidate",
+            "provider": "ollama",
+            "task": "chat_tool_use",
+        },
+    )
+
+    assert response.status_code == expected_status
+    if expected_status == 200:
+        assert response.json()["activated_tasks"] == ["chat_tool_use"]
+        assert manager.set_calls == 1
+        persisted = json.loads(config_copy.read_text(encoding="utf-8"))["ai"]
+        assert persisted["task_overrides"]["chat_tool_use"] == "tool-candidate"
+    else:
+        assert "erforderliche Capability" in response.json()["detail"]
+        assert manager.set_calls == 0
+        assert service.invalidate_calls == 0
+
+
 def test_model_smoke_request_uses_selected_provider_and_exact_model(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -532,6 +599,10 @@ def test_model_smoke_request_uses_selected_provider_and_exact_model(
         ),
     )
     calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        "pb_studio.ai.llm_provider.get_provider",
+        lambda: "ollama",
+    )
     monkeypatch.setattr(
         "pb_studio.ai.llm_provider.get_llm_client",
         lambda *, provider: _GenerationClient(provider, calls),
@@ -552,6 +623,37 @@ def test_model_smoke_request_uses_selected_provider_and_exact_model(
             "options": {"max_tokens": 1, "temperature": 0.0},
         }
     ]
+
+
+def test_model_smoke_empty_provider_reply_is_reported_as_failure(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_inventory(monkeypatch, _snapshot(_model("ollama", "empty-chat")))
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        "pb_studio.ai.llm_provider.get_provider",
+        lambda: "ollama",
+    )
+    monkeypatch.setattr(
+        "pb_studio.ai.llm_provider.get_llm_client",
+        lambda *, provider: _GenerationClient(
+            provider,
+            calls,
+            response={"response": "  "},
+        ),
+    )
+
+    response = client.post(
+        "/models/test",
+        json={"name": "empty-chat", "provider": "ollama"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+    assert response.json()["response"] == ""
+    assert "leere Antwort" in response.json()["error"]
+    assert len(calls) == 1
 
 
 def test_model_smoke_request_does_not_guess_ambiguous_provider(

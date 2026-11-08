@@ -1,0 +1,1095 @@
+{
+  "scope": "Native caption wrapper on six previously reviewed still frames, two uncached calls each; no router, persistence or GUI",
+  "before": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "runs": [
+    {
+      "source_id": "V01",
+      "repeat": 1,
+      "frame_sha256": "6b5411062d8228c95d3c2288e55b22a9ab0db24f8b2c322b16a34d16eb5d9c74",
+      "source_time_seconds": 5.0,
+      "seconds": 5.8627086000005875,
+      "tags": [
+        "eine weibliche figur",
+        "dunkles kleid",
+        "tanzen",
+        "wald",
+        "neblig",
+        "blaues licht",
+        "violett",
+        "mystisch",
+        "geheimnisvoll",
+        "nächtlich"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine weibliche Figur, dunkles Kleid, tanzen, Wald, neblig, blaues Licht, violett, mystisch, geheimnisvoll, nächtlich",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 37,
+              "total_tokens": 236,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-5pqxejqz88a6cythbh4uy",
+              "object": "chat.completion",
+              "created": 1792440438,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine weibliche Figur, dunkles Kleid, tanzen, Wald, neblig, blaues Licht, violett, mystisch, geheimnisvoll, nächtlich",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 37,
+                "total_tokens": 236,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V01",
+      "repeat": 2,
+      "frame_sha256": "6b5411062d8228c95d3c2288e55b22a9ab0db24f8b2c322b16a34d16eb5d9c74",
+      "source_time_seconds": 5.0,
+      "seconds": 0.589382399999522,
+      "tags": [
+        "eine weibliche figur",
+        "dunkle kleidung",
+        "tanzen",
+        "wald",
+        "neblig",
+        "blaues licht",
+        "violett",
+        "mysteriös",
+        "geheimnisvoll",
+        "nacht"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine weibliche Figur, dunkle Kleidung, tanzen, Wald, neblig, blaues Licht, violett, mysteriös, geheimnisvoll, Nacht",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 37,
+              "total_tokens": 236,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-nhnynrzqvi9qeklptz314a",
+              "object": "chat.completion",
+              "created": 1792440441,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine weibliche Figur, dunkle Kleidung, tanzen, Wald, neblig, blaues Licht, violett, mysteriös, geheimnisvoll, Nacht",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 37,
+                "total_tokens": 236,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "repeat": 1,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 0.767942999999832,
+      "tags": [
+        "gruppe",
+        "dunkle gewänder",
+        "stehen",
+        "architektonisch",
+        "steinern",
+        "düster",
+        "neongrün",
+        "mysteriös",
+        "bedrohlich",
+        "fantasy"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, dunkle Gewänder, stehen, architektonisch, steinern, düster, neongrün, mysteriös, bedrohlich, Fantasy, Innenraum",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 37,
+              "total_tokens": 236,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-yqs5hk9fhvrr59azwie9y",
+              "object": "chat.completion",
+              "created": 1792440442,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, dunkle Gewänder, stehen, architektonisch, steinern, düster, neongrün, mysteriös, bedrohlich, Fantasy, Innenraum",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 37,
+                "total_tokens": 236,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V02",
+      "repeat": 2,
+      "frame_sha256": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+      "source_time_seconds": 15.0,
+      "seconds": 0.6939444999998159,
+      "tags": [
+        "gruppe",
+        "dunkle gewänder",
+        "stehen",
+        "architektonische struktur",
+        "innenraum",
+        "gedämpftes licht",
+        "blau-violett",
+        "mysteriös",
+        "bedrohlich",
+        "fantasy"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, dunkle Gewänder, stehen, architektonische Struktur, Innenraum, gedämpftes Licht, blau-violett, mysteriös, bedrohlich, Fantasy, düster",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 42,
+              "total_tokens": 241,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-hsiepkmk33585kqmt3k6pg",
+              "object": "chat.completion",
+              "created": 1792440442,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, dunkle Gewänder, stehen, architektonische Struktur, Innenraum, gedämpftes Licht, blau-violett, mysteriös, bedrohlich, Fantasy, düster",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 42,
+                "total_tokens": 241,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "repeat": 1,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 3.457475400000476,
+      "tags": [
+        "zwei weibliche figuren",
+        "dunkle kleider",
+        "stehen im wasser",
+        "nebliger wald",
+        "gedämpftes licht",
+        "blau-grau-töne",
+        "mystisch",
+        "melancholisch",
+        "wasserfläche"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei weibliche Figuren, dunkle Kleider, stehen im Wasser, nebliger Wald, gedämpftes Licht, Blau-Grau-Töne, mystisch, melancholisch, Wasserfläche",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 44,
+              "total_tokens": 243,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-rnd8gkee8rk7rjnl8h29rq",
+              "object": "chat.completion",
+              "created": 1792440446,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei weibliche Figuren, dunkle Kleider, stehen im Wasser, nebliger Wald, gedämpftes Licht, Blau-Grau-Töne, mystisch, melancholisch, Wasserfläche",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 44,
+                "total_tokens": 243,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V03",
+      "repeat": 2,
+      "frame_sha256": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+      "source_time_seconds": 5.0,
+      "seconds": 0.6625228000002608,
+      "tags": [
+        "zwei weibliche figuren",
+        "dunkle kleider",
+        "stehen im wasser",
+        "nebliger wald",
+        "dämmerlicht",
+        "blau-grau-töne",
+        "mystisch",
+        "geheimnisvoll",
+        "wasserfläche"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "zwei weibliche Figuren, dunkle Kleider, stehen im Wasser, nebliger Wald, Dämmerlicht, Blau-Grau-Töne, mystisch, geheimnisvoll, Wasserfläche",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 44,
+              "total_tokens": 243,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-jw43k6ovjwdry4igmnj",
+              "object": "chat.completion",
+              "created": 1792440447,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "zwei weibliche Figuren, dunkle Kleider, stehen im Wasser, nebliger Wald, Dämmerlicht, Blau-Grau-Töne, mystisch, geheimnisvoll, Wasserfläche",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 44,
+                "total_tokens": 243,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V04",
+      "repeat": 1,
+      "frame_sha256": "1c1ad3a99d35dcbe4b3fa5bcbcc3e59b219502fd9ec30a8ebaf8913ea63d41b2",
+      "source_time_seconds": 5.0,
+      "seconds": 0.8405692999995154,
+      "tags": [
+        "eine weibliche figur",
+        "dunkles gewand",
+        "steht",
+        "steinernes gelände",
+        "nacht",
+        "gedämpftes licht",
+        "warmbraun",
+        "geheimnisvoll",
+        "düster",
+        "mystisch"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine weibliche Figur, dunkles Gewand, steht, steinernes Gelände, Nacht, gedämpftes Licht, warmbraun, geheimnisvoll, düster, mystisch, Kerzenlicht",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 43,
+              "total_tokens": 242,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-rdi5rxkzm6f6ngk4ut008h",
+              "object": "chat.completion",
+              "created": 1792440447,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine weibliche Figur, dunkles Gewand, steht, steinernes Gelände, Nacht, gedämpftes Licht, warmbraun, geheimnisvoll, düster, mystisch, Kerzenlicht",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 43,
+                "total_tokens": 242,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V04",
+      "repeat": 2,
+      "frame_sha256": "1c1ad3a99d35dcbe4b3fa5bcbcc3e59b219502fd9ec30a8ebaf8913ea63d41b2",
+      "source_time_seconds": 5.0,
+      "seconds": 0.6242112999998426,
+      "tags": [
+        "eine weibliche person",
+        "dunkles gewand",
+        "steht",
+        "steinernes gelände",
+        "außenaufnahme",
+        "dämmerlicht",
+        "warmbraun",
+        "geheimnisvoll",
+        "düster",
+        "mystisch"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "eine weibliche Person, dunkles Gewand, steht, steinernes Gelände, Außenaufnahme, Dämmerlicht, warmbraun, geheimnisvoll, düster, mystisch",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 39,
+              "total_tokens": 238,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-w58qzd6fxhn7b6omqu5ek",
+              "object": "chat.completion",
+              "created": 1792440448,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "eine weibliche Person, dunkles Gewand, steht, steinernes Gelände, Außenaufnahme, Dämmerlicht, warmbraun, geheimnisvoll, düster, mystisch",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 39,
+                "total_tokens": 238,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V05",
+      "repeat": 1,
+      "frame_sha256": "010fd896ab7bbccab7711635ce0e7ddf8f29ade2515763ab3b616a7408bebda4",
+      "source_time_seconds": 5.0,
+      "seconds": 0.7439770999999382,
+      "tags": [
+        "gruppe",
+        "mensch",
+        "dunkle kleidung",
+        "steht",
+        "gewitterhimmel",
+        "dramatisch",
+        "blau",
+        "dunkel",
+        "stürmisch",
+        "naturereignis"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, Mensch, dunkle Kleidung, steht, Gewitterhimmel, dramatisch, blau, dunkel, stürmisch, Naturereignis, Blitzschlag",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 35,
+              "total_tokens": 234,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-ae6ukl909yachgixg5wjot",
+              "object": "chat.completion",
+              "created": 1792440449,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, Mensch, dunkle Kleidung, steht, Gewitterhimmel, dramatisch, blau, dunkel, stürmisch, Naturereignis, Blitzschlag",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 35,
+                "total_tokens": 234,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V05",
+      "repeat": 2,
+      "frame_sha256": "010fd896ab7bbccab7711635ce0e7ddf8f29ade2515763ab3b616a7408bebda4",
+      "source_time_seconds": 5.0,
+      "seconds": 0.5556714999993346,
+      "tags": [
+        "gruppe",
+        "mensch",
+        "dunkle kleidung",
+        "steht",
+        "gewitterhimmel",
+        "dramatisch",
+        "blau",
+        "dunkel",
+        "stürmisch",
+        "nächtlich"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, Mensch, dunkle Kleidung, steht, Gewitterhimmel, dramatisch, blau, dunkel, stürmisch, nächtlich, elektrisch",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 34,
+              "total_tokens": 233,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-tvfaj6womok6gg0aox0xv5",
+              "object": "chat.completion",
+              "created": 1792440449,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, Mensch, dunkle Kleidung, steht, Gewitterhimmel, dramatisch, blau, dunkel, stürmisch, nächtlich, elektrisch",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 34,
+                "total_tokens": 233,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V06",
+      "repeat": 1,
+      "frame_sha256": "6542bbafb087179015c1ddb7ca394dcdb382a310e6d099d370357a0e11fd8f5c",
+      "source_time_seconds": 5.0,
+      "seconds": 0.6833435999997164,
+      "tags": [
+        "gruppe",
+        "stehende figuren",
+        "dunkle gewänder",
+        "wasser",
+        "mondschein",
+        "nacht",
+        "dramatisch",
+        "blau",
+        "dunkel",
+        "mysteriös"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, stehende Figuren, dunkle Gewänder, Wasser, Mondschein, Nacht, dramatisch, blau, dunkel, mysteriös",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 29,
+              "total_tokens": 228,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-vpo8u2k9bgp0uqwh64nu9",
+              "object": "chat.completion",
+              "created": 1792440450,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, stehende Figuren, dunkle Gewänder, Wasser, Mondschein, Nacht, dramatisch, blau, dunkel, mysteriös",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 29,
+                "total_tokens": 228,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "source_id": "V06",
+      "repeat": 2,
+      "frame_sha256": "6542bbafb087179015c1ddb7ca394dcdb382a310e6d099d370357a0e11fd8f5c",
+      "source_time_seconds": 5.0,
+      "seconds": 0.5380244999996648,
+      "tags": [
+        "gruppe",
+        "stehende figuren",
+        "dunkle gewänder",
+        "wasserfläche",
+        "mondschein",
+        "nacht",
+        "dramatisch",
+        "mysteriös",
+        "blau",
+        "schwarz"
+      ],
+      "model": "google/gemma-4-e4b",
+      "calls": [
+        {
+          "provider": "lmstudio",
+          "endpoint": "http://127.0.0.1:1234/v1",
+          "model": "google/gemma-4-e4b",
+          "response": {
+            "model": "google/gemma-4-e4b",
+            "message": {
+              "role": "assistant",
+              "content": "Gruppe, stehende Figuren, dunkle Gewänder, Wasserfläche, Mondschein, Nacht, dramatisch, mysteriös, blau, schwarz, tief",
+              "tool_calls": []
+            },
+            "done": true,
+            "done_reason": "stop",
+            "usage": {
+              "prompt_tokens": 199,
+              "completion_tokens": 32,
+              "total_tokens": 231,
+              "completion_tokens_details": {
+                "reasoning_tokens": 0
+              }
+            },
+            "raw": {
+              "id": "chatcmpl-n4gjtjohjmbyj4p3e1ou3q",
+              "object": "chat.completion",
+              "created": 1792440451,
+              "model": "google/gemma-4-e4b",
+              "choices": [
+                {
+                  "index": 0,
+                  "message": {
+                    "role": "assistant",
+                    "content": "Gruppe, stehende Figuren, dunkle Gewänder, Wasserfläche, Mondschein, Nacht, dramatisch, mysteriös, blau, schwarz, tief",
+                    "reasoning_content": "",
+                    "tool_calls": []
+                  },
+                  "logprobs": null,
+                  "finish_reason": "stop"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 199,
+                "completion_tokens": 32,
+                "total_tokens": 231,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                }
+              },
+              "stats": {},
+              "system_fingerprint": "google/gemma-4-e4b"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "preflight": {
+    "gpu_name": "AMD Radeon RX 7800 XT",
+    "adapter_index": 1,
+    "adapter_luid": "0x00000000_0x00013019",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "dedicated_vram_total_mb": 16177,
+    "monitoring_status": "ready",
+    "monitoring_error": null,
+    "gpu_load": 0.0,
+    "gpu_temp": 24.0,
+    "gpu_memory_used": 3.0,
+    "gpu_memory_total": 16177.0,
+    "cpu_load": 9.649999618530273,
+    "driver_version": "Unknown",
+    "gpu_sensors": {
+      "smalldata": {
+        "GPU Memory Total": 16368.0,
+        "D3D Dedicated Memory Total": 16177.31,
+        "D3D Dedicated Memory Free": 16173.73,
+        "D3D Dedicated Memory Used": 3.58,
+        "D3D Shared Memory Used": 9.73,
+        "D3D Shared Memory Free": 31899.3,
+        "D3D Shared Memory Total": 31909.03,
+        "GPU Memory Used": 3.0,
+        "GPU Memory Free": 16365.0
+      },
+      "factor": {
+        "Fullscreen FPS": 0.0
+      },
+      "load": {
+        "D3D 3D": 0.0,
+        "D3D Copy": 0.0,
+        "D3D Compute 0": 0.0,
+        "D3D Timer 0": 0.0,
+        "D3D Security 1": 0.0,
+        "D3D Video JPEG 0": 0.0,
+        "D3D Video Codec Engine": 0.0,
+        "GPU Core": 0.0,
+        "GPU Memory": 0.0
+      },
+      "power": {
+        "GPU Package": 9.0
+      },
+      "clock": {
+        "GPU Core": 0.0,
+        "GPU Memory": 126.0
+      },
+      "temperature": {
+        "GPU Core": 24.0,
+        "GPU Memory": 44.0,
+        "GPU Hot Spot": 31.0
+      },
+      "fan": {
+        "GPU Fan": 0.0
+      },
+      "control": {
+        "GPU Fan": 0.0
+      },
+      "voltage": {
+        "GPU Core": 0.06
+      }
+    }
+  },
+  "models_before": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  },
+  "load": {
+    "returncode": 0,
+    "stdout": "\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 0% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 1% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 1% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 3% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 3% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 3% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 5% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 5% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 7% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 8% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 8% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 8% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 10% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 10% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 12% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 13% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 13% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 13% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 15% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 16% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 16% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 17% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 19% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 20% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 20% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 21% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 23% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 24% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 25% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 25% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 26% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 27% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 28% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 29% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 30% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 31% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 32% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 33% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 34% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 35% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 36% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 37% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 38% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 39% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 40% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 41% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 42% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 43% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 44% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 45% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 46% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 47% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 48% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 49% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 50% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 51% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 52% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 53% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 54% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 55% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 56% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 57% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 58% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 59% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 60% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 61% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 62% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 63% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 64% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 65% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 66% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 67% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 68% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠼\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠴\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠦\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠧\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠇\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠏\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠋\u001b[?25l\nLoading google/gemma-4-e4b 69% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 70% ⠙\u001b[?25l\nLoading google/gemma-4-e4b 70% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 70% ⠹\u001b[?25l\nLoading google/gemma-4-e4b 70% ⠸\u001b[?25l\nLoading google/gemma-4-e4b 100% ⠸\n\u001b[K\u001b[?25h",
+    "stderr": "Model loaded successfully in 14.40s.\n(5.89 GiB)\nTo use the model in the API/SDK, use the identifier \"google/gemma-4-e4b\".\n"
+  },
+  "wrapper_sha256": "26c0063ccb82aec8c1e23872d5573da720ff976ad0470098cef8f140e81072be",
+  "prompt": "Analysiere dieses Video-Frame. Gib 8-12 praegnante Tags zurueck, kommagetrennt, deutsch. Beginne mit den sichtbaren Personen oder Wesen: wie viele (bei mehr als drei nur 'gruppe'), was fuer eine Figur, Kleidung, was sie tun. Keine Hautfarbe nennen. Danach Ort, Licht und Farben, Stimmung. Nenne nur, was eindeutig im Bild zu sehen ist. Nur die Tags, keine Erklaerung, keine Nummern.",
+  "unload": {
+    "returncode": 0,
+    "stdout": "",
+    "stderr": "Model \"google/gemma-4-e4b\" unloaded.\n"
+  },
+  "after": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "protected_unchanged": true,
+  "models_after": {
+    "data": [
+      {
+        "id": "essentialai/rnj-1",
+        "object": "model",
+        "type": "llm",
+        "publisher": "essentialai",
+        "arch": "gemma3",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 32768,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "google/gemma-4-e4b",
+        "object": "model",
+        "type": "vlm",
+        "publisher": "google",
+        "arch": "gemma4",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 131072,
+        "capabilities": [
+          "tool_use"
+        ]
+      },
+      {
+        "id": "text-embedding-nomic-embed-text-v1.5",
+        "object": "model",
+        "type": "embeddings",
+        "publisher": "nomic-ai",
+        "arch": "nomic-bert",
+        "compatibility_type": "gguf",
+        "quantization": "Q4_K_M",
+        "state": "not-loaded",
+        "max_context_length": 2048
+      }
+    ],
+    "object": "list"
+  }
+}

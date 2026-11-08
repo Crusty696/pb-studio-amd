@@ -9,10 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
+import time
 from typing import Any
+import uuid
 
 
 CONTROL_ROOT_PARTS = ("PB_Studio", "recovery-control", "v1")
@@ -26,6 +29,8 @@ JOURNAL_STATES = {
 }
 DELETE_IF_PRESENT = "delete_if_present"
 RUNTIME_DIRTY_NAME = "RUNTIME_DIRTY"
+logger = logging.getLogger(__name__)
+_ATOMIC_REPLACE_DELAYS = (0.01, 0.03, 0.06)
 
 
 class RecoveryBootstrapError(RuntimeError):
@@ -89,26 +94,55 @@ def _fsync_parent(path: Path) -> None:
 
 def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp")
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         with temporary.open("w", encoding="utf-8", newline="\n") as handle:
             json.dump(value, handle, ensure_ascii=False, sort_keys=True, indent=2)
             handle.write("\n")
             _fsync_file(handle)
-        os.replace(temporary, path)
+        for attempt, delay in enumerate((*_ATOMIC_REPLACE_DELAYS, None)):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                if (
+                    getattr(exc, "winerror", None) not in {5, 32}
+                    and getattr(exc, "errno", None) not in {5, 13}
+                ) or delay is None:
+                    raise
+                time.sleep(delay)
         _fsync_parent(path)
     finally:
         if temporary.exists():
             temporary.unlink(missing_ok=True)
 
 
+def _is_reparse_point(path: Path) -> bool:
+    """Detect Windows junctions/symlinks without resolving virtualized paths."""
+    try:
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+    except OSError:
+        return False
+    return bool(attributes & 0x400)
+
+
 def _generation_dir(control_root: Path, generation_id: str) -> Path:
     if not generation_id or Path(generation_id).name != generation_id:
         raise RecoveryBootstrapError("Invalid recovery generation ID")
-    path = (control_root / "generations" / generation_id).resolve()
-    generations_root = (control_root / "generations").resolve()
+    # Do not resolve the concrete generation directory here. Windows AppX/Codex
+    # virtualization can resolve an otherwise valid child through the package
+    # cache while its parent stays in LOCALAPPDATA, producing a false escape.
+    # The basename check above excludes traversal; absolute lexical containment
+    # keeps the recovery root boundary deterministic.
+    path = (control_root / "generations" / generation_id).absolute()
+    generations_root = (control_root / "generations").absolute()
     if not path.is_relative_to(generations_root):
         raise RecoveryBootstrapError("Recovery generation escapes control root")
+    if _is_reparse_point(path) or _is_reparse_point(generations_root):
+        resolved_path = path.resolve()
+        resolved_root = generations_root.resolve()
+        if not resolved_path.is_relative_to(resolved_root):
+            raise RecoveryBootstrapError("Recovery generation escapes control root")
     return path
 
 
@@ -596,7 +630,12 @@ def _runtime_dirty(control_root: Path) -> dict[str, Any] | None:
     )
     expected_inventory = _runtime_variable_inventory(manifest)
     if marker.get("variable_inventory") != expected_inventory:
-        raise RecoveryBootstrapError("Runtime dirty inventory does not match its base")
+        # Marker schema is intentionally stable, but the inventory derivation
+        # can gain new owner scopes between releases.  Keep the marker
+        # inspectable and let ensure_recovery_ready decide whether it is still
+        # recoverable from the current/journal generations.  Raising here
+        # permanently bricks startup after an otherwise committed recovery.
+        marker["_inventory_mismatch"] = True
     return marker
 
 
@@ -633,9 +672,50 @@ def _clear_runtime_dirty_file(control_root: Path) -> None:
         _fsync_parent(path)
 
 
+_BACKEND_LOCKS: dict[str, Any] = {}
+
+
+def _acquire_backend_lock(root: Path) -> None:
+    """Hold an exclusive per-root lock for the lifetime of this process.
+
+    ensure_recovery_ready runs at backend.main import time, before the port is
+    bound. A second backend (second app window, driver script, a pytest run
+    against the real root) therefore read the RUNNING backend's RUNTIME_DIRTY
+    as a crash, started a restore, failed on the locked DB and left an
+    APPLYING journal behind. The running backend's shutdown snapshot then
+    failed and the next start rolled back to an old generation (observed
+    twice on 2026-09-30). The OS releases the lock when the process dies, so
+    a real crash still recovers on the next start.
+    """
+    key = str(root)
+    if key in _BACKEND_LOCKS:
+        return
+    lock_path = root.parent / f"{root.name}.backend.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "a+b")  # noqa: SIM115 - held until process exit
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        handle.close()
+        raise RecoveryBootstrapError(
+            "Ein anderes PB-Studio-Backend läuft bereits und hält "
+            f"{root}; Recovery wird nicht angefasst."
+        ) from exc
+    _BACKEND_LOCKS[key] = handle
+
+
 def mark_runtime_dirty(control_root: Path | None = None) -> bool:
     """Durably bind accepted runtime work to the current backup generation."""
     root = (control_root or fixed_control_root()).resolve()
+    _acquire_backend_lock(root)
     current = _validated_current(root, _current_pointer(root))
     if current is None:
         return False
@@ -716,6 +796,7 @@ def ensure_recovery_ready(
 ) -> RecoveryBootstrapResult:
     """Converge interrupted recovery before any product owner opens data."""
     root = (control_root or fixed_control_root()).resolve()
+    _acquire_backend_lock(root)
     if not root.exists():
         return RecoveryBootstrapResult(status="uninitialized")
 
@@ -723,6 +804,26 @@ def ensure_recovery_ready(
     journal = _read_json(journal_path) if journal_path.is_file() else None
     current = _validated_current(root, _current_pointer(root))
     dirty = _runtime_dirty(root)
+
+    if dirty is not None and dirty.get("_inventory_mismatch"):
+        current_pair = current[:2] if current is not None else None
+        journal_previous = (
+            str(journal.get("previous_generation", "")),
+            str(journal.get("previous_manifest_sha256", "")),
+        ) if journal is not None else None
+        dirty_pair = (
+            str(dirty.get("base_generation", "")),
+            str(dirty.get("base_manifest_sha256", "")),
+        )
+        recoverable = dirty_pair == current_pair or dirty_pair == journal_previous
+        if not recoverable:
+            logger.warning(
+                "Stale runtime dirty marker verworfen: Basisgeneration %s "
+                "ist weder CURRENT noch Journal-Vorgänger.",
+                dirty_pair[0],
+            )
+            _clear_runtime_dirty_file(root)
+            dirty = None
 
     if journal is None:
         if current is None:

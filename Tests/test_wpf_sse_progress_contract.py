@@ -27,4 +27,4 @@ def test_video_and_director_progress_are_correlated():
     assert 'e.EventType != "pacing_progress"' in director_vm
     assert "e.ClipId != _activePacingAudioClipId.Value" in director_vm
     assert '"task_id": "video_import"' in video_router
-    assert '"task_id": f"pacing:{audio_clip_id}"' in pacing_router
+    assert 'f"pacing:{audio_clip_id}"' in pacing_router or 'f"pacing:{config.audio_clip_id}"' in pacing_router

@@ -916,13 +916,6 @@ class VRAMBudgetManager:
                 self._models[model_id].touch()
                 self._models.move_to_end(model_id)
 
-    def set_priority(self, model_id: str, priority: ModelPriority):
-        """Change model priority."""
-        with self._registry_lock:
-            if model_id in self._models:
-                self._models[model_id].priority = priority
-                logger.debug(f"Set {model_id} priority to {priority.name}")
-
     def get_model(self, model_id: str) -> Optional[ModelBudget]:
         """Get model budget info (thread-safe snapshot)."""
         with self._registry_lock:
@@ -1058,13 +1051,6 @@ class VRAMContext:
         self.reserved = False
         self.committed = False
         self._unload_fn: Optional[Callable] = None
-
-    def set_unload_callback(self, fn: Callable):
-        """Set function to call on context exit."""
-        self._unload_fn = fn
-        with self.manager._registry_lock:
-            if self.model_id in self.manager._models:
-                self.manager._models[self.model_id].unload_callback = fn
 
     def commit(self):
         """Mark model as successfully loaded."""

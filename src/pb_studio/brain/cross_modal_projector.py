@@ -52,6 +52,31 @@ DEFAULT_VIDEO_MODEL_VERSION = _VIDEO_MODEL_VERSION
 DEFAULT_SEED = 42
 WEIGHTS_FILENAME = "cross_modal_projector.npz"
 PROJECTOR_ARTIFACT_VERSION = 2
+MIN_TRAINING_EMBEDDING_NORM = 1e-6
+
+
+def prepare_training_embedding(
+    embedding: Optional[np.ndarray], expected_dim: int
+) -> Optional[np.ndarray]:
+    """Validate and normalize input identically for filtering and fitting."""
+    if embedding is None:
+        return None
+    x = np.asarray(embedding, dtype=np.float32).reshape(-1)
+    if x.size == 0:
+        return None
+    x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+    if x.size != int(expected_dim):
+        logger.warning(
+            "CrossModalProjector training rejected embedding dimension %d; "
+            "expected %d",
+            x.size,
+            expected_dim,
+        )
+        return None
+    norm = float(np.linalg.norm(x))
+    if norm < MIN_TRAINING_EMBEDDING_NORM:
+        return None
+    return (x / norm).astype(np.float32)
 
 
 class CrossModalProjector:
@@ -86,6 +111,7 @@ class CrossModalProjector:
         self.pending_events: dict[str, dict] = {}
         self.project_checkpoints: dict[str, dict] = {}
         self.inventory_digest = ""
+        self._loaded_from_artifact = False
 
         self._init_random_matrices()
         # R-Brain-08
@@ -94,6 +120,13 @@ class CrossModalProjector:
         self._proj_cache_misses = 0
         if self.weights_path and self.weights_path.is_file():
             self._load_weights()
+
+    @property
+    def is_trained(self) -> bool:
+        """Whether semantic similarity is backed by learned matrices."""
+        if self.artifact_version == PROJECTOR_ARTIFACT_VERSION:
+            return bool(self.applied_event_uuids)
+        return self._loaded_from_artifact
 
     # ---------- public projection API ----------
 
@@ -272,6 +305,7 @@ class CrossModalProjector:
         clone.pending_events = json.loads(json.dumps(self.pending_events))
         clone.project_checkpoints = json.loads(json.dumps(self.project_checkpoints))
         clone.inventory_digest = self.inventory_digest
+        clone._loaded_from_artifact = self._loaded_from_artifact
         clone.clear_projection_cache()
         return clone
 
@@ -475,6 +509,7 @@ class CrossModalProjector:
             self.pending_events = pending_events
             self.project_checkpoints = project_checkpoints
             self.inventory_digest = inventory_digest
+            self._loaded_from_artifact = True
             if artifact_version == PROJECTOR_ARTIFACT_VERSION:
                 self._validate_v2_metadata()
             self._projection_cache.clear()
@@ -519,24 +554,7 @@ class CrossModalProjector:
         self, emb: Optional[np.ndarray], expected_dim: int
     ) -> Optional[np.ndarray]:
         """Returns L2-normalized fixed-size float32 vector. None on bad input."""
-        if emb is None:
-            return None
-        x = np.asarray(emb, dtype=np.float32).reshape(-1)
-        if x.size == 0:
-            return None
-        x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
-        if x.size != expected_dim:
-            logger.warning(
-                "CrossModalProjector training rejected embedding dimension %d; "
-                "expected %d",
-                x.size,
-                expected_dim,
-            )
-            return None
-        n = float(np.linalg.norm(x)) + 1e-9
-        if n < 1e-6:
-            return None
-        return (x / n).astype(np.float32)
+        return prepare_training_embedding(emb, expected_dim)
 
     def _compute_loss(
         self, prepared: list[tuple[np.ndarray, np.ndarray, float]]

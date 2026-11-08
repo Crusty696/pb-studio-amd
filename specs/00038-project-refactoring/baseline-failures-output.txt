@@ -1,0 +1,91 @@
+BASELINE SOURCE: C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\backend\routers\pacing_router.py
+BASELINE SOURCE: C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\src\pb_studio\pacing\clip_selector.py
+BASELINE SOURCE: C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\src\pb_studio\services\pacing_service.py
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+collected 5 items
+
+..\..\Tests\test_clip_selector_provenance.py FF                          [ 40%]
+..\..\Tests\test_full_audit_video_contract.py F                          [ 60%]
+..\..\Tests\test_pacing_analysis_preflight.py FF                         [100%]
+
+================================== FAILURES ===================================
+_________ test_semantic_faiss_path_records_semantic_and_motion_scores _________
+..\..\Tests\test_clip_selector_provenance.py:124: in test_semantic_faiss_path_records_semantic_and_motion_scores
+    assert selected.clip_id == "target"
+E   AssertionError: assert 'other' == 'target'
+E     
+E     - target
+E     + other
+------------------------------ Captured log call ------------------------------
+WARNING  pb_studio.pacing.clip_selector:clip_selector.py:1249 FAISS-Semantik fehlgeschlagen: _VectorStore.search() got an unexpected keyword argument 'query_identity' — direkte Embeddings werden versucht
+____ test_semantic_direct_path_records_similarity_without_changing_ranking ____
+..\..\Tests\test_clip_selector_provenance.py:170: in test_semantic_direct_path_records_similarity_without_changing_ranking
+    assert provenance["selection_path"] == "semantic_direct_embedding"
+E   AssertionError: assert 'semantic_fallback_motion' == 'semantic_direct_embedding'
+E     
+E     - semantic_direct_embedding
+E     + semantic_fallback_motion
+___________ test_embedding_resume_checks_vector_link_and_tombstone ____________
+..\..\Tests\test_full_audit_video_contract.py:342: in test_embedding_resume_checks_vector_link_and_tombstone
+    assert router._get_reusable_embedding_metadata(
+E   AssertionError: assert None == {'embedding_dim': 1152, 'embedding_samples': 1}
+E    +  where None = <function _get_reusable_embedding_metadata at 0x0000017376B98900>('C:/clip.mp4', 1, 'hash', <test_full_audit_video_contract.test_embedding_resume_checks_vector_link_and_tombstone.<locals>.State object at 0x0000017377322610>, <test_full_audit_video_contract.Context object at 0x00000173773225D0>)
+E    +    where <function _get_reusable_embedding_metadata at 0x0000017376B98900> = <module 'backend.routers.video_router' from 'C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\temp\\refactor-038-baseline\\backend\\routers\\video_router.py'>._get_reusable_embedding_metadata
+E    +    and   <test_full_audit_video_contract.test_embedding_resume_checks_vector_link_and_tombstone.<locals>.State object at 0x0000017377322610> = <class 'test_full_audit_video_contract.test_embedding_resume_checks_vector_link_and_tombstone.<locals>.State'>()
+______ test_preflight_reports_mode_specific_missing_stages_and_clip_ids _______
+..\..\Tests\test_pacing_analysis_preflight.py:85: in test_preflight_reports_mode_specific_missing_stages_and_clip_ids
+    assert detail["missing"]["video"] == [
+E   AssertionError: assert [{'clip_id': ... 'missing'}]}] == [{'clip_id': ... 'missing'}]}]
+E     
+E     At index 0 diff: {'clip_id': 10, 'stages': [{'stage': 'embedding', 'status': 'completed', 'payload_valid': False}]} != {'clip_id': 11, 'stages': [{'stage': 'motion', 'status': 'missing', 'payload_valid': False}, {'stage': 'embedding', 'status': 'missing', 'payload_valid': False}, {'stage': 'audio_key', 'status': 'missing', 'payload_valid': False}]}
+E     Left contains one more item: {'clip_id': 11, 'stages': [{'payload_valid': False, 'stage': 'motion', 'status': 'missing'}, {'payload_valid': False, 'stage': 'embedding', 'status': 'missing'}, {'payload_valid': False, 'stage': 'audio_key', 'status': 'missing'}]}
+E     Use -v to get more diff
+____ test_preflight_never_waives_stages_that_are_always_producible[motion] ____
+..\..\Tests\test_pacing_analysis_preflight.py:195: in test_preflight_never_waives_stages_that_are_always_producible
+    assert reported == [stage]
+E   AssertionError: assert ['motion', 'embedding'] == ['motion']
+E     
+E     Left contains one more item: 'embedding'
+E     Use -v to get more diff
+============================== warnings summary ===============================
+src\pb_studio\audio\beat_detector.py:65
+  C:\Users\david\Documents\Pb_studio_AMD_version\temp\refactor-038-baseline\src\pb_studio\audio\beat_detector.py:65: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources  # noqa: F401
+
+..\..\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+..\..\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(scipy_version) < LooseVersion("0.14"):
+
+..\..\.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `maximum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+..\..\.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `minimum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+Tests/test_clip_selector_provenance.py::test_semantic_faiss_path_records_semantic_and_motion_scores
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+Tests/test_full_audit_video_contract.py::test_embedding_resume_checks_vector_link_and_tombstone
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\faiss\loader.py:28: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(numpy.__version__) >= "1.19":
+
+Tests/test_full_audit_video_contract.py::test_embedding_resume_checks_vector_link_and_tombstone
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\setuptools\_distutils\version.py:336: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    other = LooseVersion(other)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED ..\..\Tests\test_clip_selector_provenance.py::test_semantic_faiss_path_records_semantic_and_motion_scores
+FAILED ..\..\Tests\test_clip_selector_provenance.py::test_semantic_direct_path_records_similarity_without_changing_ranking
+FAILED ..\..\Tests\test_full_audit_video_contract.py::test_embedding_resume_checks_vector_link_and_tombstone
+FAILED ..\..\Tests\test_pacing_analysis_preflight.py::test_preflight_reports_mode_specific_missing_stages_and_clip_ids
+FAILED ..\..\Tests\test_pacing_analysis_preflight.py::test_preflight_never_waives_stages_that_are_always_producible[motion]
+======================== 5 failed, 8 warnings in 2.76s ========================

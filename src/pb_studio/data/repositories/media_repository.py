@@ -262,10 +262,12 @@ class MediaRepository:
                     cursor.execute(
                         """
                         UPDATE media
-                        SET file_hash = ?, duration_sec = ?, metadata_json = ?, status = COALESCE(status, 'pending')
+                        SET ai_data_json = CASE WHEN file_hash != ? THEN NULL ELSE ai_data_json END,
+                            status = CASE WHEN file_hash != ? THEN 'pending' ELSE COALESCE(status, 'pending') END,
+                            file_hash = ?, duration_sec = ?, metadata_json = ?
                         WHERE id = ?
                         """,
-                        (file_hash, duration, json_meta, existing[0]),
+                        (file_hash, file_hash, file_hash, duration, json_meta, existing[0]),
                     )
                     logger.info(f"Reused existing media {existing[0]}: {normalized_path}")
                     return existing[0]
@@ -358,30 +360,26 @@ class MediaRepository:
             raise
 
     @_retry_on_database_lock
-    def update_metadata(self, media_id: int, metadata: Dict):
-        """Update technical metadata for a media file."""
+    def invalidate_analysis(self, media_id: int) -> None:
+        """Clear derived AI data when the current file identity is unverified."""
         try:
             with self.db.transaction(immediate=True) as conn:
-                row = conn.execute(
-                    "SELECT file_path FROM media WHERE id = ?",
-                    (media_id,),
-                ).fetchone()
-                file_path = row[0] if row else ""
-                json_meta = _serialize_meta(
-                    _migrate_metadata_for_path(file_path, metadata)
-                )
                 cursor = conn.execute(
-                    "UPDATE media SET metadata_json = ? WHERE id = ?",
-                    (json_meta, media_id)
+                    "UPDATE media SET status = 'pending', ai_data_json = NULL "
+                    "WHERE id = ?",
+                    (int(media_id),),
                 )
                 if cursor.rowcount != 1:
                     raise LookupError(f"Media {media_id} existiert nicht mehr")
-                logger.debug(f"Updated metadata for media {media_id}")
-
         except sqlite3.OperationalError:
             raise
-        except Exception as e:
-            logger.error(f"Update Metadata failed for media {media_id}: {e}", exc_info=True)
+        except Exception as exc:
+            logger.error(
+                "Analysis invalidation failed for media %s: %s",
+                media_id,
+                exc,
+                exc_info=True,
+            )
             raise
 
     @_retry_on_database_lock
@@ -400,14 +398,6 @@ class MediaRepository:
         except Exception as e:
             logger.error(f"Delete failed for media {media_id}: {e}", exc_info=True)
             raise
-
-    def get_all_pending(self) -> List[Dict]:
-        """Get all media files with 'pending' status."""
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM media WHERE status = 'pending' ORDER BY id")
-        rows = cursor.fetchall()
-        return [self._row_to_dict(row) for row in rows]
 
     @_retry_on_database_lock
     def bulk_update_status(self, media_ids: List[int], status: str):

@@ -9,7 +9,6 @@ from pb_studio.config_manager import ConfigManager
 from pb_studio.data.database_core import DatabaseCore, legacy_project_uuid
 from pb_studio.data.repositories import media_repository as media_repository_module
 from pb_studio.data.repositories.media_repository import MediaRepository
-from pb_studio.services.media_service import MediaService
 
 
 class _TempConfig:
@@ -196,29 +195,6 @@ def test_existing_db_is_migrated_and_guard_backfilled(tmp_path, monkeypatch):
     updated = repo.get_by_id(media_id)
     assert updated["file_hash"] == "hash-updated"
     assert updated["duration_sec"] == 4.0
-
-    DatabaseCore().shutdown()
-    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
-
-
-def test_media_service_reimport_skips_duplicate_rows_for_real_file(tmp_path, monkeypatch):
-    db_path = tmp_path / "media_service.db"
-    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
-    _reset_db_singletons()
-
-    media_file = tmp_path / "song.mp3"
-    media_file.write_bytes(b"ID3" + b"x" * 512)
-
-    service = MediaService()
-    monkeypatch.setattr(service, "_get_metadata", lambda path: {"duration": 3.0, "format": "mp3"})
-
-    first = service.import_files(1, [str(media_file)])
-    second = service.import_files(1, [str(media_file)])
-    rows = service.get_project_files(1)
-
-    assert first == second
-    assert len(rows) == 1
-    assert Path(rows[0]["file_path"]).resolve() == media_file.resolve()
 
     DatabaseCore().shutdown()
     monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)

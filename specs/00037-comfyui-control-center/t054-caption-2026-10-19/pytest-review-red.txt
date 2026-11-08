@@ -1,0 +1,25 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+collected 31 items / 29 deselected / 2 selected
+
+Tests\test_t054_caption_contract.py FF                                   [100%]
+
+================================== FAILURES ===================================
+________ test_numbered_list_without_spacing_does_not_keep_list_indices ________
+Tests\test_t054_caption_contract.py:121: in test_numbered_list_without_spacing_does_not_keep_list_indices
+    assert _parse_tags("1.frau, 2.wald") == ["frau", "wald"]
+E   AssertionError: assert ['1.frau', '2.wald'] == ['frau', 'wald']
+E     
+E     At index 0 diff: '1.frau' != 'frau'
+E     Use -v to get more diff
+________ test_prefixed_single_prose_response_retains_content_keywords _________
+Tests\test_t054_caption_contract.py:126: in test_prefixed_single_prose_response_retains_content_keywords
+    assert "frau" in tags
+E   AssertionError: assert 'frau' in []
+=========================== short test summary info ===========================
+FAILED Tests/test_t054_caption_contract.py::test_numbered_list_without_spacing_does_not_keep_list_indices
+FAILED Tests/test_t054_caption_contract.py::test_prefixed_single_prose_response_retains_content_keywords
+====================== 2 failed, 29 deselected in 0.61s =======================

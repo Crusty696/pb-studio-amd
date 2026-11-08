@@ -310,6 +310,7 @@ def test_long_mix_uses_full_duration_streaming_representations(
 
     from backend.routers.audio_router import _run_audio_analysis
     from backend.schemas.audio_schemas import AudioAnalyzeRequest
+    from pb_studio.audio.key_detector import KeyDetector
     from pb_studio.audio.streaming_analyzer import (
         StreamingAnalysisResult,
         StreamingAudioAnalyzer,
@@ -321,12 +322,18 @@ def test_long_mix_uses_full_duration_streaming_representations(
         duration_seconds=1200.0,
         bpm=120.0,
         beats=[1.0, 1190.0],
-        energy_curve=[0.1, 0.2, 0.8],
+        energy_curve=[0.5] * 1200,
         chroma_mean=[1.0] + [0.0] * 11,
-        spectral_times=[0.0, 600.0, 1199.0],
-        spectral_bands={"bass": [0.1, 0.5, 0.9]},
-        spectral_centroids=[100.0, 500.0, 900.0],
+        chroma_features=(
+            [[1.0] + [0.0] * 11 for _ in range(600)]
+            + [[0.0] * 4 + [1.0] + [0.0] * 7 for _ in range(600)]
+        ),
+        spectral_times=[float(index) for index in range(1200)],
+        spectral_bands={"bass": [0.5] * 1200},
+        spectral_centroids=[500.0] * 1200,
         window_count=48,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
     )
 
     monkeypatch.setattr(librosa, "get_duration", lambda **_kwargs: 1200.0)
@@ -339,6 +346,24 @@ def test_long_mix_uses_full_duration_streaming_representations(
         StreamingAudioAnalyzer,
         "analyze",
         lambda *_args, **_kwargs: streamed,
+    )
+    seen_chroma: list[float] = []
+
+    def detect_from_full_mix_chroma(
+        _detector: KeyDetector, chroma: list[float]
+    ) -> str:
+        seen_chroma.extend(chroma)
+        return "D major"
+
+    monkeypatch.setattr(
+        KeyDetector, "detect_key_from_chroma", detect_from_full_mix_chroma
+    )
+    monkeypatch.setattr(
+        KeyDetector,
+        "detect_key",
+        lambda *_args, **_kwargs: pytest.fail(
+            "long-mix key must not be inferred from the 600-second waveform snapshot"
+        ),
     )
 
     result = _run_audio_analysis(
@@ -353,8 +378,202 @@ def test_long_mix_uses_full_duration_streaming_representations(
     )
 
     assert result["structure_segments"][-1]["end_time"] == pytest.approx(1200.0)
+    assert any(
+        segment["start_time"] == pytest.approx(600.0, abs=2.0)
+        for segment in result["structure_segments"][1:]
+    )
+    assert all("chroma" in segment["evidence_sources"] for segment in result["structure_segments"])
+    assert all(
+        segment["feature_source_role"] == "original_mix"
+        for segment in result["structure_segments"]
+    )
     assert result["spectral_data"]["times"][-1] == pytest.approx(1199.0)
+    assert result["key"] == "D major"
+    assert seen_chroma == streamed.chroma_mean
+    assert result["feature_provenance"]["key_source_role"] == "original_mix"
+    assert result["feature_provenance"]["key_coverage"] == pytest.approx(1.0)
+
+
+def test_long_mix_keeps_beat_stem_separate_from_original_mix_features(
+    monkeypatch,
+    tmp_path,
+):
+    import librosa
+
+    from backend.routers.audio_router import _run_audio_analysis
+    from backend.schemas.audio_schemas import AudioAnalyzeRequest
+    from pb_studio.audio.beat_detector import BeatDetector
+    from pb_studio.audio.key_detector import KeyDetector
+    from pb_studio.audio.streaming_analyzer import (
+        StreamingAnalysisResult,
+        StreamingAudioAnalyzer,
+    )
+
+    audio = tmp_path / "mix.wav"
+    drums = tmp_path / "drums.wav"
+    audio.write_bytes(b"mix")
+    drums.write_bytes(b"drums")
+    beat_stream = StreamingAnalysisResult(
+        duration_seconds=1200.0,
+        bpm=120.0,
+        beats=[10.0, 20.0],
+        energy_curve=[0.9, 0.9],
+        chroma_mean=[0.0, 1.0] + [0.0] * 10,
+        spectral_times=[10.0, 20.0],
+        spectral_bands={"bass": [0.9, 0.9]},
+        spectral_centroids=[900.0, 900.0],
+        window_count=48,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
+    )
+    mix_stream = StreamingAnalysisResult(
+        duration_seconds=1200.0,
+        bpm=0.0,
+        beats=[],
+        energy_curve=[0.1, 0.2, 0.3],
+        chroma_mean=[1.0] + [0.0] * 11,
+        spectral_times=[0.0, 600.0, 1199.0],
+        spectral_bands={"bass": [0.1, 0.2, 0.3]},
+        spectral_centroids=[100.0, 200.0, 300.0],
+        window_count=48,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
+    )
+    calls: list[tuple[str, bool]] = []
+
+    def analyze(_analyzer, path, *, energy_only=False, **_kwargs):
+        calls.append((str(path), energy_only))
+        return mix_stream if energy_only else beat_stream
+
+    monkeypatch.setattr(librosa, "get_duration", lambda **_kwargs: 1200.0)
+    monkeypatch.setattr(
+        librosa,
+        "load",
+        lambda *_args, **_kwargs: (np.zeros(22050, dtype=np.float32), 22050),
+    )
+    monkeypatch.setattr(StreamingAudioAnalyzer, "analyze", analyze)
+    monkeypatch.setattr(
+        BeatDetector,
+        "compute_beat_strengths",
+        staticmethod(lambda _y, _sr, times: [0.5] * len(times)),
+    )
+    key_chroma: list[float] = []
+
+    def detect_mix_key(_detector: KeyDetector, chroma: list[float]) -> str:
+        key_chroma.extend(chroma)
+        return "C major"
+
+    monkeypatch.setattr(KeyDetector, "detect_key_from_chroma", detect_mix_key)
+    monkeypatch.setattr(
+        KeyDetector,
+        "detect_key",
+        lambda *_args, **_kwargs: pytest.fail(
+            "the 600-second snapshot must not replace full-run mix chroma"
+        ),
+    )
+
+    result = _run_audio_analysis(
+        str(audio),
+        5,
+        AudioAnalyzeRequest(
+            clip_id=5,
+            detect_beats=True,
+            detect_structure=False,
+            spectral_analysis=True,
+            detect_key=True,
+        ),
+        stems_paths={"drums": str(drums)},
+    )
+
+    assert calls == [(str(drums), False), (str(audio), True)]
+    assert [beat["time"] for beat in result["beats"]] == [10.0, 20.0]
+    assert result["energy_curve"] == mix_stream.energy_curve
+    assert result["spectral_data"]["times"] == mix_stream.spectral_times
     assert result["key"] == "C major"
+    assert key_chroma == mix_stream.chroma_mean
+    provenance = result["feature_provenance"]
+    assert provenance["spectral_source_role"] == "original_mix"
+    assert provenance["key_source_role"] == "original_mix"
+    assert provenance["spectral_coverage"] == pytest.approx(1.0)
+    assert provenance["key_coverage"] == pytest.approx(1.0)
+    chunk_evidence = result["_chunk_evidence"]
+    assert chunk_evidence["primary"]["source_role"] == "beat_source"
+    assert chunk_evidence["mix_energy"]["source_role"] == (
+        "original_mix_features_and_energy"
+    )
+
+
+def test_long_mix_router_preserves_suspect_segmented_beat_grid(
+    monkeypatch,
+    tmp_path,
+):
+    import librosa
+
+    from backend.routers.audio_router import _run_audio_analysis
+    from backend.schemas.audio_schemas import AudioAnalyzeRequest
+    from pb_studio.audio.beat_grid_segments import GridSegment
+    from pb_studio.audio.streaming_analyzer import (
+        StreamingAnalysisResult,
+        StreamingAudioAnalyzer,
+    )
+
+    audio = tmp_path / "mix.wav"
+    audio.write_bytes(b"placeholder")
+    streamed = StreamingAnalysisResult(
+        duration_seconds=1200.0,
+        bpm=120.0,
+        beats=[1.0, 1.5, 2.0],
+        energy_curve=[0.1, 0.2],
+        chroma_mean=[0.0] * 12,
+        spectral_times=[],
+        spectral_bands={},
+        spectral_centroids=[],
+        window_count=40,
+        feature_coverage=1.0,
+        feature_covered_seconds=1200.0,
+    )
+    monkeypatch.setattr(librosa, "get_duration", lambda **_kwargs: 1200.0)
+    monkeypatch.setattr(
+        librosa,
+        "load",
+        lambda *_args, **_kwargs: (np.zeros(22050, dtype=np.float32), 22050),
+    )
+    monkeypatch.setattr(
+        StreamingAudioAnalyzer,
+        "analyze",
+        lambda *_args, **_kwargs: streamed,
+    )
+    suspect_segments = [
+        GridSegment(0.0, 600.0, 120.0, 0.0, 4.0, "plausible", 20),
+        GridSegment(600.0, 1200.0, 120.0, 0.2, 1.0, "suspect", 20),
+    ]
+    segment_calls = []
+
+    def segmented_grid(path, *, sr, kick_times):
+        segment_calls.append((path, sr, kick_times))
+        return suspect_segments
+
+    monkeypatch.setattr(
+        "pb_studio.audio.beat_grid_segments.segment_beat_grids_from_file",
+        segmented_grid,
+    )
+
+    result = _run_audio_analysis(
+        str(audio),
+        8,
+        AudioAnalyzeRequest(
+            clip_id=8,
+            detect_beats=True,
+            detect_structure=False,
+            spectral_analysis=False,
+            detect_key=False,
+        ),
+    )
+
+    assert segment_calls == [(str(audio), 22050, [])]
+    assert result["beat_grid"]["status"] == "suspect"
+    assert result["beat_grid"]["suspect_count"] == 1
+    assert result["beat_grid"]["segments"][1]["status"] == "suspect"
 
 
 def test_stage_failure_marks_analysis_partial(monkeypatch, tmp_path):

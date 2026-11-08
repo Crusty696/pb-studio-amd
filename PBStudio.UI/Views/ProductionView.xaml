@@ -206,6 +206,12 @@
                 <!-- Progress Bar (Feature-1: zentriertes %) -->
                 <controls:ProgressBarWithLabel Percent="{Binding RenderProgress}"
                                                Visibility="{Binding IsRendering, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <TextBlock Text="{Binding ValidationText}"
+                           Foreground="{StaticResource AbletonYellow}"
+                           FontSize="10"
+                           Margin="0,4,0,0"
+                           AutomationProperties.Name="Render-Validierungsfortschritt"
+                           AutomationProperties.LiveSetting="Polite"/>
 
                 <!-- Status + ETA -->
                 <DockPanel Margin="0,6,0,0">

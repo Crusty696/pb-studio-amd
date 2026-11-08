@@ -60,10 +60,13 @@ def test_gpu_stage_failures_are_explicit(monkeypatch):
             pass
 
     class FailedSiglip:
-        is_ready = False
+        is_ready = True
 
         def __init__(self, *args, **kwargs):
             pass
+
+        def encode_image(self, *args, **kwargs):
+            raise RuntimeError("SigLIP inference crashed")
 
         def unload(self):
             pass
@@ -144,7 +147,10 @@ def test_caption_deadline_budget_is_shared_with_moondream(monkeypatch):
             pass
 
     async def no_lm_tags(frame, mode):
-        await asyncio.sleep(0.01)
+        # 50 ms, nicht 10: die Windows-Monotonuhr tickt in ~15,6 ms. Mit 10 ms
+        # las loop.time() vor und nach dem Schlaf denselben Wert, das Restbudget
+        # war 0.2 + 1e-11 und der Test fiel (Vollsuite 2026-10-01).
+        await asyncio.sleep(0.05)
         return [], "none"
 
     gpu_timeouts = []

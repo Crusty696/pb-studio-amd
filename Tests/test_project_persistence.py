@@ -84,6 +84,42 @@ class TestProjectLifecyclePersistence:
         monkeypatch.setattr(ProjectRepository, "update_project", fake_update)
         return records
 
+    def test_open_counts_match_loaded_catalog_not_project_folder_files(
+        self, client, tmp_path, fresh_state, monkeypatch
+    ):
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        project_path = tmp_path / "Counts"
+        audio_folder = project_path / "audio"
+        audio_folder.mkdir(parents=True)
+        (audio_folder / "cached-copy.wav").write_bytes(b"RIFF")
+        (audio_folder / "unrelated.txt").write_text("not a catalog clip")
+        (project_path / "project.json").write_text(
+            json.dumps({"name": "Counts", "audio_count": 0, "video_count": 0}),
+            encoding="utf-8",
+        )
+        registered_audio = tmp_path / "registered.wav"
+        registered_audio.write_bytes(b"RIFF")
+
+        def load_catalog(self, project_id=None):
+            self.audio_clips[11] = {
+                "id": 11,
+                "path": str(registered_audio),
+                "name": "registered",
+            }
+            return True
+
+        monkeypatch.setattr(AppState, "load_from_db", load_catalog)
+
+        opened = client.post("/project/open", json={"path": str(project_path)})
+
+        assert opened.status_code == 200, opened.text
+        assert opened.json()["audio_count"] == len(fresh_state.audio_clips) == 1
+        info = client.get("/project/info")
+        assert info.status_code == 200
+        assert info.json()["audio_count"] == opened.json()["audio_count"]
+
     def test_create_save_open_roundtrip_persists_timeline_metadata(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
 
@@ -146,6 +182,44 @@ class TestProjectLifecyclePersistence:
         assert fresh_state.current_audio_path == str(audio_file)
         assert len(fresh_state.current_timeline) == 1
         assert fresh_state.current_timeline[0]["metadata"]["file_path"] == str(video_file)
+
+    def test_explicit_save_after_removing_all_cuts_deletes_stale_timeline(
+        self, client, tmp_path, fresh_state, monkeypatch,
+    ):
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        created = client.post(
+            "/project/create",
+            json={"name": "Cleared", "path": str(tmp_path)},
+        )
+        assert created.status_code == 200, created.text
+        project_path = tmp_path / "Cleared"
+        video_file = project_path / "video" / "clip.mp4"
+        video_file.parent.mkdir(parents=True, exist_ok=True)
+        video_file.write_bytes(b"video")
+        fresh_state.video_clips[1] = {
+            "id": 1, "path": str(video_file), "name": "clip",
+        }
+        fresh_state.set_timeline([{
+            "clip_id": "clip_1", "file_path": str(video_file),
+            "start_time": 0.0, "end_time": 2.0,
+        }])
+
+        first_save = client.post("/project/save")
+        assert first_save.status_code == 200, first_save.text
+        timeline_path = project_path / "timeline.json"
+        assert timeline_path.is_file()
+
+        fresh_state.set_timeline([])
+        cleared_save = client.post("/project/save")
+
+        assert cleared_save.status_code == 200, cleared_save.text
+        assert not timeline_path.exists()
+        project_meta = json.loads(
+            (project_path / "project.json").read_text(encoding="utf-8")
+        )
+        assert project_meta["has_timeline"] is False
 
     def test_roundtrip_timeline_endpoint_restores_flat_fields_after_reopen(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config

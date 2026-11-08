@@ -1,0 +1,135 @@
+{
+  "verified_utc": "2026-10-13T02:38:22.973303+00:00",
+  "proof_level": "Executed planning-document assertions and source hashes only; no product tests, apps, GPU, GUI, migrations or media execution",
+  "checks": {
+    "45_unique_open_packages": true,
+    "42_requirements_preserved": true,
+    "40_original_findings_present": true,
+    "82_original_sections_preserved": true,
+    "18_additional_findings_traced": true,
+    "dependency_graph_acyclic": true,
+    "unique_planned_file_creator": true,
+    "task_metadata_index_blocks_and_file_ownership_match": true,
+    "parallel_marked_tasks_no_unordered_write_overlap": true,
+    "254_inventoried_sources_unchanged": true,
+    "additional_communication_sources_unchanged": true,
+    "original_attachment_unchanged": true,
+    "baseline_snapshots_immutable": true,
+    "spec_under_10KiB": true,
+    "no_completion_markers": true,
+    "restore_transition_edges_present": true,
+    "restore_generation_consistent_and_automatic": true,
+    "canonical_existing_project_uuid": true,
+    "partial_stage_status": true,
+    "event_catalog_matches_communication": true,
+    "no_future_full_acceptance_in_T009": true,
+    "no_T019_acceptance_cycle": true,
+    "T020_owns_native_run_producer": true,
+    "cloud_gates_removed": true,
+    "balanced_fences_plan.md": true,
+    "balanced_fences_tasks.md": true,
+    "balanced_fences_traceability.md": true,
+    "balanced_fences_domain-contracts.md": true,
+    "balanced_fences_communication-contract.md": true,
+    "balanced_fences_full-plan-audit-2026-10-13/report.md": true,
+    "local_document_links_resolve": true,
+    "cited_files_and_line_bounds_exist": true
+  },
+  "passed": 32,
+  "failed": [],
+  "packages": 45,
+  "requirements": 42,
+  "findings": 18,
+  "source_hashes_checked": 254,
+  "source_hash_changes": [],
+  "metadata_errors": [],
+  "unresolved_links": [],
+  "invalid_source_refs": [],
+  "parallel_conflicts": [],
+  "future_modify_paths_with_creator": [
+    {
+      "task": "T016",
+      "file": "src/pb_studio/jobs/admission.py",
+      "creator": [
+        "T015"
+      ]
+    },
+    {
+      "task": "T027",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": [
+        "T011"
+      ]
+    },
+    {
+      "task": "T030",
+      "file": "src/pb_studio/jobs/derivations.py",
+      "creator": [
+        "T027"
+      ]
+    },
+    {
+      "task": "T041",
+      "file": "src/pb_studio/jobs/scheduler.py",
+      "creator": [
+        "T012"
+      ]
+    },
+    {
+      "task": "T043",
+      "file": "src/pb_studio/jobs/repository.py",
+      "creator": [
+        "T011"
+      ]
+    }
+  ],
+  "topological_order": [
+    "T001",
+    "T045",
+    "T002",
+    "T003",
+    "T004",
+    "T005",
+    "T006",
+    "T008",
+    "T007",
+    "T010",
+    "T011",
+    "T009",
+    "T015",
+    "T017",
+    "T012",
+    "T018",
+    "T013",
+    "T019",
+    "T014",
+    "T020",
+    "T016",
+    "T021",
+    "T022",
+    "T043",
+    "T023",
+    "T024",
+    "T025",
+    "T026",
+    "T027",
+    "T031",
+    "T044",
+    "T028",
+    "T029",
+    "T030",
+    "T032",
+    "T033",
+    "T035",
+    "T036",
+    "T037",
+    "T038",
+    "T034",
+    "T039",
+    "T040",
+    "T041",
+    "T042"
+  ],
+  "product_acceptance": "NOT RUN",
+  "implementation": "NOT AUTHORIZED"
+}

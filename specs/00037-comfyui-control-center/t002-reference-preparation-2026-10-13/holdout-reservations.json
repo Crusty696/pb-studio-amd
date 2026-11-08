@@ -1,0 +1,208 @@
+{
+  "status": "HOLDOUT_DEFERRED_CANDIDATES_RECLASSIFIED_REGRESSION_RESERVE",
+  "no_hit_paths_total": 19,
+  "no_hit_unique_hashes": 16,
+  "excluding_development_V02_duplicate_family": {
+    "paths": 17,
+    "unique_hashes": 15
+  },
+  "candidates": [
+    {
+      "candidate_id": "H01",
+      "sha256": "87cb7687351f839ec62078b94367fde81b7d5ea068f14c55efc56987a6ac65f3",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_0485b499.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_0485b499.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H02",
+      "sha256": "c637ae72f98e776b4cc00e9e2a52be76230d092e43ec6257d831150ef3e29982",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_0989bf23.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_0989bf23.mp4",
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_09dadab6.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H03",
+      "sha256": "0d4ef76f0c45e76ed52f776abe8ada6b579f8044399e9378ba096e2fbe58cdec",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_143e0ce1.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_143e0ce1.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H04",
+      "sha256": "a187cafd28e8f6fbe4f846a8f9485679e9ba69821f8b84a44527deb9a9177a00",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_38d7e177.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_38d7e177.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H05",
+      "sha256": "9a45f6f0898ae441260293f97c9f3c4d1d76b2188467e3e4596b8b4c5b6848b4",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_439c7813.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_439c7813.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H06",
+      "sha256": "4730a26f7da10838242adff8ea2555bd43895a567195b43826f827daf78d206f",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_710a4407.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_710a4407.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H07",
+      "sha256": "9782ea172e95fbfe3c6c9fdb1c2aa456faeb0f5656cff5fd4aa1329add4a326d",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_7ec86866.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_7ec86866.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H08",
+      "sha256": "aba05ca2fa3937f6997c6d5f0df4c2c302d11cfd1c4b25ca78515e863ddf456e",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_917e5923.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_917e5923.mp4",
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_fa3aa2cd.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H09",
+      "sha256": "6b2f9ebd9f77d80413e0c01ce868aee3b30f155c3880fe779922e8b07515b8cd",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_92f8e394.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_92f8e394.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H10",
+      "sha256": "e388e2c2026c6fa649457ddafd4374efa85b290f193961e52d3eba6793928450",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_9821016f.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_9821016f.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H11",
+      "sha256": "92c272482a5042b82f340b6eb09af10c37471c23a03e505e1e1b465a51d37db1",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_abcc00c1.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_abcc00c1.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H12",
+      "sha256": "fb4a5dcf18ae25bb22d5d12522a91e401d566a5d54e39e643e0f544717e27fbc",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_d8366c2d.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_d8366c2d.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H13",
+      "sha256": "00266eaf4324d29c39e52c4220f0e46ff274e08264c45d984c415e25bcd3408f",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_da6dccf8.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_da6dccf8.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H14",
+      "sha256": "5e8101f517133cbdbacacb0c525cf151c932edb11450029959665a0b9eb473e2",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_de6a1ad2.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_de6a1ad2.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    },
+    {
+      "candidate_id": "H15",
+      "sha256": "b106022a8c58ce42df88215a83de70b0a4da12f2570db218363a54181b41b2ed",
+      "representative_path": "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_e1b7aad7.mp4",
+      "identical_paths": [
+        "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_e1b7aad7.mp4"
+      ],
+      "status": "REGRESSION_RESERVE_NOT_QUALIFIED_HOLDOUT",
+      "family_policy": "Origin unresolved; keep aliases/family hints together; no independent split.",
+      "prior_usage": "no exact name/hash hit in specified searchable repository text; user/private/external usage unknown"
+    }
+  ],
+  "freeze_rules": [
+    "No longer claimed or reserved as independent holdout under current user decision",
+    "Can be selected for later authorized regression; none automatically added to active9",
+    "Known byte duplicates stay grouped",
+    "Generation/GPU execution remains forbidden",
+    "Independent holdout requires future new evidence and scope"
+  ],
+  "user_origin_statement": {
+    "date": "2026-10-13",
+    "source": "direct_user_reply",
+    "verbatim": "das sind von mir generierte video mit gemini  sora und civitai",
+    "confirmed": "User-created generated videos; Gemini, Sora and Civitai named collectively",
+    "not_established": [
+      "per_file_generator_or_model",
+      "prior_PB_analysis_or_evaluation",
+      "prior_prompt_or_model_tuning",
+      "shared_reference_image_character_or_series"
+    ],
+    "effect": "No holdout qualification, no new generation authorization"
+  },
+  "user_regression_decision": {
+    "date": "2026-10-13",
+    "source": "direct_user",
+    "prior_usage_and_family_origin": "user_does_not_remember_exactly",
+    "current_use": "regression_test_media",
+    "independent_holdout": "explicitly_deferred_open",
+    "generation_allowed": false,
+    "gpu_runs_allowed": false,
+    "meaning": "Continue preparation without repeatedly requiring unknown origin facts; no claim of independent generalization."
+  }
+}

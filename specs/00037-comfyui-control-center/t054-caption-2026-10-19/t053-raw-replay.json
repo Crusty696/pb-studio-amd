@@ -1,0 +1,512 @@
+[
+  {
+    "id": "V01",
+    "repeat": 1,
+    "before": [
+      "eine weibliche figur",
+      "dunkles kleid",
+      "tanzen",
+      "wald",
+      "neblig",
+      "blaues licht",
+      "violett",
+      "mystisch",
+      "geheimnisvoll",
+      "nächtlich"
+    ],
+    "after": [
+      "eine weibliche figur",
+      "dunkles kleid",
+      "tanzen",
+      "wald",
+      "neblig",
+      "blaues licht",
+      "violett",
+      "mystisch",
+      "geheimnisvoll",
+      "nächtlich"
+    ],
+    "merged": [
+      "eine weibliche figur",
+      "dunkles kleid",
+      "tanzen",
+      "wald",
+      "neblig",
+      "blaues licht",
+      "violett",
+      "mystisch",
+      "geheimnisvoll",
+      "nächtlich"
+    ],
+    "retained_extra": []
+  },
+  {
+    "id": "V01",
+    "repeat": 2,
+    "before": [
+      "eine weibliche figur",
+      "dunkle kleidung",
+      "tanzen",
+      "wald",
+      "neblig",
+      "blaues licht",
+      "violett",
+      "mysteriös",
+      "geheimnisvoll",
+      "nacht"
+    ],
+    "after": [
+      "eine weibliche figur",
+      "dunkle kleidung",
+      "tanzen",
+      "wald",
+      "neblig",
+      "blaues licht",
+      "violett",
+      "mysteriös",
+      "geheimnisvoll",
+      "nacht"
+    ],
+    "merged": [
+      "eine weibliche figur",
+      "dunkle kleidung",
+      "tanzen",
+      "wald",
+      "neblig",
+      "blaues licht",
+      "violett",
+      "mysteriös",
+      "geheimnisvoll",
+      "nacht"
+    ],
+    "retained_extra": []
+  },
+  {
+    "id": "V02",
+    "repeat": 1,
+    "before": [
+      "gruppe",
+      "dunkle gewänder",
+      "stehen",
+      "architektonisch",
+      "steinern",
+      "düster",
+      "neongrün",
+      "mysteriös",
+      "bedrohlich",
+      "fantasy"
+    ],
+    "after": [
+      "gruppe",
+      "dunkle gewänder",
+      "stehen",
+      "architektonisch",
+      "steinern",
+      "düster",
+      "neongrün",
+      "mysteriös",
+      "bedrohlich",
+      "fantasy",
+      "innenraum"
+    ],
+    "merged": [
+      "gruppe",
+      "dunkle gewänder",
+      "stehen",
+      "architektonisch",
+      "steinern",
+      "düster",
+      "neongrün",
+      "mysteriös",
+      "bedrohlich",
+      "fantasy",
+      "innenraum"
+    ],
+    "retained_extra": [
+      "innenraum"
+    ]
+  },
+  {
+    "id": "V02",
+    "repeat": 2,
+    "before": [
+      "gruppe",
+      "dunkle gewänder",
+      "stehen",
+      "architektonische struktur",
+      "innenraum",
+      "gedämpftes licht",
+      "blau-violett",
+      "mysteriös",
+      "bedrohlich",
+      "fantasy"
+    ],
+    "after": [
+      "gruppe",
+      "dunkle gewänder",
+      "stehen",
+      "architektonische struktur",
+      "innenraum",
+      "gedämpftes licht",
+      "blau-violett",
+      "mysteriös",
+      "bedrohlich",
+      "fantasy",
+      "düster"
+    ],
+    "merged": [
+      "gruppe",
+      "dunkle gewänder",
+      "stehen",
+      "architektonische struktur",
+      "innenraum",
+      "gedämpftes licht",
+      "blau-violett",
+      "mysteriös",
+      "bedrohlich",
+      "fantasy",
+      "düster"
+    ],
+    "retained_extra": [
+      "düster"
+    ]
+  },
+  {
+    "id": "V03",
+    "repeat": 1,
+    "before": [
+      "zwei weibliche figuren",
+      "dunkle kleider",
+      "stehen im wasser",
+      "nebliger wald",
+      "gedämpftes licht",
+      "blau-grau-töne",
+      "mystisch",
+      "melancholisch",
+      "wasserfläche"
+    ],
+    "after": [
+      "zwei weibliche figuren",
+      "dunkle kleider",
+      "stehen im wasser",
+      "nebliger wald",
+      "gedämpftes licht",
+      "blau-grau-töne",
+      "mystisch",
+      "melancholisch",
+      "wasserfläche"
+    ],
+    "merged": [
+      "zwei weibliche figuren",
+      "dunkle kleider",
+      "stehen im wasser",
+      "nebliger wald",
+      "gedämpftes licht",
+      "blau-grau-töne",
+      "mystisch",
+      "melancholisch",
+      "wasserfläche"
+    ],
+    "retained_extra": []
+  },
+  {
+    "id": "V03",
+    "repeat": 2,
+    "before": [
+      "zwei weibliche figuren",
+      "dunkle kleider",
+      "stehen im wasser",
+      "nebliger wald",
+      "dämmerlicht",
+      "blau-grau-töne",
+      "mystisch",
+      "geheimnisvoll",
+      "wasserfläche"
+    ],
+    "after": [
+      "zwei weibliche figuren",
+      "dunkle kleider",
+      "stehen im wasser",
+      "nebliger wald",
+      "dämmerlicht",
+      "blau-grau-töne",
+      "mystisch",
+      "geheimnisvoll",
+      "wasserfläche"
+    ],
+    "merged": [
+      "zwei weibliche figuren",
+      "dunkle kleider",
+      "stehen im wasser",
+      "nebliger wald",
+      "dämmerlicht",
+      "blau-grau-töne",
+      "mystisch",
+      "geheimnisvoll",
+      "wasserfläche"
+    ],
+    "retained_extra": []
+  },
+  {
+    "id": "V04",
+    "repeat": 1,
+    "before": [
+      "eine weibliche figur",
+      "dunkles gewand",
+      "steht",
+      "steinernes gelände",
+      "nacht",
+      "gedämpftes licht",
+      "warmbraun",
+      "geheimnisvoll",
+      "düster",
+      "mystisch"
+    ],
+    "after": [
+      "eine weibliche figur",
+      "dunkles gewand",
+      "steht",
+      "steinernes gelände",
+      "nacht",
+      "gedämpftes licht",
+      "warmbraun",
+      "geheimnisvoll",
+      "düster",
+      "mystisch",
+      "kerzenlicht"
+    ],
+    "merged": [
+      "eine weibliche figur",
+      "dunkles gewand",
+      "steht",
+      "steinernes gelände",
+      "nacht",
+      "gedämpftes licht",
+      "warmbraun",
+      "geheimnisvoll",
+      "düster",
+      "mystisch",
+      "kerzenlicht"
+    ],
+    "retained_extra": [
+      "kerzenlicht"
+    ]
+  },
+  {
+    "id": "V04",
+    "repeat": 2,
+    "before": [
+      "eine weibliche person",
+      "dunkles gewand",
+      "steht",
+      "steinernes gelände",
+      "außenaufnahme",
+      "dämmerlicht",
+      "warmbraun",
+      "geheimnisvoll",
+      "düster",
+      "mystisch"
+    ],
+    "after": [
+      "eine weibliche person",
+      "dunkles gewand",
+      "steht",
+      "steinernes gelände",
+      "außenaufnahme",
+      "dämmerlicht",
+      "warmbraun",
+      "geheimnisvoll",
+      "düster",
+      "mystisch"
+    ],
+    "merged": [
+      "eine weibliche person",
+      "dunkles gewand",
+      "steht",
+      "steinernes gelände",
+      "außenaufnahme",
+      "dämmerlicht",
+      "warmbraun",
+      "geheimnisvoll",
+      "düster",
+      "mystisch"
+    ],
+    "retained_extra": []
+  },
+  {
+    "id": "V05",
+    "repeat": 1,
+    "before": [
+      "gruppe",
+      "mensch",
+      "dunkle kleidung",
+      "steht",
+      "gewitterhimmel",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "stürmisch",
+      "naturereignis"
+    ],
+    "after": [
+      "gruppe",
+      "mensch",
+      "dunkle kleidung",
+      "steht",
+      "gewitterhimmel",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "stürmisch",
+      "naturereignis",
+      "blitzschlag"
+    ],
+    "merged": [
+      "gruppe",
+      "mensch",
+      "dunkle kleidung",
+      "steht",
+      "gewitterhimmel",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "stürmisch",
+      "naturereignis",
+      "blitzschlag"
+    ],
+    "retained_extra": [
+      "blitzschlag"
+    ]
+  },
+  {
+    "id": "V05",
+    "repeat": 2,
+    "before": [
+      "gruppe",
+      "mensch",
+      "dunkle kleidung",
+      "steht",
+      "gewitterhimmel",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "stürmisch",
+      "nächtlich"
+    ],
+    "after": [
+      "gruppe",
+      "mensch",
+      "dunkle kleidung",
+      "steht",
+      "gewitterhimmel",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "stürmisch",
+      "nächtlich",
+      "elektrisch"
+    ],
+    "merged": [
+      "gruppe",
+      "mensch",
+      "dunkle kleidung",
+      "steht",
+      "gewitterhimmel",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "stürmisch",
+      "nächtlich",
+      "elektrisch"
+    ],
+    "retained_extra": [
+      "elektrisch"
+    ]
+  },
+  {
+    "id": "V06",
+    "repeat": 1,
+    "before": [
+      "gruppe",
+      "stehende figuren",
+      "dunkle gewänder",
+      "wasser",
+      "mondschein",
+      "nacht",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "mysteriös"
+    ],
+    "after": [
+      "gruppe",
+      "stehende figuren",
+      "dunkle gewänder",
+      "wasser",
+      "mondschein",
+      "nacht",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "mysteriös"
+    ],
+    "merged": [
+      "gruppe",
+      "stehende figuren",
+      "dunkle gewänder",
+      "wasser",
+      "mondschein",
+      "nacht",
+      "dramatisch",
+      "blau",
+      "dunkel",
+      "mysteriös"
+    ],
+    "retained_extra": []
+  },
+  {
+    "id": "V06",
+    "repeat": 2,
+    "before": [
+      "gruppe",
+      "stehende figuren",
+      "dunkle gewänder",
+      "wasserfläche",
+      "mondschein",
+      "nacht",
+      "dramatisch",
+      "mysteriös",
+      "blau",
+      "schwarz"
+    ],
+    "after": [
+      "gruppe",
+      "stehende figuren",
+      "dunkle gewänder",
+      "wasserfläche",
+      "mondschein",
+      "nacht",
+      "dramatisch",
+      "mysteriös",
+      "blau",
+      "schwarz",
+      "tief"
+    ],
+    "merged": [
+      "gruppe",
+      "stehende figuren",
+      "dunkle gewänder",
+      "wasserfläche",
+      "mondschein",
+      "nacht",
+      "dramatisch",
+      "mysteriös",
+      "blau",
+      "schwarz",
+      "tief"
+    ],
+    "retained_extra": [
+      "tief"
+    ]
+  }
+]

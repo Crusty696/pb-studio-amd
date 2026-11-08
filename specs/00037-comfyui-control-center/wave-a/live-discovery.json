@@ -1,0 +1,45 @@
+{
+  "utc": "2026-10-13T04:30:21.890953+00:00",
+  "kind": "real adapter minimal GET only; not inventory or workflow acceptance",
+  "calls": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8188/system_stats"
+    }
+  ],
+  "snapshot": {
+    "endpoint": {
+      "endpoint_id": "local-comfyui",
+      "canonical_url": "http://127.0.0.1:8188",
+      "configured_locality": "loopback",
+      "profile_revision": "unqualified",
+      "discovery_generation": 0,
+      "server_identity": null,
+      "session_identity": null,
+      "server_boot_identity": null
+    },
+    "version": "0.39.2",
+    "profile_revision": "comfy-0.39.2-3c1b7a17-readonly-v1",
+    "profile_source_sha256": "7dc4ca3bd801a64da1fe7c2d1af81da61999f6b96dd96637d456e0562e8ce40b",
+    "profile_binding": "source_candidate",
+    "nodes": null,
+    "models": null,
+    "model_roles": null,
+    "features": null,
+    "extensions": null,
+    "captured_at": "2026-10-13T04:30:21.890453Z",
+    "readiness": "discovered",
+    "reasons": [
+      "inventory_not_requested",
+      "runtime_source_binding_unknown",
+      "server_boot_identity_unknown",
+      "custom_node_versions_unknown",
+      "model_content_identity_unknown",
+      "workflow_not_qualified"
+    ],
+    "execution_ready": false,
+    "custom_node_inventory_complete": false,
+    "client_prompt_id_source_supported": true,
+    "client_prompt_id_runtime_verified": null
+  }
+}

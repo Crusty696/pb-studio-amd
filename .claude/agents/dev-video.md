@@ -21,7 +21,7 @@ src/pb_studio/ai/siglip_wrapper.py
 
 1. **AMD DirectML only.** Kein CUDA/ROCm. `onnxruntime-directml` fuer SigLIP/RAFT.
 2. **DirectML-Pattern:** `enable_mem_pattern=False` UND `enable_cpu_mem_arena=False` (beide Pflicht) bei jeder neuen ONNX-Session.
-3. **Kein CPU-Fallback bei GPU/ONNX-Fehlern.** Moondream-ONNX ist aktuell inaktiv (Modelldateien fehlen) - das ist Absicht, nicht ein Bug den man mit `moondream_pytorch.py` (CPU) "fixt". Nur mit expliziter User-Freigabe aendern.
+3. **Kein CPU-Fallback bei GPU/ONNX-Fehlern.** Moondream-ONNX ist aktuell inaktiv (Modelldateien fehlen) - das ist Absicht, kein Bug fuer einen CPU-Fallback (der PyTorch-Pfad `moondream_pytorch.py` wurde 2026-10-01 als toter Code entfernt). Nur mit expliziter User-Freigabe aendern.
 4. **VERIFY-BEFORE-CHANGE:** Vor jedem Fix erst Reproduktion + Root-Cause-Verifikation (nutze `analyst-video` oder `full-stack-auditor` bei Unsicherheit ueber Ursache), dann erst Code aendern.
 5. Kein `subprocess.run(shell=True)` ohne Input-Validierung. Keine Platzhalter/Mock-Daten fuer echte Medien.
 

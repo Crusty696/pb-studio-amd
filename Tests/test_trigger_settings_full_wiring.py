@@ -36,7 +36,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SCHEMA_FILE = REPO_ROOT / "backend" / "schemas" / "pacing_schemas.py"
-API_CLIENT_FILE = REPO_ROOT / "PBStudio.UI" / "Services" / "ApiClient.cs"
+API_RESPONSE_MODELS_FILE = REPO_ROOT / "PBStudio.UI" / "Services" / "ApiResponseModels.cs"
 VIEW_MODEL_FILE = (
     REPO_ROOT / "PBStudio.UI" / "ViewModels" / "DirectorViewModel.cs"
 )
@@ -62,21 +62,6 @@ TRIGGER_FIELDS: dict[str, str] = {
     "beat_trigger_mode": "BeatTriggerMode",
 }
 
-# Felder, die die Engine bewusst (noch) nicht liest. Jeder Eintrag braucht eine
-# Begruendung -- diese Liste ist die ehrliche Buchfuehrung ueber offene Enden,
-# nicht ein Freibrief.
-ENGINE_READ_EXCEPTIONS: dict[str, str] = {
-    # Audit 2026-08-05 (H-2): max_cut_interval hat repo-weit keinen Leser; der
-    # Kommentar in pacing_models.py behauptete faelschlich eine Nutzung durch
-    # _enforce_clip_lengths. Bis zur Entscheidung (T4) bleibt das Feld
-    # durchgereicht, aber wirkungslos -- hier dokumentiert statt verschwiegen.
-    "max_cut_interval": "Kein Engine-Leser; Entscheidung T4 offen.",
-    # Audit 2026-08-05 (M-6): onset_sensitivity wird von der Stem-Extraktion
-    # nicht gelesen (librosa.onset_detect laeuft mit Defaults).
-    "onset_sensitivity": "Kein Engine-Leser; Entscheidung T4 offen.",
-}
-
-
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
@@ -85,7 +70,7 @@ def _read(path: Path) -> str:
 def sources() -> dict[str, str]:
     return {
         "schema": _read(SCHEMA_FILE),
-        "client": _read(API_CLIENT_FILE),
+        "client": _read(API_RESPONSE_MODELS_FILE),
         "view_model": _read(VIEW_MODEL_FILE),
         "view": _read(VIEW_FILE),
         "engine": _read(ENGINE_FILE),
@@ -159,11 +144,6 @@ def test_field_is_bindable_in_xaml(
 def test_field_has_engine_reader(
     snake: str, pascal: str, sources: dict[str, str]
 ) -> None:
-    if snake in ENGINE_READ_EXCEPTIONS:
-        pytest.skip(
-            f"{snake}: bewusst ohne Engine-Leser — "
-            f"{ENGINE_READ_EXCEPTIONS[snake]}"
-        )
     assert snake in sources["engine"], (
         f"{snake} wird von advanced_pacing_engine.py nicht gelesen. Entweder "
         f"verdrahten oder in ENGINE_READ_EXCEPTIONS mit Begruendung eintragen."

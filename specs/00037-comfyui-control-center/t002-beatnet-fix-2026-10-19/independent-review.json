@@ -1,0 +1,32 @@
+{
+  "reviewer": "analyst-audio beatnet_fix_review",
+  "blocking_findings": [],
+  "reference_parity": {
+    "cases": 16,
+    "exact_array_equal": true,
+    "correct_options": [
+      true,
+      false
+    ],
+    "thresholds": [
+      0,
+      0.4
+    ],
+    "frame_lengths": [
+      1,
+      2,
+      40,
+      80
+    ],
+    "exit_code": 0
+  },
+  "additional_existing_issue": {
+    "description": "BeatNet BDA retains hidden and cell across file calls",
+    "same_instance_A01_max_timestamp_difference_seconds": 0.02,
+    "synthetic_BDA_max_logit_difference": 0.008167276,
+    "reset_hidden_cell_restores_first_output": true,
+    "DBN_adapter_involved": false,
+    "fixed_in_this_task": false
+  },
+  "limits": "Reference parity covers decoder semantics, not musical quality; A01 exact activation/reset causal comparison not run."
+}

@@ -90,31 +90,6 @@ class FrameGrabber:
             return None
         return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-    def extract_middle_frame(self, video_path: str, start_time: float, end_time: float) -> Optional[Image.Image]:
-        frames = self.extract_batch(video_path, start_time, end_time, count=1)
-        return frames[0] if frames else None
-
-    def extract_thumbnail(self, video_path: str, time_seconds: float = 0.0, size: tuple = (320, 180)) -> Optional[Image.Image]:
-        video_path = Path(video_path)
-        if not video_path.exists():
-            return None
-        cap = None
-        try:
-            cap = cv2.VideoCapture(str(video_path))
-            if not cap.isOpened():
-                return None
-            frame = self._grab_frame_at(cap, time_seconds)
-            if frame is None:
-                return None
-            frame.thumbnail(size, Image.Resampling.LANCZOS)
-            return frame
-        except Exception as e:
-            logger.error(f"Thumbnail fehlgeschlagen: {e}")
-            return None
-        finally:
-            if cap is not None:
-                cap.release()
-
     def extract_thumbnail_strip(
         self,
         video_path: str,
@@ -163,24 +138,3 @@ class FrameGrabber:
             return out
         finally:
             cap.release()
-
-    def get_video_info(self, video_path: str) -> dict:
-        video_path = Path(video_path)
-        if not video_path.exists():
-            raise FileNotFoundError(f"Video nicht gefunden: {video_path}")
-        cap = None
-        try:
-            cap = cv2.VideoCapture(str(video_path))
-            if not cap.isOpened():
-                raise RuntimeError(f"Konnte Video nicht öffnen: {video_path}")
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            return {
-                "fps": fps, "frame_count": fc,
-                "duration": fc / fps if fps > 0 else 0,
-                "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            }
-        finally:
-            if cap is not None:
-                cap.release()

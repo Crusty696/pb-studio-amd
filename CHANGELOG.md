@@ -1,7 +1,198 @@
 # CHANGELOG - PB Studio AMD Edition
+
+## 2026-11-08 - Sicherheitsrefresh nach Bereinigung
+
+- Acht Python-Pakete hashgebunden aktualisiert; CPU-PyTorch und NumPy 1.26.4 erhalten. 130 Pakete im neuen Lock, isolierte Vollinstallation und pip check bestanden.
+- Frischer SCA-Lauf: keine unfreigegebenen Befunde; drei exakt begrenzte Ausnahmen bis 08.12.2026. Transformers-Ausnahme entfernt, setuptools-Legacyinstallationsbefund nach Pfadpruefung aufgenommen (Torch verlangt setuptools<82).
+- Skip-Liste revalidiert, drei ueberholte Eintraege entfernt. 149 gezielte Tests bestanden, 1 Skip; finale CI-Checks vor Merge erforderlich. Details: `docs/security-review-2026-11-08.md`.
+- Abgeschlossene Dokumentbereinigung und ehrlicher offener Spec00028-Status separat gesichert; keine neue GUI-/Medienabnahme.
+
+## 2026-11-08 - Git-Synchronisierung des vorhandenen Projektstands
+
+- Vorhandene Caption-/Embedding-Vertraege, ComfyUI-Vertraege, Refaktorierung 00038 und Bereinigungsbelege 00039 fuer GitHub und `main` zusammengefuehrt.
+- Frische Pruefung: WPF Release 0 Warnungen/Fehler, 91 native Tests bestanden; Python 2272 bestanden, 1 fehlgeschlagen, 9 uebersprungen. Der unveraenderte SCA-Vertrag scheitert an drei am 31.10.2026 abgelaufenen Sicherheitsausnahmen. Keine Sicherheitsausnahme verlaengert, keine neue Produkt-/Releaseabnahme.
+- Umfang, Belege und Grenzen: `docs/git-sync-2026-11-08.md`. Persoenliche Claude-Einstellungen/Hooks bleiben lokal.
+
+## 2026-10-30 - Projektrefaktorierung, Spec 00038
+
+- API-Client in sieben Domaenen-Partials plus zentrale Transportklasse und separate Response-Modelle aufgeteilt; oeffentliche Vertraege erhalten.
+- Audio-Bibliothek aktualisiert bestehende Clipmodelle statt Clear/Neuanlage: Mehrfachauswahl bleibt erhalten, unveraenderte Antworten erzeugen keine CollectionChanged-Ereignisse. Projektkontext direkt vor UI-Veroeffentlichung erneut geprueft.
+- Timelineabschluss und gecachte Dauerprobe gemeinsam von Pacing/Export nutzbar; Anchor-Dateilesen aus Projekt-Router ausgelagert.
+- Release gebaut, 91 native Tests bestanden; 139 gezielte Python-Pruefungen bestanden, 2 uebersprungen. Zwei breite Abschnitte decken 2267 ausgewaehlte Python-Faelle ab: sechs gegen Baseline bestaetigte veraltete Embedding-Fixtures korrigiert, 56/20 gezielte Nachpruefungen bestanden. Weitere 16 Finalizer-/Pfadtests bestanden. Einzelheiten und Abnahmegrenzen in specs/00038-project-refactoring/verification.md.
+- Isoliertes Backend gesund; sichtbare WPF-Pruefung durch bestehenden Launcher-Socketbefund und automatische Freigabesperre offen. Produktions-Recovery und Konfigurationen hashgleich. Keine Gesamt-/Releasefreigabe, keine Skriptaenderung; neue Pfade ASCII.
+
+## 2026-10-19 - Masterplan-Fortschritt bereinigt
+
+- Veraltete Aufgaben-Kopfzeile korrigiert, Paketindex mit Status und vollständige lesbare Übersicht masterplan-status.md ergänzt. 5/45 Hauptpakete plus11 erledigte T002-Teilaufgaben getrennt; Erkennungsqualität bleibt offen. Arbeitsregel gegen Wiederholungsprüfungen festgehalten; KI-Hirn synchronisiert. Nur Dokumentpflege anhand vorhandener Belege, keine neuen Analyse-/Modelltests.
+
+
+## 2026-10-19 - T055/T056 native Bildpruefung und SigLIP-Korrektur
+
+-42 Caption-Aufrufe: native Originalframes statt480px-Vorschau, JPEG/PNG und Reasoning getrennt, sechs Clips an drei Zeitpunkten. V03-Wasserfall am spaeten Zeitpunkt bis Merge erhalten; Einzelbild-/V02-Qualitaetsfehler bleiben. Keine globale Transport-/Reasoningumstellung, keine semantische Gesamtfreigabe.
+- SigLIP nutzte falsche CLIP-Normalisierung; auf registrierte0.5/0.5 korrigiert und Einzel-/Batchpfad vereinheitlicht. Neuer Vektorraum onnx-dml-v2; Producer, Queries, Kandidaten, Reuse, Persistenz/Reload und Backfill gegen Vermischung mit Altvektoren geschuetzt. Alte Projektorgewichte unveraendert abgelehnt; keine Migration/Retaggingaktion.
+-186 gezielte Tests bestanden, unabhaengiger Review und42 echte DirectML-Inferenzen (18 native Bilder je zweimal plus6 Altvergleich) dokumentiert. Original-/Schutzdateien gleich, eigene Modelle entladen. Ein bestehender10ms-Testflake per kontrollierter Testuhr behoben. Keine Generierung/Installation, kein Produktneustart/GUI-Abnahme. Beleg specs/00037-comfyui-control-center/t055-vision-2026-10-19/report.md. Masterplan und neues KI-Hirn aktualisiert.
+
+## 2026-10-19 - T054 Caption-Reparaturen
+
+- Gemeinsames12-Tag-Budget fuer Parser und Clip-Merge; Hautfarben werden nicht per Wortfallback/Prosa wieder eingefuehrt. Numerische Personenzahlen vor/nach Nomen werden oberhalb3 zu Gruppen normalisiert. Nummerierungs-/Prosa-Regressionsfaelle gesichert.
+- Kontrollierte Bildvergleiche: Kandidat2-Prompt begrenzt uebernommen; weniger erfundene Gruppen, konkrete Bilddetails besser erhalten. V03-Wasserfall/Zweizahl und V02-Torform/Ort bleiben fehlerhaft.101 Tests gruen;84 echte Bildaufrufe inkl. verworfener Varianten, letzte12 endgueltiger Code. Schutzdateien unveraendert, eigenes Modell entladen. Keine Gesamtqualitaets-/GUI-Freigabe. Beleg specs/00037-comfyui-control-center/t054-caption-2026-10-19/report.md.
+
+## 2026-10-19 - T002 Caption-Teilpruefung
+
+- T053: V01-V06 Referenzbilder je zweimal mit unveraendertem nativen Caption-Wrapper analysiert, 12 echte HTTP-Antworten. Gemma 4 E4B auf vorhandener Vulkan-Runtime 2.60.0; konfiguriertes Qwen fehlt im Inventar. Keine Produkt-/Konfigurationsaenderung. Original-/Schutzdateihashes identisch, eigenes Modell entladen.
+- Qualitaetsfreigabe verweigert: unbelegte Gruppen V02/V05, fehlender Wasserfall V03; Parser entfernt sechs elfte Tags, darunter Blitzschlag. T054 Prompt-/Parservergleich offen. Masterplan aktualisiert; Nachweis specs/00037-comfyui-control-center/t002-caption-2026-10-19/report.md. Keine Vollclip-/GUI-Abnahme oder Generierung.
+
+## 2026-10-19 - Umbau-Status und T002-CPU-Fortsetzung
+
+- Aktueller Masterplanstatus in specs/00037-comfyui-control-center/current-status.md: 5/45 urspruengliche Pakete und T046-T049 abgeschlossen; T002 weiter offen. Historische Berichte werden nicht als aktuelle offene BeatNet-Fehler interpretiert. Cache-Restore vom 01.10. mit 247 Eintraegen und Grenzen dokumentiert. KI-Hirn ersetzt Obsidian auf Nutzeranweisung.
+- T051: Spektral-/Strukturmodule A01-A03 je zweimal im Fenster 60-90 s erfolgreich und exakt wiederholbar; A02 70-80 s messbar leiser/bassaermer. T052: sechs vollstaendige Clips je zweimal mit CPU-Szenendetektor, Frameabdeckung gegen ffprobe, eine Szene je Clip ueber No-cut-Ersatzpfad. Alle erfassten Quell-/Schutzdateien unveraendert. Keine semantische Gesamtqualitaetsabnahme, keine Generierung, kein Produktneustart.
 # Bug-History archiviert 2026-03-09
 
 ---
+
+## 2026-10-19 - BeatNet reused-instance state isolation
+
+- 19.10.2026: Zustandsreset je Dateianalyse fuer online/offline/realtime umgesetzt; Mikrofon-stream bleibt fortlaufend. Gemeinsamer Lock schuetzt Reset/Inferenz/Cleanup; PF-Decoder wird aus frischem Snapshot restauriert, RNG bleibt unangetastet. 63 gezielte Tests und CPU-A01–A03 Shared-Instance-Matrix bestanden; alle fuenf BeatDetector-A01/A02/A03/A01-A01-Vergleiche entsprechen frischen Referenzen. Review ohne Blocker. Eine fruehe Testausfuehrung ohne APPDATA-Isolation beruehrte Brain-Store-SHM/WAL; embedding_cache.db meldete sich bei read-only quick_check als malformed, kein Vorherhash vorhanden und keine Reparatur vorgenommen. Folgepruefungen isoliert. Beleg: specs/00037-comfyui-control-center/t002-beatnet-state-fix-2026-10-19/qc-report.md. Kein GUI-Neustart, Build, GPU-Lauf oder Generierung; Gesamt-T002 offen.
+
+## 2026-10-19 - BeatNet DBN compatibility fix
+
+- 19.10.2026: BeatNet-DBN-NumPy-Kompatibilitaetsfix in beiden Python-Aufrufern umgesetzt (lokaler Adapter, keine Packageaenderung). Nach Stromausfall/Neustart 18:54:22 erneut 54 Tests bestanden; A01–A03 je drei echte CPU-Analysen ohne Fallback, frische Wiederholungen identisch. Originale/Recovery/DB/Config/Library-Hashes gleich. Unabhaengiges Review mit16 Decodervergleichen ohne Blocker. Separater LSTM-Zustandsbefund bei Instanzwiederverwendung bleibt offen, ebenso musikalische Taktqualitaet/T002/WPF-Abnahme. T046/T047 abgeschlossen. Beleg: specs/00037-comfyui-control-center/t002-beatnet-fix-2026-10-19/qc-report.md. Quellen frisch ausgefuehrt; kein Produktneustart/EXE-Build, keine Generierung. Lokal, noch nicht committed.
+
+## 2026-10-19 - T002 audio root-cause investigation
+
+- 19.10.2026: T002 Ursachenanalyse mit drei Spezialagenten. BeatNet offline/DBN-Abbruch in madmom ragged np.asarray reproduziert; isolierte Score-Auswahl-Gegenprobe erfolgreich (A03 68 Beats/34 Downbeats, Zweiermetrum). Beat-This-Rohlogits liefern bereits viele Downbeat-Spitzen; 90-s-Kontext beseitigt A01/A03-Auffälligkeit nicht. Frontend/80 Postprocess-Fälle/18 Chunklängen referenzkonform; Verbraucher prüfen keine musikalische Taktgüte. Produktcode/Pakete unverändert, Original-/Recovery-/DB-Hashes gleich. Beleg: specs/00037-comfyui-control-center/t002-audio-investigation-2026-10-19/investigation.md. T002/Qualitätsabnahme offen; lokal, nicht committed.
+
+## 2026-10-19 - T002 bounded GPU checks
+
+- 19.10.2026: T002 GPU-Teilprüfung freigegeben und ausgeführt: A01–A03 je 30 s zweimal über native Beat-This-Audioroute; V01–V06 je ein Bildpaar zweimal mit RAFT/DirectML. 18 Läufe, identische Wiederholungen; Original-SHA-256, Recovery-Marker, Konfiguration und DB/WAL/SHM unverändert. BeatNet-Fehler und auffällige Downbeat-Anzahlen A01/A03 offen. Keine Generierung, kein Produktstart, keine Migration. T002/Qualitätsbaseline/GUI-Abnahme offen. Beleg: specs/00037-comfyui-control-center/t002-gpu-check-2026-10-19/gpu-check-report.md. Lokal dokumentiert, nicht committed.
+
+## 2026-10-19 - T002 technical countercheck (Spec 00037)
+
+- Prepared a human-review guide with direct local source/frame links, six blank picture rows and three blank audio rows (01:00–01:30). Human observations precede model-output review; rough listening notes are not precise beat labels. No new analysis, GPU or generation run. Guide: specs/00037-comfyui-control-center/t002-human-review-2026-10-19/BEWERTUNG.md.
+
+- Re-ran the bounded PB Studio CPU functions on all nine pinned regression sources; all nine passed and original SHA-256 hashes still match. Rechecked the V02 exact duplicate and six local-only reference-image hashes. A03 still uses the Librosa/audioread fallback with a deprecation warning. Full decode/PTS evidence remains dated 2026-10-13; human labels, Native baseline and independent holdout remain open. Evidence: specs/00037-comfyui-control-center/t002-regression-preparation-2026-10-13/technical-countercheck-2026-10-19.md.
+
+## 2026-10-13 - T002 read-only CPU media probe (Spec 00037)
+
+- Nine selected regression sources passed isolated PB Studio path/metadata/frame/audio-chunk function checks without GPU acceleration. All nine original SHA-256 hashes were unchanged afterward. A03 M4A required the Librosa/audioread fallback and raised a deprecation warning. This is bounded CPU evidence, not an app import or Native quality baseline; T002 and the independent holdout remain open. Evidence: specs/00037-comfyui-control-center/t002-cpu-check-2026-10-13/cpu-check-report.md.
+
+## 2026-10-13 - ComfyUI Wave B (Spec 00037)
+
+- Added immutable workflow bundles, bounded parameter/output contracts and an explicit caller-owned JSON registry with persistent CAS, idempotency and restore-generation fencing API. Added offline local policy verification and backend SSE log redaction.
+- Verified 109 isolated tests plus 47 subtests, 163 Python files compiled and independent source review. No live ComfyUI/GPU/generation/install/migration/app startup. No qualified runtime profile or product registry integration. Evidence and limits: specs/00037-comfyui-control-center/wave-b/qc-report.md.
+
+## 2026-10-13 - ComfyUI Wave A (Spec 00037)
+
+- Added disabled-by-default validated ComfyUI settings and a bounded read-only async discovery library. Loopback-only endpoints, source-candidate capability profiles, explicit unknown model/runtime identities, local socket ownership and frame contracts; no generation or startup integration.
+- Verified 53 tests plus 20 subtests, 155 Python files compiled, and one real GET /system_stats through the new adapter. No GPU, migration, installation, live inventory scan or existing-job mutation. Existing config/recovery/DB and unrelated dirty files preserved. Scope and limits: specs/00037-comfyui-control-center/wave-a/qc-report.md.
+
+## 2026-10-03 - Manual acceptance logging (Spec 00036)
+
+- Added German manual checklist `docs/MANUELLE_ABNAHME.md` and independent double-click `LOG-AUFZEICHNUNG.bat`: emitted WPF/backend/stdout/stderr/native/launcher lines are collected live into one unique `logs/sessions/manual_*.log`, with source/time labels, flushing, recreation/rotation warnings and common credential redaction. No app/project control; no exhaustive tracing claim.
+- WPF now logs received SSE payload diagnostics before UI throttling. Native negative test revealed quoted JSON credential keys were not masked; fixed shared redactor, including owner-capability assignments. Native Release suite 86/86; targeted Python recorder/terminal/SSE 16/16; three finite wrapper runs exit 0; deployed Release build 0 warnings/errors. Manual new WPF session pending; no release marker.
+
+## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
+
+- 2026-09-30/10-01 (Claude) recovery: a second backend (second window, driver, pytest on the real root) read the running backend's RUNTIME_DIRTY as a crash, started a restore and left an APPLYING journal; the next start rolled back. On 2026-09-30 00:54 this reset `data/pb_studio.db` to the 2026-09-24 generation (lost `gui_qc_20260925`, 572 media; `test` of 09-28, 396 media; both still in generation `20260929T224820…` and `data/backups/t013_pre_20260930/`, not restored pending David's decision). Fix `a380a13`: exclusive per-root process lock in `ensure_recovery_ready`/`mark_runtime_dirty` (live: second backend refused, journal unchanged); `Tests/conftest.py` isolates `LOCALAPPDATA`.
+- 2026-09-30 (Claude) video: silent clips no longer `partial` (`fc25f21`); caption tags merge all 3 frames, figures-first prompt, no word-splitting of comma lists, near-duplicate collapse (`dd3ee87`, `a558db2`); `/video/clips` shows tags right after analysis (`eaa90aa`).
+- 2026-09-30 (Claude) models: one model for all LLM tasks (LM Studio `qwen3.5-9b`, `reasoning_effort="none"`); LM Studio `tool_use` capability now read, chat no longer falls back to Ollama; MODELLE tab hides unsuitable models (`8a91eed`, `a558db2`). Brain: neutral `section` label kept out of `transition` context (`bf596c3`).
+
+- 2026-10-01 (Claude) T003 mix boundaries: long-mix path now picks track changes by an optimal partition of the chroma self-similarity (kernel k-means objective, penalty 18, segments 2–15 min) plus the existing tempo step; replaces recurrence novelty + prominence peaks. Same-tempo/beatmatched reference mixes F1 mean 0.538→0.783 (psy 0.556→0.889, untouched holdouts 0.700→0.889 and 0.444→0.556; techno 1.000→0.889). `beat_grid._phase_scores` vectorized + grid interpolation: `estimate_beat_grid` bit-identical on 32 real windows, 3.9× faster; boundary detection A/B 141.9→56.2 s and 118.9→51.8 s per mix under load. Key/BPM/grid on the 40-track rekordbox set field-identical (32/40, 38/40, phase median 1.0). Reference-mix builder gains rekordbox playlists + beatmatching (`--match-bpm`). Evidence `specs/00035-full-audit-remediation/evidence/t003-boundaries-20261001.md`.
+- 2026-10-01 (Claude) WPF: project opened/closed via API or chat now adopted by the WPF (`project_changed` SSE); INGEST tab removed; launcher waits up to 180 s for the recovery snapshot before killing the backend (`99dd5eb`, `bf99e6a`, `6204940`).
+- 2026-09-30 T003 accuracy fixes, measured against rekordbox reference + three constructed mixes: key 25→32/40 (`KeyDetector.MINOR_PRIOR` 0.075, shared decision path), beat-grid half-beat error fixed via sub-bass (20–90 Hz) on/off-beat check plus one-hop anchor lag correction (phase median 0.37→1.00), long-mix boundaries rebuilt on chroma recurrence novelty + precise tempo step (F1 0.375→0.842, 0.364→1.000, holdout 0.186→0.556, still below 0.65 for same-tempo mixes; ~4–5× slower). Launcher start timeout 90→300 s. New `Tests/test_t003_analysis_accuracy.py` 9 passed; see `specs/00035-full-audit-remediation/evidence/t003-fixes-20260930.md`.
+
+- Health-check reconciliation (2026-09-29): latest isolated Python full suite **1,958 passed / 13 skipped / 0 failed / 35 warnings** (1,766.58 s); native C# 80/80; WPF Release build 0/0; DirectML/core-package checks and AMF encoder discovery passed. Finding-54 decision regression 1/1. Backend startup smoke intentionally not run because startup/recovery may mutate user render/recovery state. T003/T013/T014/#2 still open; no release pass claimed.
+- Removed three missing-audio-fixture skips from waveform file-integration tests: each now creates deterministic 2-s PCM WAV (80/800/8000 Hz). Focused waveform suite: **20 passed, 0 skipped**; no production change. Full suite not rerun; historical aggregate remains scoped to earlier source state.
+
+- Finding 54 now links back to source audit P03 and has a disposition regression: actual `PacingService.generate_cut_list` with semantic matching disabled emitted only `prompt=None`, kept semantic selector off, and generated cuts via motion path (1/1 pass). No product change; finding remains withdrawn.
+- Caption progress no longer mislabels the configurable primary Vision provider as “LM Studio”; timeout, heartbeat, fallback-path and idle-status wording is provider-neutral. Test-first regression reproduced both normal and timeout status defects; focused Spec 00035 + video contract suites: 13 passed. T014 remains open: Ollama model is installed but not loaded, backend-policy compliance and human-reviewed caption labels are unverified.
+- T017 evidence receipt now hashes the exact generated FFmpeg concat-list bytes (`concat_input_sha256`) without writing raw input paths into `result.json`; failed and completed runs both retain the digest. Test-first RED/GREEN plus broad render regressions: 75 passed, 1 skipped; current isolated full Python suite: 1,956 passed, 13 skipped, 0 failed.
+- Activated hardware gates independently: RX 7800 XT + DXGI/DirectML + LHM identity test 1/1 passed; real fixture-backed music-cut → audio preview → AMD AMF export test 1/1 passed, with 899/899 frames, complete independent decode, and −11.72 dBTP. These are service-level real-media checks, not WPF GUI/import/reopen acceptance; see Spec 00035 T013 evidence.
+
+- #35–39/#53 pacing cluster verified: 95 targeted tests passed, covering music-led semantic ranking, bounded theme continuity, source-repeat provenance, rational beat strength and string/int analysis-key normalization. Two legacy Brain-pacing fixture failures surfaced in the broader selector run; T011 reconciliation required.
+- #1–2/#26–28 render path: focused router/service/validator/atomic-output suite 35/35 passed. 30-s/60-s AMF exports remain recorded; original 54:59 source and incident evidence are missing, so no exact long-incident rerun claimed and #2 stays open.
+- #4,#6–15,#44–46 video/model/chat contracts rechecked: 60 focused Python regressions and 3 native C# tests passed; no additional code defect found. LM Studio inventory probe answered; Ollama endpoints timed out, so model inference/recovery remains unverified.
+- #17–21 preview workflow reverified: artifact path/audio/duration, rendered-preview selection and source-offset scrubbing covered by 38 Python and 8 native tests; GUI listening/playback remains pending handover.
+- #30–34 audio analysis verified: streaming key/spectral provenance and tail accounting remain covered; long-mix structure boundaries follow observed energy transitions with evidence-derived confidence, without invented section labels. Focused suites 35 passed, 1 skipped; real separated-stem comparison remains pending fixture availability.
+- #22–25/#29/#50–51 event/GPU lifecycle verified: queue/replay recovery reaches render-status reconciliation; GPU job deadline bounds lock wait and work, lock stays held until timed-out worker exits, and VRAM reservation/eviction happens only under serialization. Focused Python and native C# evidence recorded in Spec 00035 QC report.
+- #40–43/#52 project lifecycle: stale DB media reuse now refreshes from current import hash/probe and invalidates old analysis on changed content; project-switch stale save response, catalog counters, inaccessible recovery root and empty-timeline explicit Save path verified. Close still preserves timeline when RAM emptiness may be unsaved; GUI interaction remains pending.
+- #47–49 Brain: per-stage failures no longer expose stale values to learned axes or context; fit prefilter shares projector validation and actual fit count gates publish/acknowledgement; source-media annotation time verified. Regression suite evidence is in Spec 00035 QC report.
+- #30 real-media verification: existing 30-second WAV analyzed through the audio router; spectral/key provenance reports original mix with complete coverage. Real separated-stem comparison remains pending (no stem fixture available).
+
+### Fixed & Verified (partial scope only)
+- Caption coverage counts each planned sample even when frame seek/decode fails; partial tags stay available with `partial` truth and exact unread frame indices instead of falsely reporting completed.
+- Video audio-key stage now uses a single tested mapping: confirmed missing or unusable audio is `unavailable`, measured key is `completed`, probe/extraction failure is retryable `failed` with error.
+- Render concat PTS now uses the rational frame timebase correctly; real AMF RenderService exports validated at 30 s (900 frames) and 60 s (1800 frames), with synchronized AAC audio, 30 fps, progress to 100%.
+- Long-mix streaming structure now uses detected energy-change boundaries rather than a fixed 60-second grid. Neutral `section` labels replace unsupported semantic labels; Intro/Outro require measured edge transitions. Transition/harmonic evidence is not yet wired for full-run semantics.
+- Caption provider cooldown recovery is covered through failure, suppression during cooldown, and successful mocked recovery after expiry; live provider recovery remains unverified.
+- Music/theme ranking regressions now use normalized semantic-score paths and prove strong music/motion match outranks theme; bounded theme bonus may choose a near-tie for continuity.
+- Long-mix key regression proves the router uses full-run aggregate chroma, not its 600-second waveform snapshot, and reports original-mix source with complete coverage.
+- Long-mix source-role regression distinguishes beat-stem timing from original-mix energy, spectrum, and key provenance at the API boundary.
+- Suspect segmented beat-grid status is tested through long-mix router, generated WPF transport, and `AudioLibraryViewModel` display mapping (`unsicher`); live GUI rendering remains pending.
+- Segmented beat-grid coverage now reports exact uncovered tail duration and why scanning stopped; sub-5-second or truncated decoder tails remain suspect, while cap status reflects the actual window limit.
+- Pacing regressions now cover linear bounded RAFT normalization, full expected-BPM beat-strength remapping, and short-output chapter energy sampled against original-track duration.
+- Repeated short-source clips now retain explicit non-musical `source_repeat` trigger identity, zero trigger strength, and no false copied beat provenance.
+- Validation: focused render tests 4 passed; audio structure/provenance/long-mix suites 20 passed; caption wrapper suite 35 passed; music pacing suite 8 passed; refreshed audio/provenance suite 21 passed; WPF suspect-grid DTO/ViewModel tests 2 passed. Full audit remediation and GUI/E2E acceptance remain open.
+- Native verification: PBStudio.UI.Tests Release 74/74; WPF Release build 0 warnings, 0 errors.
+- Reverification: complete Python suite 1,918 passed / 12 skipped / 0 failed; native C# suite 75/75; WPF Release build 0/0. Live RX 7800 XT DirectML selection and matching LibreHardwareMonitor identity/status verified.
+- Video library ViewModel now falls back to its current dispatcher when tests or nonstandard hosts have no global WPF `Application`; avoids abandoned STA/Dispatcher operations while preserving production application's dispatcher.
+- Video embedding resume now requires exact matching media content hash plus active linked FAISS metadata; negative IDs, missing links, out-of-range IDs, and tombstones cannot reuse stale embedding status.
+- Model smoke endpoint has direct empty-provider-response coverage: reports failure with explicit reason and preserves the existing empty-string response schema, never fabricated “OK”.
+- Model inventory capability-probe failure is explicitly verified as installed-but-unverified/unusable, with failure detail surfaced in status reason instead of a silent DEBUG-only diagnosis.
+- Tool-use activation is covered through the API for both capability-negative and capability-positive models; rejected activation leaves configuration and inventory unchanged.
+- ChatAgent now has a regression proving successful tool responses containing `error: null` do not emit a failure event.
+- Chat render’s video-only path is verified end-to-end at the tool/API boundary without requiring an audio path when audio is disabled.
+- Chat history clear is protected by a native delayed-response/project-switch regression; stale success cannot erase the newly opened project's visible history.
+- Preview route regression proves relative renderer output is normalized to an absolute path for the actual generated local artifact; live WPF playback remains pending.
+- Real PreviewGenerator AMF smoke with existing test media produced synchronized H.264/AAC preview and non-silent decoded master audio; route coverage proves registered project audio path reaches worker.
+- Preview duration route contract proves measured artifact duration wins over differing requested target.
+- Timeline seeking now maps timeline position to selected-clip source offset and rendered-preview-relative time through a shared tested calculator; native regression passed, live GUI scrub remains pending.
+- Rendered timeline preview now remains active only when new selection falls inside its rendered time window; outside selection reloads selected source clip instead of leaving stale rendered footage active.
+- Render SSE replay-gap now has native recovery coverage through authoritative status reconciliation, including stale-task response protection; ProductionViewModel captures a dispatcher fallback for headless/test hosts. Verified: C# 79 passed, focused Python recovery contracts 10 passed (6 dependency warnings), WPF Release build 0/0.
+- SSE cursor restart behavior verified across separate Python processes: a fresh backend instance returns a replayable event ID greater than previous process cursor. No runtime implementation change needed; live server reconnect remains to verify.
+- Bounded SSE client queue overflow verified to retain dropped-ID range and emit `replay_gap` before next accepted progress event; live-queue regression included in 9/9 passing event suite.
+- Fractional `30000/1001` FPS command and artifact validation agree on exact frame count over 60,000 seconds; render-integrity tests 5/5. Live fractional-rate AMF render remains pending.
+- Render start rejects source/output collisions by canonical path and physical hardlink identity before queueing; route regression covers video path, master-audio path, and hardlink alias.
+- SSEClient now exempts render-validation status/phase events from the 100-ms progress throttle; named validation phases reach ProductionViewModel and visible XAML binding. Verified: C# 80/80, Python render/UI contracts 9/9 (6 dependency warnings), WPF Release 0/0; interactive display remains pending.
+- Render-status API caller after SSE replay gaps verified natively; UI restores authoritative completed state and output evidence, while stale task responses are ignored.
+
+## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
+
+### Fixed & Verified
+- **Full Test Suite:** 1854 passed, 12 skipped, 0 failures across the entire Python repository (`pytest Tests/ -q`).
+- **C# / WPF:** 70 passed in `dotnet test PBStudio.UI.Tests`; Release build clean with 0 warnings, 0 errors (`dotnet build -c Release`).
+- **SDD Governance:** 31 passed in `test_validate_sdd.py` and `test_audit_sdd_gate.py`; merge ancestry check allows fast-forward commits post-PR merge.
+- **Specs 00030–00034 Completed:** All 5 functional completion workspaces (Pacing 00030, AI Models/Chat 00031, Brain 00032, Video/Vision 00033, Audio 00034) verified and marked with `.completed` and `.qc-passed`.
+- **Exclusive LLM Provider & Standby (ADR 2026-09-20):** Aligned model inventory receipts and persistence test suites with exclusive provider mode. ChatAgent intra-provider candidate retry verified; vision failover retryability and task lock restored.
+- **Audio & Video Project Leases:** Test suites updated for project context requirement on clipwave, thumbstrip, motion, and onset/spectral endpoints.
+- **Iron Rules R1–R8:** Verified with 0 violations across all source code.
+
+## 2026-09-20 - PR #32 review corrections
+
+### Fixed & live-start verified
+- LM Studio/Ollama inference is now globally exclusive: the MODELLE tab requires a deliberate provider choice, switching unloads both runtimes into standby, and the registry/test/activation paths reject the inactive provider.
+- Chat and Brain narrator release stale automatic model pins before capability fallback; explicit narrator model overrides no longer inherit a pinned provider.
+- Timeline trims move the adjacent boundary and preserve continuity; source duration is exposed to the editor for safe clamping.
+- Chat history transport failures keep persisted context protected and expose an explicit reload action.
+- Ollama pull invalidates model inventory before publishing terminal success.
+- Legacy completed audio analyses remain readable when their persisted stage payload exists.
+- WPF Release build passed with 0 warnings/errors; backend health and the current WPF executable completed one live startup/render smoke. Scenario-specific provider, pull, legacy-project, and timeline interaction checks were not executed.
+- Exclusive provider switching was subsequently verified through the WPF UI with project `12345`: LM Studio → Ollama → LM Studio, both runtimes confirmed at zero resident models, and all 14 tabs passed the GUI release gate.
+- Vision analysis now holds one provider/model lease for the complete `/video/analyze` request plus the short GUI batch gap; provider changes, activations, and model smoke tests return 409 while that lease is active.
+- The newest usable installed Qwen vision model, `qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive`, is persisted as the LM Studio override for vision, chat, and Brain narration tasks.
+- Full WPF functional run with project `12345`: audio analysis returned 139.7 BPM/E minor/6205 beats; a fresh uncached clip completed scenes, RAFT, 1152-dim SigLIP, and three Qwen 3.6 vision calls (HTTP 200) with 5 colors/10 tags; real chat returned the requested live marker through Qwen 3.6. Both runtimes ended with zero loaded models. Evidence: `logs/gui_functional_12345_20260920_041747/complete_functional_run.log`.
+
+## 2026-09-19 - AUDIO source-functional completion (Spec 00034)
+
+### Fixed (verification deferred by user directive)
+- Audio list/read/delete/waveform endpoints now hold the initiating project lease; deletes cross the guarded commit boundary.
+- Beat, onset, structure, and spectral reads reject unavailable/partial stages instead of fabricating successful empty results.
+- Waveform failures are explicit and sample-rate metadata is no longer hard-coded; invalid non-finite ffprobe metadata is rejected.
+- BeatNet-to-librosa fallback preserves caller duration bounds.
+- Audio response collections use isolated Pydantic factories instead of mutable class defaults.
+- Audio Library and Media Import now deduplicate paths/rows, continue per-file failures, correlate import progress to the current project, suppress stale results, reset full selection/progress state on transitions, and block duplicate import/stem commands.
+- `separator.py` remained unchanged; validated marker/resume/project-guard callers were retained.
+- Tests, builds, GUI/audio/provider runs and QC markers remain intentionally unexecuted until explicit authorization.
 
 ## 2026-09-14 - Backlog-Abschluss, OBJ-76 Live-Runtime-Wahrheit, reale Frontend-QC
 
@@ -892,4 +1083,39 @@ pytest: 511 passed / 8 skipped / 0 failed. dotnet build Release: clean.
 ### Open (User-Action)
 - AMD Adrenalin Driver Update fuer h264_amf (siehe test-report/2026-05-14-AMD-DRIVER-UPDATE-required.md)
 
+## 2026-09-19 — VIDEO/VISION source-fix phase (Spec 00033)
+
+- Added project leases to thumbstrip, clip-wave, scene, motion, and video-delete routes; stale project work now fails closed.
+- Scene/motion reads no longer fabricate successful empty/static data for unavailable stages.
+- RAFT and SigLIP sessions remain resident across model-centric clip passes; real failures discard the affected cached owner.
+- Non-finite motion/embedding results are rejected before persistence; missing DirectML capability is explicit `unavailable`.
+- Video imports deduplicate canonical input paths; WPF import/progress publication is project- and sequence-bound.
+- Verification intentionally deferred by user instruction; no PASS/QC claim.
+
+## 2026-09-27 — Spec 00035 provider-outage truth
+
+- Video captioning now stops repeated LM Studio/Ollama failover probes after the wrapper reports no usable provider for a clip; remaining frames still use the existing Moondream DirectML fallback.
+- If neither provider is available, captions stage is persisted as `unavailable` with cooldown/provider cause instead of a generic empty-tag result. Focused video/provider/pipeline regressions: 55 passed; live provider recovery and caption semantic accuracy remain unverified.
+
+## 2026-09-29 — Spec 00035 AAC true-peak correction (T016)
+
+- Reproduced final AAC artifact at +1.47 dBTP against the -1.00 dBTP gate. Increased render pre-encode gain reduction from 2 to 4 dB; kept artifact validation and its gate unchanged.
+- Added encoded transient-rich AAC regression using production filter and artifact meter. Pre-fix signal exceeded gate; post-fix passed.
+- Existing 337.176-s/162-clip AMF export passed at -1.58 dBTP with 10,115/10,115 frames and complete independent decode. Focused tests 43 passed/1 skipped; isolated full suite 1,950 passed/13 skipped/0 failed/35 warnings.
+- T003 ground-truth accuracy and T013/T014 live acceptance remain open; no release/QC marker.
+
+## 2026-09-29 — Spec 00035 render segment evidence (T017)
+
+- RenderService now atomically persists a privacy-minimized ordered segment manifest before final FFmpeg encoding. Source paths are represented by SHA-256 identifiers; exact source and cumulative timeline ranges are recorded without raw paths or media bytes.
+- `result.json` validates run/job ownership and binds the exact manifest and canonical segment-list hashes. Manifest is not overwritten and remains available when final encoding fails.
+- Follow-up RED found concat-list timestamps rounded to milliseconds while manifest retained higher precision; both paths now use identical six-decimal boundaries and integer-microsecond timeline accumulation.
+- Focused manifest/render-evidence regressions: 8 passed. Python full suite is running separately; live AMF rerender not performed because dedicated-memory telemetry reports high use on an adapter LUID not mapped to a physical adapter.
+- Read-only provider recheck: Ollama API online, 15 installed/5 vision-capable/0 loaded; LM Studio 24 installed/5 VLM/0 loaded. No inference or model load performed; provider compliance/semantic accuracy remain unproven.
+- T003, T013, T014 and historical finding #2 remain partial/open; no release/QC marker.
+
 ---
+
+
+## 2026-11-01 - Lokale Bereinigung
+
+Bereinigung: 49 belegte Wegwerfziele entfernt, 734648061 logische Bytes. Getrackte Dateien und Venv-Interpreter hashgleich. 35 Dublettengruppen inventarisiert; QC-Belege, Sicherheitsstubs, Modelle, offene Arbeiten und Produktionsdaten erhalten. Keine Produktcodeaenderung oder neue Live-Abnahme. Beleg: specs/00039-project-cleanup/report.md. Spec00038 bleibt offen.

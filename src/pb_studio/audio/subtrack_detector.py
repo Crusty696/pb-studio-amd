@@ -9,6 +9,11 @@ Block-4-Pipeline (4 Signale, gewichtete Fusion):
 Fusion: 0.35 / 0.30 / 0.20 / 0.15
 Peak-Picking: min_distance=60s, adaptive Threshold.
 
+Das gilt nur noch fuer Dateien bis 10 min. Lange Mixe (der eigentliche
+Anwendungsfall) laufen seit T003 (2026-10-01) ueber eine optimale Zerlegung
+der Chroma-Aehnlichkeit plus genaue Tempostufe - Begruendung und Messwerte in
+`_long_mix_boundaries`.
+
 Fallback: 0 Boundaries -> 1 Sub-Track (start..end).
 """
 
@@ -47,6 +52,26 @@ W_SPECTRAL = 0.15
 DEFAULT_SR = 22050
 HOP_LENGTH = 512
 MIN_DISTANCE_SEC = 60.0
+
+# Langer-Mix-Pfad (T003) - Herleitung in `_long_mix_boundaries`.
+NOVELTY_BIN_SEC = 4.0
+# Zerlegung (2026-10-01): Preis je Grenze aus dem Plateau 14-24 an fuenf
+# Referenzmixen gewaehlt, an zwei weiteren unberuehrt geprueft; Abschnitte
+# 2-15 min (kuerzer spielt kaum ein DJ einen Titel, laenger dauert kaum ein
+# Titel). Ein laengerer Einzeltitel wird zwangsweise geteilt.
+PARTITION_PENALTY = 18.0
+PARTITION_MIN_SEC = 120.0
+PARTITION_MAX_SEC = 900.0
+TEMPO_MERGE_SEC = 45.0
+LONG_MIX_MIN_DISTANCE_SEC = 90.0
+TRACK_PEAK_PROMINENCE = 0.45
+TEMPO_WINDOW_SEC = 20.0
+TEMPO_HOP_SEC = 10.0
+TEMPO_MIN_WINDOW_SEC = 8.0
+TEMPO_MEDIAN_SEC = 30.0
+TEMPO_STEP_SIDE_SEC = 20.0
+TEMPO_STEP_MIN_BPM = 0.3
+TEMPO_STEP_RANGE_BPM = 0.5
 
 
 class SubtrackDetector:
@@ -156,53 +181,155 @@ class SubtrackDetector:
         )
         if chroma.shape[1] == 0:
             return SubtrackResult([], [(0.0, duration, 0.0)], [])
+        boundaries = self._long_mix_boundaries(chroma, activity, flux, tempo, duration)
+        return SubtrackResult(
+            boundaries=boundaries,
+            segments=self._boundaries_to_segments(boundaries, duration),
+            tempo_curve=[float(value) for value in tempo],
+        )
 
+    def _long_mix_boundaries(
+        self,
+        chroma: np.ndarray,
+        activity: np.ndarray,
+        flux: np.ndarray,
+        tempo: np.ndarray,
+        duration: float,
+    ) -> list[SubtrackBoundary]:
+        """Titelwechsel aus Sekunden-Features eines langen Mixes.
+
+        T003 (2026-09-30): die alte gewichtete Summe aus Foote(0,35)/RMS-
+        Spruengen(0,30)/beat_track-Tempo(0,20)/Flux(0,15) fand an einem
+        59-min-Referenzmix 23 statt 9 Grenzen (F1 0,375): RMS und Flux
+        markieren Breaks und Drops innerhalb eines Titels, `beat_track` liefert
+        je Block nur Attraktorwerte, der kurze Foote-Kern sieht Abschnitte.
+
+        T003 (2026-10-01), aktueller Weg - zwei unabhaengige Hinweise:
+          (a) **Optimale Zerlegung der Chroma-Aehnlichkeit**
+              (`_optimal_partition`): der Mix wird so in Abschnitte von
+              2-15 min zerlegt, dass die Frames innerhalb eines Abschnitts
+              einander moeglichst aehnlich sind, mit einem festen Preis je
+              Grenze. Ein Titel wiederholt seine Harmonien ueber die ganze
+              Laenge, ein Break aendert daran wenig.
+          (b) **Tempostufe** aus dem genauen Beatgrid-Schaetzer, nur fuer
+              Mixe, deren Titel nicht auf ein Tempo gezogen sind; sie ergaenzt
+              Grenzen, die (a) nicht innerhalb von `TEMPO_MERGE_SEC` hat.
+
+        Der Vorgaenger (Wiederholungs-Neuheit, Foote-Kern +-128 s, Spitzen
+        per Prominenz relativ zur groessten Spitze) erreichte an
+        beatgematchten Referenzmixen F1 0,44-0,70: eine einzelne starke
+        Spitze drueckte die uebrigen unter die Schwelle, und der lokale Kern
+        verortete Grenzen bis zu 40 s daneben. Messung und Grenzen:
+        specs/00035-full-audit-remediation/evidence/t003-boundaries-20261001.md.
+        """
+        chroma, activity, flux, tempo = self._group_features(
+            chroma, activity, flux, tempo, duration
+        )
         chroma, activity, flux, tempo = self._cap_feature_resolution(
             chroma,
             activity,
             flux,
             tempo,
         )
-        t_axis = np.linspace(
-            0.0,
-            duration,
-            chroma.shape[1],
-            endpoint=False,
-            dtype=np.float64,
-        )
-        s1 = self._foote_novelty_from_features(chroma)
-        s2 = activity
-        s3 = np.zeros_like(tempo, dtype=np.float32)
-        if tempo.size > 1:
-            s3[1:] = np.abs(np.diff(tempo))
-        s4 = flux
+        n_frames = chroma.shape[1]
+        frame_sec = duration / float(n_frames)
+        # Bin-Mitten statt Bin-Anfaenge: bei 4-s-Bins sonst 2 s systematisch zu frueh.
+        t_axis = (np.arange(n_frames, dtype=np.float64) + 0.5) * frame_sec
 
-        components = [_normalize(value) for value in (s1, s2, s3, s4)]
-        fused = (
-            W_FOOTE * components[0]
-            + W_STEM * components[1]
-            + W_TEMPO * components[2]
-            + W_SPECTRAL * components[3]
-        )
-        peaks = self._pick_peaks(fused, t_axis, duration)
-        boundaries = [
+        similarity = self._frame_similarity(chroma)
+        cuts = self._optimal_partition(similarity, frame_sec)
+        contrast = self._cut_contrast(similarity, cuts)
+        s_tempo = self._tempo_step_novelty(tempo, frame_sec)
+        activity_n = _normalize(activity)
+        flux_n = _normalize(flux)
+
+        # (Zeit, Frame, Konfidenz, Kontrast der Zerlegung)
+        found: list[tuple[float, int, float, float]] = [
+            (cut * frame_sec, min(cut, n_frames - 1), value, value)
+            for cut, value in zip(cuts, contrast)
+        ]
+        for peak in self._pick_track_peaks(s_tempo, frame_sec):
+            t = float(t_axis[peak])
+            if all(abs(t - item[0]) > TEMPO_MERGE_SEC for item in found):
+                found.append((t, int(peak), float(s_tempo[peak]), 0.0))
+        found.sort()
+        return [
             SubtrackBoundary(
-                time=float(t_axis[index]),
-                confidence=float(fused[index]),
+                time=float(time),
+                confidence=float(np.clip(confidence, 0.0, 1.0)),
                 components={
-                    "foote": float(components[0][index]),
-                    "stem": float(components[1][index]),
-                    "tempo": float(components[2][index]),
-                    "spectral": float(components[3][index]),
+                    "foote": float(np.clip(split, 0.0, 1.0)),
+                    "stem": float(activity_n[index]),
+                    "tempo": float(s_tempo[index]),
+                    "spectral": float(flux_n[index]),
                 },
             )
-            for index in peaks
+            for time, index, confidence, split in found
         ]
-        return SubtrackResult(
-            boundaries=boundaries,
-            segments=self._boundaries_to_segments(boundaries, duration),
-            tempo_curve=[float(value) for value in tempo],
-        )
+
+    @staticmethod
+    def _frame_similarity(chroma: np.ndarray) -> np.ndarray:
+        """Kosinus-Aehnlichkeit der je Tonklasse standardisierten Chroma-Frames."""
+        x = np.asarray(chroma, dtype=np.float64)
+        x = (x - x.mean(axis=1, keepdims=True)) / (x.std(axis=1, keepdims=True) + 1e-9)
+        x = x.T
+        x = x / np.maximum(np.linalg.norm(x, axis=1, keepdims=True), 1e-9)
+        return x @ x.T
+
+    @staticmethod
+    def _optimal_partition(similarity: np.ndarray, frame_sec: float) -> list[int]:
+        """Grenzen (Frame-Indizes) der besten Zerlegung in homogene Abschnitte.
+
+        Bewertung eines Abschnitts [i, j): Summe seiner Aehnlichkeiten geteilt
+        durch seine Laenge (Kernel-k-means). Ein Abschnitt, der zwei Titel
+        ueberspannt, verliert die Kreuzterme; eine Teilung innerhalb eines
+        Titels gewinnt nichts. Jede Grenze kostet `PARTITION_PENALTY`
+        (in 4-s-Frame-Einheiten, damit die Wahl nicht von der Aufloesung
+        abhaengt). Dynamische Programmierung ueber alle Zerlegungen mit
+        Abschnitten von `PARTITION_MIN_SEC` bis `PARTITION_MAX_SEC` -
+        O(n * max_len), bei 2048 Frames unter einer Sekunde.
+
+        Gemessen an sieben Referenzmixen mit exakten Grenzen (Plateau
+        Preis 14-24, gewaehlt 18); Einzelwerte im Beleg.
+        """
+        m = similarity.shape[0]
+        lo = max(1, int(PARTITION_MIN_SEC / frame_sec))
+        hi = max(lo, int(PARTITION_MAX_SEC / frame_sec))
+        if m < 2 * lo:
+            return []
+        scale = frame_sec / NOVELTY_BIN_SEC
+        prefix = np.zeros((m + 1, m + 1), dtype=np.float64)
+        prefix[1:, 1:] = similarity.cumsum(axis=0).cumsum(axis=1)
+        best = np.full(m + 1, -np.inf)
+        best[0] = 0.0
+        back = np.zeros(m + 1, dtype=np.int64)
+        for j in range(lo, m + 1):
+            starts = np.arange(max(0, j - hi), j - lo + 1)
+            block = prefix[j, j] - prefix[starts, j] - prefix[j, starts] + prefix[starts, starts]
+            value = best[starts] + scale * block / (j - starts) - PARTITION_PENALTY
+            k = int(np.argmax(value))
+            best[j], back[j] = value[k], starts[k]
+        if not np.isfinite(best[m]):
+            return []
+        cuts: list[int] = []
+        j = m
+        while j > 0:
+            j = int(back[j])
+            if j > 0:
+                cuts.append(j)
+        return sorted(cuts)
+
+    @staticmethod
+    def _cut_contrast(similarity: np.ndarray, cuts: list[int]) -> list[float]:
+        """Je Grenze: mittlere Aehnlichkeit innerhalb der Nachbarn minus zwischen ihnen."""
+        edges = [0, *cuts, similarity.shape[0]]
+        out: list[float] = []
+        for k in range(1, len(edges) - 1):
+            a = slice(edges[k - 1], edges[k])
+            b = slice(edges[k], edges[k + 1])
+            within = 0.5 * (float(similarity[a, a].mean()) + float(similarity[b, b].mean()))
+            out.append(within - float(similarity[a, b].mean()))
+        return out
 
     def _bounded_chunk_features(
         self,
@@ -283,12 +410,9 @@ class SubtrackDetector:
             )
             flux_parts.append(self._mean_bin_1d(onset, frames_per_bin, n_bins))
             chroma_parts.append(chroma_binned)
-            try:
-                chunk_tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-                tempo_value = float(np.asarray(chunk_tempo).reshape(-1)[0])
-            except Exception:
-                tempo_value = 0.0
-            tempo_parts.append(np.full(n_bins, tempo_value, dtype=np.float32))
+            tempo_parts.append(
+                self._window_tempo_bins(y, sr, n_bins, frames_per_bin * self.hop_length / sr)
+            )
             offset += chunk_duration
 
         if not chroma_parts:
@@ -300,6 +424,112 @@ class SubtrackDetector:
             np.concatenate(flux_parts).astype(np.float32),
             np.concatenate(tempo_parts).astype(np.float32),
         )
+
+    @staticmethod
+    def _window_tempo_bins(
+        y: np.ndarray, sr: int, n_bins: int, bin_sec: float
+    ) -> np.ndarray:
+        """Genaues Tempo je Fenster, auf die Sekunden-Bins verteilt; 0 = unbekannt.
+
+        Ersetzt `librosa.beat.beat_track` je 120-s-Block (nur Attraktorwerte,
+        siehe `_detect_long_mix`). Fenster ohne sitzendes Raster (Kontrast unter
+        `GRID_CONTRAST_MIN`, typisch Breakdowns ohne Kick) bleiben unbekannt,
+        statt ein zufaelliges Tempo als Stufe einzutragen.
+        """
+        from pb_studio.audio.beat_grid import GRID_CONTRAST_MIN, estimate_beat_grid
+
+        out = np.zeros(n_bins, dtype=np.float32)
+        win = int(TEMPO_WINDOW_SEC * sr)
+        hop = int(TEMPO_HOP_SEC * sr)
+        if n_bins == 0 or y.size < int(TEMPO_MIN_WINDOW_SEC * sr) or hop <= 0:
+            return out
+        starts = range(0, y.size - win + 1, hop) if y.size >= win else [0]
+        centers: list[float] = []
+        tempos: list[float] = []
+        for start in starts:
+            segment = y[start:start + win]
+            try:
+                grid = estimate_beat_grid(segment, sr)
+            except Exception as exc:  # pragma: no cover - defensive, logged
+                logger.debug("Fenster-Tempo fehlgeschlagen: %s", exc)
+                continue
+            if grid.bpm > 0.0 and grid.contrast >= GRID_CONTRAST_MIN:
+                centers.append((start + segment.size / 2.0) / sr)
+                tempos.append(float(grid.bpm))
+        if not tempos:
+            return out
+        bin_centers = (np.arange(n_bins) + 0.5) * bin_sec
+        center_arr = np.asarray(centers)
+        nearest = np.abs(bin_centers[:, None] - center_arr[None, :]).argmin(axis=1)
+        return np.asarray(tempos, dtype=np.float32)[nearest]
+
+    def _group_features(
+        self,
+        chroma: np.ndarray,
+        activity: np.ndarray,
+        flux: np.ndarray,
+        tempo: np.ndarray,
+        duration: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Sekunden-Bins zu ~`NOVELTY_BIN_SEC` zusammenfassen (Tempo: Median der bekannten)."""
+        n = chroma.shape[1]
+        size = int(round(NOVELTY_BIN_SEC / max(duration / max(n, 1), 1e-6)))
+        if size <= 1 or n < 2 * size:
+            return chroma, activity, flux, tempo
+        groups = n // size
+        cut = groups * size
+
+        def _mean(values: np.ndarray) -> np.ndarray:
+            return values[..., :cut].reshape(*values.shape[:-1], groups, size).mean(axis=-1)
+
+        tempo_groups = tempo[:cut].reshape(groups, size)
+        grouped_tempo = np.asarray(
+            [float(np.median(row[row > 0])) if np.any(row > 0) else 0.0 for row in tempo_groups],
+            dtype=np.float32,
+        )
+        return (
+            _mean(chroma).astype(np.float32),
+            _mean(activity).astype(np.float32),
+            _mean(flux).astype(np.float32),
+            grouped_tempo,
+        )
+
+    @staticmethod
+    def _tempo_step_novelty(tempo: np.ndarray, frame_sec: float) -> np.ndarray:
+        """Tempostufe zwischen den Medianen links/rechts, auf [0, 1] abgebildet."""
+        from scipy.ndimage import median_filter
+
+        n = tempo.size
+        out = np.zeros(n, dtype=np.float32)
+        known = tempo > 0
+        if n < 3 or np.count_nonzero(known) < 2:
+            return out
+        index = np.arange(n)
+        filled = np.interp(index, index[known], tempo[known])
+        size = max(1, int(round(TEMPO_MEDIAN_SEC / frame_sec)) // 2 * 2 + 1)
+        smooth = median_filter(filled, size=size, mode="nearest")
+        side = max(1, int(round(TEMPO_STEP_SIDE_SEC / frame_sec)))
+        for i in range(1, n):
+            left = smooth[max(0, i - side):i]
+            right = smooth[i:i + side]
+            step = abs(float(np.median(right)) - float(np.median(left)))
+            out[i] = (step - TEMPO_STEP_MIN_BPM) / TEMPO_STEP_RANGE_BPM
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+    def _pick_track_peaks(self, fused: np.ndarray, frame_sec: float) -> list[int]:
+        from scipy.signal import find_peaks
+
+        if fused.size == 0:
+            return []
+        distance_sec = max(self.min_distance_sec, LONG_MIX_MIN_DISTANCE_SEC)
+        distance = max(1, int(distance_sec / max(frame_sec, 1e-6)))
+        peaks, _ = find_peaks(fused, distance=distance, prominence=TRACK_PEAK_PROMINENCE)
+        # Der Mindestabstand gilt auch zu Mix-Anfang und -Ende: ein "Titel" von
+        # 81 s vor der ersten Grenze ist dieselbe Unterschreitung wie zwischen
+        # zwei Grenzen. (Am dritten Referenzmix lag dort der einzige Fehlalarm;
+        # der Foote-Kern sieht am Rand nur die eine Seite.)
+        edge = distance
+        return [int(p) for p in peaks if edge <= p < fused.size - edge]
 
     @staticmethod
     def _mean_bin_2d(values: np.ndarray, size: int) -> np.ndarray:
@@ -369,21 +599,6 @@ class SubtrackDetector:
                 dtype=np.float32,
             ),
         )
-
-    def _foote_novelty_from_features(self, chroma: np.ndarray) -> np.ndarray:
-        ssm = self._cosine_ssm(chroma.T)
-        kernel_size = min(64, max(8, ssm.shape[0] // 4))
-        kernel = self._foote_kernel(kernel_size)
-        half = kernel_size // 2
-        padded = np.pad(ssm, ((half, half), (half, half)), mode="edge")
-        novelty = np.zeros(ssm.shape[0], dtype=np.float32)
-        for index in range(ssm.shape[0]):
-            block = padded[
-                index : index + kernel_size,
-                index : index + kernel_size,
-            ]
-            novelty[index] = float(np.sum(block * kernel))
-        return np.maximum(novelty, 0.0)
 
     def _foote_novelty(
         self, y: np.ndarray, sr: int

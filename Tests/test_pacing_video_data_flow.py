@@ -3,7 +3,12 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
-def test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding():
+@pytest.mark.parametrize("identity,usable", [
+    ({"embedding_model_name": "siglip_vision", "embedding_model_version": "onnx-dml-v2"}, True),
+    ({}, False),
+    ({"embedding_model_name": "siglip_vision", "embedding_model_version": "onnx-dml-v1"}, False),
+], ids=["current", "missing", "stale"])
+def test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding(identity, usable):
     """video_analysis_cache mit motion_curve/dominant_colors/tags/has_embedding muss in clip_data landen."""
     from backend.routers.pacing_router import _run_pacing_generation
     from backend.schemas.pacing_schemas import PacingConfigSchema, TriggerSettingsSchema
@@ -26,6 +31,8 @@ def test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding():
             "tags": ["nature", "outdoor"],
             "scenes": [{"start_time": 0.0, "end_time": 5.0}],
             "has_embedding": True,
+            "video_embedding": [1.0, 0.0],
+            **identity,
         },
     }
 
@@ -61,7 +68,10 @@ def test_clip_data_includes_motion_curve_dominant_colors_tags_has_embedding():
     assert clip["motion_curve"] == [1.0, 2.0, 3.0]
     assert clip["dominant_colors"] == ["#FF0000", "#00FF00"]
     assert clip["tags"] == ["nature", "outdoor"]
-    assert clip["has_embedding"] is True
+    assert clip["has_embedding"] is usable
+    assert clip["video_embedding"] == ([1.0, 0.0] if usable else None)
+    assert clip["embedding_model_name"] == identity.get("embedding_model_name")
+    assert clip["embedding_model_version"] == identity.get("embedding_model_version")
     # Sanity-check existing forwarding still works
     assert clip["motion_score"] == 5.0
     assert clip["scene_changes"] == [{"start_time": 0.0, "end_time": 5.0}]

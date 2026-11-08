@@ -298,6 +298,9 @@ class VideoSpecialist:
         if compute_embedding:
             embedding = self._compute_clip_embedding(clip)
             clip.embedding = embedding
+            if embedding is not None:
+                from pb_studio.embedding_identity import current_video_embedding_identity
+                clip.metadata.update(current_video_embedding_identity())
 
             # Store in vector store if available
             if self.vector_store and embedding is not None:
@@ -311,6 +314,8 @@ class VideoSpecialist:
                     }
                     if metadata:
                         meta_info.update(metadata)
+                    from pb_studio.embedding_identity import current_video_embedding_identity
+                    meta_info.update(current_video_embedding_identity())
                     self.vector_store.add_embedding(embedding, meta_info)
                 except Exception as e:
                     logger.error(f"Failed to store embedding in vector store: {e}")
@@ -385,7 +390,8 @@ class VideoSpecialist:
         self,
         query_embedding: np.ndarray,
         k: int = 5,
-        min_score: float = 0.0
+        min_score: float = 0.0,
+        *, query_identity=None,
     ) -> List[Tuple[VideoClip, float]]:
         """
         Find similar clips using embedding similarity.
@@ -398,13 +404,19 @@ class VideoSpecialist:
         Returns:
             List of (VideoClip, score) tuples sorted by similarity
         """
+        from pb_studio.embedding_identity import is_current_video_embedding
+        if not is_current_video_embedding(query_identity):
+            logger.warning("Clip similarity unavailable: query identity missing or incompatible")
+            return []
         # Use vector store if available
         if self.vector_store:
             try:
-                results = self.vector_store.search(query_embedding, k=k)
+                results = self.vector_store.search(query_embedding, k=k, query_identity=query_identity)
                 clip_results = []
 
                 for meta, score in results:
+                    if not is_current_video_embedding(meta):
+                        continue
                     if score < min_score:
                         continue
 
@@ -421,7 +433,7 @@ class VideoSpecialist:
         results = []
 
         for clip in self.clips.values():
-            if clip.embedding is None:
+            if clip.embedding is None or not is_current_video_embedding(clip.metadata):
                 continue
 
             # BUG-073 FIX: Normalize vectors before dot product for proper cosine similarity
@@ -438,32 +450,6 @@ class VideoSpecialist:
         results.sort(key=lambda x: x[1], reverse=True)
 
         return results[:k]
-
-    def find_similar_clips_by_video(
-        self,
-        video_path: str,
-        k: int = 5,
-        interval: float = 1.0
-    ) -> List[Tuple[VideoClip, float]]:
-        """
-        Find clips similar to a query video.
-
-        Args:
-            video_path: Path to query video
-            k: Number of results to return
-            interval: Keyframe extraction interval
-
-        Returns:
-            List of (VideoClip, score) tuples sorted by similarity
-        """
-        # Compute query embedding
-        query_embedding = self.embed_video(video_path, interval=interval)
-
-        if query_embedding is None:
-            logger.error(f"Failed to embed query video: {video_path}")
-            return []
-
-        return self.find_similar_clips(query_embedding, k=k)
 
     def tag_video(
         self,

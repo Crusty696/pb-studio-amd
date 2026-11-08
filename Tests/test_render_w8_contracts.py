@@ -220,8 +220,14 @@ def test_preview_renderer_uses_reported_640x360_resolution(
 
     def fake_run(command, **kwargs):
         commands.append(command)
+        if "-show_entries" in command:
+            return SimpleNamespace(
+                returncode=0,
+                stderr="",
+                stdout='{"format":{"duration":"1.0"}}',
+            )
         Path(command[-1]).write_bytes(b"preview")
-        return SimpleNamespace(returncode=0, stderr="")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
 
     monkeypatch.setattr(
         "pb_studio.rendering.preview_renderer.subprocess.run",
@@ -253,9 +259,10 @@ def test_preview_renderer_uses_reported_640x360_resolution(
     ]
     assert filters
     assert all("scale=640:360" in value for value in filters)
-    assert all(command.index("-init_hw_device") < command.index("-i") for command in commands)
-    assert all("d3d11va=pb_amf:7" in command for command in commands)
-    assert all("d3d11va=pb_amf:1" not in command for command in commands)
+    ffmpeg_commands = [command for command in commands if "-i" in command]
+    assert all(command.index("-init_hw_device") < command.index("-i") for command in ffmpeg_commands)
+    assert all("d3d11va=pb_amf:7" in command for command in ffmpeg_commands)
+    assert all("d3d11va=pb_amf:1" not in command for command in ffmpeg_commands)
 
 
 def test_cancel_before_gpu_lock_acquire(

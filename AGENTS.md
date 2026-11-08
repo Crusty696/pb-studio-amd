@@ -1,11 +1,11 @@
 # SDD Pilot — Agent Context
 
-Apply the Spec-Driven Development rules below during feature delivery. Enforce the lifecycle order, phase gates, conventions, and execution policy. If any rule here conflicts with `project-instructions.md`, follow `project-instructions.md`.
+Apply the Spec-Driven Development rules below during feature delivery. Enforce the lifecycle order, phase gates, conventions, and execution policy.
 
 ## Obsidian Brain Policy
 **The vault at `C:\Users\david\Brain` is your source of truth.**
 - BEFORE RESEARCH: Search the Brain for existing context on the task.
-- BEFORE DESIGN: Read `_wiki/decisions` to avoid repeating mistakes or violating architecture.
+- BEFORE DESIGN: Read `C:\Users\david\Brain\10_Projects\PB_studio\INDEX.md` and task-relevant entries in `log.md`, then the relevant repository `specs/` and `docs/`. Neither `_wiki/decisions` nor the project vault `_wiki/decisions` exists as of 2026-10-30; do not repeatedly read these nonexistent paths or invent decision records.
 - AFTER IMPLEMENTATION: Log your progress in `10_Projects/PB_studio/log.md`.
 - ON DISCOVERY: If you find a new pattern or trap, create a note in `_wiki/learnings`.
 
@@ -23,7 +23,7 @@ Treat this order as strict. If a required artifact for the next phase is missing
 - If `checklists/` exists, all checklist items must be complete before Implement unless the user explicitly overrides.
 - `.completed` must exist before QC.
 - Do not treat a feature as release-ready until `.qc-passed` exists.
-- Any `project-instructions.md` violation is CRITICAL severity.
+- Any violation of the Iron Rules below is CRITICAL severity.
 
 ## Core Conventions
 
@@ -57,25 +57,10 @@ Markers:
 
 ## Communication Style & Core Principles
 
-### Priority 0: Caveman-Modus Standard (Token-Effizienz ~75%)
-Alle Agenten und Subagenten kommunizieren standardmaessig im **Caveman-Stil** (`[Subjekt] [Aktion] [Grund]. [Naechster Schritt].`):
-- Extrem knappe, dichte Sprache. Keine Hoeflichkeitsfloskeln, kein "Gerne!", kein Wiederkauen der User-Aufgabe.
-- Spart ~75% Kontext-Tokens bei 100% technischer Praezision.
-- Code-Bloecke, Datei-Pfade (`file:///...`), CLI-Befehle und Fehler-Meldungen bleiben vollstaendig und unkomprimiert.
-
-### Priority 1: 100% Ehrlichkeit & Live-Verifikation
-- **Null Annahmen, kein Raten, keine Halluzinationen**: Jede Aussage muss auf realen, gelesenen Dateien und ausgefuehrten Tests basieren.
-- Niemals Erfolg behaupten ohne Live-Verifikation (`pytest`, `dotnet build -c Release`, CLI-Runs).
-- Wenn etwas unklar oder ungetestet ist: transparent und direkt `[unbekannt: X]` oder `[zu verifizieren]` melden. Nicht beschoenigen.
-
-### Priority 2: Anti-Starrheits-Prinzip (Adaptive Flexibilitaet / Soft Constraints)
-- **Keine blinden, starren Regeln**: Regeln und Standardwerte duerfen kein Hindernis sein, wenn reale Situationen von der Norm abweichen.
-- **Kontext & Intention verstehen**: Analysiere die Basis, den urspruenglichen Zweck und den konkreten Nutzen. Macht das Geplante Sinn? Gibt es die Funktion schon? Ist es nutzerfreundlich und intuitiv?
-- **Full-Stack & Verdrahtung ganzheitlich abdecken**: Frontend (WPF XAML / C# ViewModels), Backend (FastAPI / Python), Signalverarbeitung (DSP / DirectML) und deren gegenseitige Abhaengigkeiten als Gesamtsystem verstehen und aufeinander abstimmen.
-- **Spezialisierte Coding-Skills einbinden**: Fuer Audio-Video-Pacing, BPM/Beat-Grid, EDM-Groove & Cut-Point-Kalkulation steht der Full-Stack-Coding-Skill `audio-video-pacing-specialist` zur Verfuegung.
+Caveman-Stil, 100% Ehrlichkeit/Live-Verifikation, Anti-Starrheit: siehe Iron Rules 10, 14, 15 weiter unten (einzige Quelle).
 
 ### SDD Phase Output Rules
-Agent output MUST be concise and outcome-oriented per `project-instructions.md` §IV. Apply these rules in every SDD phase:
+Agent output MUST be concise and outcome-oriented. Apply these rules in every SDD phase:
 
 - **Progress reports**: Facts and outcomes only — no narration, no restating the task.
 - **Artifact output**: Required sections only — no preamble, no summary epilogue.
@@ -96,274 +81,117 @@ Execute routine repository operations for real: file edits, build/test/lint comm
 
 ## Parallele Subagent-Arbeit
 
-Diese Sektion erweitert die "Continuous Execution Policy" um Mehrgleisigkeit. Subagenten via `Task`-Tool (Agent) starten ist ab jetzt Standard wann immer unabhängige Arbeitspakete identifiziert sind.
-
-### Wann Subagenten
-
-Spawn parallele Subagenten in einer Message wenn:
-
-- Mehrere offene Tasks adressieren **disjunkte Code-Zonen** (kein File-Overlap).
-- Pure Read-Only-Audits (Vulture, Coverage, Dep-Staleness) — können nebeneinander laufen ohne Konflikt.
-- Independent feature-Items (Spec-Tasks mit `[P]`-Marker explizit als parallel-safe markiert).
-- Refactoring-Cluster die nichts gemeinsam haben (z.B. AudioVM + Video-encoder + Brain-helpers gleichzeitig).
-
-NICHT spawnen für:
-
-- Cross-Module-Bugs die mehrere Subsysteme berühren (`/audio` ↔ `/pacing` ↔ `/render`).
-- Refactorings die zentrale State-Objekte ändern (`app_state.py`, `database_core.py`).
-- C# Build-Verifikationen (dotnet hat eigene Lock-Files in `obj/`).
-
-### Code-Zonen — kein-Overlap-Vertrag
-
-Jeder Subagent erklärt vorab seine **Code-Zone** = Set von Files/Verzeichnissen die er ändern darf. Zonen müssen disjunkt zu allen anderen aktiven Agenten sein.
-
-Vordefinierte non-overlapping Zonen für PB Studio:
-
-| Zone | Files |
-|---|---|
-| `Z-AUDIO` | `src/pb_studio/audio/**`, `backend/routers/audio_router.py`, `backend/schemas/audio_schemas.py` |
-| `Z-VIDEO` | `src/pb_studio/video/**`, `backend/routers/video_router.py`, `backend/schemas/video_schemas.py` |
-| `Z-BRAIN` | `src/pb_studio/brain/**`, `backend/routers/brain_router.py`, `backend/schemas/brain_schemas.py` |
-| `Z-RENDER` | `src/pb_studio/rendering/**`, `backend/routers/render_router.py`, `backend/schemas/render_schemas.py` |
-| `Z-PACING` | `src/pb_studio/pacing/**`, `backend/routers/pacing_router.py`, `backend/schemas/pacing_schemas.py` |
-| `Z-CORE` | `src/pb_studio/core/**` (VRAM, ModelLoader, SystemMonitor) |
-| `Z-DATA` | `src/pb_studio/data/**`, `src/pb_studio/storage/**` |
-| `Z-UI-VM` | `PBStudio.UI/ViewModels/**` |
-| `Z-UI-VIEWS` | `PBStudio.UI/Views/**`, `PBStudio.UI/MainWindow.xaml*` |
-| `Z-UI-SERVICES` | `PBStudio.UI/Services/**` |
-| `Z-TESTS` | `Tests/**` (read-only auf src/backend) |
-| `Z-DOCS` | `docs/**`, `specs/**`, `*.md` |
-| `Z-INFRA` | `scripts/**`, `*.bat`, `*.ps1`, `pytest.ini`, `requirements.txt` |
-
-`backend/app_state.py`, `backend/main.py`, `CLAUDE.md` sind **Shared-Zones** und dürfen nicht gleichzeitig von mehreren Agenten editiert werden. Sequenziell, nicht parallel.
-
-### Subagent-Brief (verpflichtende Felder)
-
-Jeder Spawn-Prompt enthält:
-
-1. **ZONE:** explizite Liste (siehe Tabelle oben oder benutzerdefiniert).
-2. **NON-GOAL:** was der Agent NICHT anfassen darf.
-3. **TICKET-ID:** Plan-ID (z.B. `P2.1 / Spec-00007 T010`).
-4. **DELIVERABLE:** konkretes Output (Code + Verify-Commands + ≤ 5-Bullet Bericht).
-5. **VERIFY:** wie der Agent self-checkt (py_compile, dotnet build via separate bat, pytest-Subset).
-6. **WRITE-METHOD:** auf diesem Linux→Windows-Mount immer `bash > file` (nicht `Edit`/`Write`-Tool — die haben truncated). Siehe `test-report/auto-qa-loop-2026-05-14-CRITICAL-CORRUPTION.md` für Hintergrund.
-
-### Mount-Truncation-Schutz (IRON für alle Subagenten)
-
-Aufgrund dokumentierter Truncation-Bugs auf dem Linux→Windows-Mount:
-
-- **Verboten:** `git checkout HEAD -- file`, `Edit` tool, direkter `Write` tool (kann silent truncaten).
-- **Pflicht:** Datei-Writes nur via `bash > /target/file` (Heredoc oder cat /tmp/staging → target).
-- **Pflicht nach jedem Write:** `python3 -c "compile(open(F,'rb').read(),F,'exec')"` oder XML-balance-check.
-- **Pflicht nach Subagent-Return:** Parent verifiziert dass keine Datei in der Zone truncated wurde (full-tree compile-sweep).
-
-### Convergence — Subagent-Output mergen
-
-Nach allen Subagent-Returns:
-
-1. Parent macht globalen `py_compile`-sweep über alle Zones.
-2. Parent macht globalen `pytest Tests/ -q` (oder Cluster wenn nicht alles importierbar).
-3. Parent macht `git status --short` und gruppiert per ZONE in separate Commits.
-4. Commits bekommen ZONE-Präfix: `feat(audio): ...`, `fix(brain): ...`, etc.
-
-### Cowork-Mount + Computer-Use-Routing
-
-Tasks die nur auf Windows laufen (dotnet build, pytest mit FAISS/DirectML, GUI-Smoke):
-
-- **NICHT** an Subagenten delegieren (die haben keinen Computer-Use-Access).
-- Parent (Cowork-Main) führt diese via `mcp__computer-use__*` aus.
-- Subagenten machen nur die Code-Änderung + Linux-py_compile + Tests-Subset-Run; Parent macht den finalen Windows-Verify.
-
-### Skill-Mapping
-
-Vordefinierte Skill-Aufrufe pro Zone (Anthropic-Skills + projekt-eigene):
-
-| Zone | Empfohlene Skills |
-|---|---|
-| Z-AUDIO | `audio-engineering`, `pb-master` (Audio-Module-Map) |
-| Z-VIDEO | `video-engineering`, `pb-master` |
-| Z-BRAIN | `ai-inference`, `pb-master` (Brain-Modul Phase 6) |
-| Z-RENDER | `ffmpeg-amf-encoding` (lokal), `pb-master` |
-| Z-PACING | `pb-master` (Pacing-Pipeline-Karte) |
-| Z-CORE | `nvidia-cuda-vram` ist N/A — wir nutzen DirectML. `pb-master` |
-| Z-DATA | `chromadb-vectors` (für FAISS-Analoga), `pb-master` |
-| Z-UI-VM, Z-UI-VIEWS, Z-UI-SERVICES | `gui-framework` (WPF/MVVM) |
-| Z-TESTS | `code-auditor`, `verification`, `gui-test-agent` (für GUI-Smoke) |
-| Z-DOCS | `doc-coauthoring`, `internal-comms` |
-
-Subagent darf weitere Skills von sich aus laden — die Liste oben ist Mindest-Sortiment.
-
-### Beispiel — Plan-Execution-Spawn
-
-Bei `PLAN_OPEN_TASKS_2026-05-15.md` Items P2.1 + P2.2 + P2.5 + P3.4 parallel:
-
-```text
-Agent 1: ZONE=Z-UI-VIEWS, Ticket=P2.1 Tab-Animations (MainWindow.xaml)
-Agent 2: ZONE=Z-DATA, Ticket=P2.2 Compressed-Depth (media_repository.py)
-Agent 3a: ZONE=Z-VIDEO, Ticket=P2.5a video_router.py:348 TODO
-Agent 3b: ZONE=Z-PACING, Ticket=P2.5b advanced_pacing_engine.py:1293 TODO
-Agent 4: ZONE=Z-CORE+Z-PACING+Z-AUDIO (read-only), Ticket=P3.4 Vulture-noqa-Kommentare
-```
-
-Diese 5 Agenten greifen 0 gemeinsame Files an → safe-parallel. Parent merged + commit-staged in `git status`-Reihenfolge.
-
-## Imported Claude Cowork project instructions
-
-# CLAUDE.md - PB Studio (AMD Premium Edition)
-# SYSTEM PROMPT, RULES & PROJECT BRAIN
-# ⚠️ LIES DIESE DATEI VOLLSTÄNDIG BEVOR DU IRGENDETWAS AUSFÜHRST.
+Zonen, Subagent-Brief, Convergence und Skill-Mapping: `docs/agents/subagent-parallel-work.md` (nur bei parallelen Subagenten lesen). Shared-Zonen (`backend/app_state.py`, `backend/main.py`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) nie parallel editieren.
 
 ---
 
-## 0. ⚡ COMMANDS
+# PB Studio - Projektregeln (gemeinsame Quelle fuer Claude, Codex, Gemini)
+
+Historie/Status: `docs/archive/CLAUDE-project-brain-history-2026-10-17.md` (nicht automatisch laden). Aktueller Stand: CHANGELOG.md, specs/, Vault.
+
+## 0. ⚡ COMMANDS (copy-paste ready)
+
+Tool routing: the existing run skill is `.claude/skills/run-pb-studio/SKILL.md`; its driver is `.claude/skills/run-pb-studio/driver.ps1` (not `.codex/skills`). Use `-Command health` for read-only checks of an existing backend. `smoke` and `full-smoke` start/stop processes and are not passive probes. Read the skill before use. Test configuration is `pytest.ini`; do not assume `pyproject.toml` exists.
 ```powershell
 # Python Backend starten
-.venv\Scripts\activate
-$env:PYTHONPATH = "src"
-python -m uvicorn backend.main:app --port 8765
+# WICHTIG (Audit 2026-08-05, H-7): NICHT nur PYTHONPATH setzen. Ohne
+# PBSTUDIO_LHM_MANIFEST_SHA256 meldet der SystemMonitor "LibreHardwareMonitor
+# deaktiviert" und das GPU-Monitoring ist tot (21x im Log nachgewiesen).
+# Ohne PBSTUDIO_OWNER_CAPABILITY kann die WPF das Backend nicht uebernehmen.
+# Fuer echte Arbeit daher immer den Launcher nehmen:
+.\start.bat            # bzw. .\launch.ps1 — setzt Owner-Token + LHM-Hashes
+
+# Nur fuer reine Backend-Tests ohne GUI und ohne GPU-Monitoring:
+$env:PYTHONPATH = (Join-Path (Get-Location) "src")
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 
 # Tests ausführen
-pytest Tests/ -x -q
+$env:PYTHONPATH = (Join-Path (Get-Location) "src")
+.\.venv\Scripts\python.exe -m pytest Tests/ -x -q
 
 # WPF Build
 dotnet build PBStudio.UI\PBStudio.UI.csproj
 ```
 
 ---
+## 2. ⚠️ IRON RULES (NEVER OVERRIDE)
+1. **AMD DIRECTML ONLY:** NO CUDA, NO ROCm. Use `onnxruntime-directml`.
+   **Einzige Ausnahme (User-Entscheid 2026-09-30, Spec 00035 T014):** LLM/VLM-Inferenz über LM Studio mit der **Vulkan**-Runtime (`llama.cpp-win-x86_64-vulkan-*`) auf der RX 7800 XT ist zulässig (z. B. `qwen3.5-9b`, Apache-2.0). ROCm bleibt auch dort verboten (auch Ollama-ROCm); alle ONNX-Pfade bleiben DirectML.
+2. **DIRECTML PATTERN:** `enable_mem_pattern = False` AND `enable_cpu_mem_arena = False` (BOTH MANDATORY).
+3. **PYTHON & NUMPY:** Python 3.11.x | NumPy 1.26.4 (< 2.0 strict — BeatNet).
+4. **HARDWARE ENCODING:** NO NVENC. Use `h264_amf`, `hevc_amf`, `av1_amf` via FFmpeg.
+5. **GPU MONITORING:** NO `pynvml`. Use `LibreHardwareMonitorLib.dll` via `pythonnet`.
+6. **WINDOWS:** `pathlib.Path` oder raw strings. PowerShell für Shell-Befehle.
+7. **PYTHONPATH:** Immer `PYTHONPATH=src` setzen (kein editable install).
+8. **TESTS:** `testpaths = Tests` (Großbuchstabe! Windows NTFS).
+9. **AUTONOMOUS DEPLOYMENT:** Nach JEDER Aufgabe die Code/Scripts/.bat-Files/Configs ändert die einen Deployment-Schritt brauchen um zu greifen → Deployment AUTONOM ausführen, OHNE User-Aufforderung. Niemals "Source geändert, fertig" als Endmeldung.
+10. **100% HONESTY (User-Direktive 2026-05-09):** Niemals Erfolg behaupten ohne Live-Verifikation. Build OK ≠ läuft. Code-Edit ≠ deployed. Test-PASS ≠ User-sichtbar funktional. Bei "sollte greifen" / "wahrscheinlich" → STOP, reformuliere als "verifiziert: X" oder "unbekannt: X". Bei Audit: vollständige Liste, keine selektiven Wahrheiten. Concerns vorab benennen. Wenn Bug nach Fix-Versuch noch da → zugeben, nicht relativieren. Wenn ich nicht weiss → "weiss ich nicht", nicht raten. **Hintergrund:** wiederholte Trust-Incidents 2026-05-08/09 (BUG falsch als gefixt gemeldet, App lief mit altem Binary, BPM-Workflow als "OK" bezeichnet trotz hand-adjust).
+   - C#-Änderung in `PBStudio.UI/` → IMMER `dotnet build PBStudio.UI\PBStudio.UI.csproj -c Release` (launcher lädt Release-DLL, nicht Debug)
+   - Script-Änderung (.bat/.ps1/.cmd) → IMMER mit `script-validator`-Skill bis 3× clean Run validieren
+   - Änderung an Setup/Start/Test-Logik → ALLE abhängigen Wrapper synchron aktualisieren (setup.bat ↔ setup_pb_studio.ps1, start.bat ↔ launch.ps1, test.bat ↔ run_full_test.ps1)
+   - Backend-Schema-/Route-Änderung → Frontend `ApiClient.cs` + Schema-Records prüfen + ggf. anpassen + Release-Build
+   - Setup-Script-Änderung → `requirements.txt`/Dependency-Listen synchron halten
+   - End-Report MUSS explizit zeigen: was gebaut, welche Binaries/Scripts aktualisiert, welche validiert.
+   - **Hintergrund:** 2026-05-08 Trust-Incident — Bug-Fix in C# war im Source aber Release-Binary nicht gebaut → User testete altes Binary und verlor Vertrauen. Diese Regel verhindert Wiederholung.
+11. **OBSIDIAN VAULT FORTLAUFEND (User-Direktive 2026-05-11):** Obsidian-Vault `C:\Users\david\Brain\10_Projects\PB_studio\` MUSS bei JEDER nicht-trivialen Aenderung mitlaufen: INDEX.md `updated`-Frontmatter + Status-Sektion, log.md append entry, neue ADR in decisions/ bei Architektur-Entscheidung. Drift zwischen Code-State und Vault-State = Vertrauensverlust. Tools: vorhandene Obsidian-Tools laut aktuellem Werkzeugkatalog nutzen; wenn sie fehlen, die vorhandenen lokalen Vault-Dateien mit Sicherung und gezielten Aenderungen pflegen. Keine nicht verfuegbaren `mcp__obsidian__*`-Aufrufe erfinden. **Hintergrund:** User explizit angemahnt 2026-05-11 dass Vault nicht stale werden darf.
+12. **FULL-SYNC EISERN (User-Direktive 2026-05-11):** Bei der Direktive "alles committen / kompletter Status / Vault gleichstand" MUSS folgendes synchron sein — **kein Detail darf ausgelassen oder uebersprungen werden**:
+   - Git: alle relevanten Files committed, `git status --short` leer (außer ignorierten Runtime-Artefakten in .gitignore)
+   - Obsidian INDEX.md: Frontmatter `updated` aktuell, Status-Sektion spiegelt Repo-HEAD wider (alle Commits seit letztem INDEX-Update reflektiert)
+   - Obsidian log.md: append entries fuer ALLE Session-Ereignisse (Commits, Audits, Decisions, Memory-Updates), keine Luecken
+   - Memory: jede neue Direktive/Lesson als eigenes feedback_*.md File + MEMORY.md Index-Eintrag
+   - CHANGELOG.md + Status-Quelle (die alte CLAUDE.md-Historie liegt in docs/archive/): aktuell
+   - Bei Drift erkannt: ZUERST sync, dann melden — nicht "kommt naechste Session". **Hintergrund:** User-Direktive 2026-05-11 "ein alles muss auf dem selben stand sein wie das projekt selber ist nicht das kleinste detail darf ausgelassen oder uebersprungen werden — das ist eine eiserne regel".
 
-## 1. 🚀 BOOT PROTOKOLL
-1. Diese Datei vollständig lesen.
-2. Aufgabe intern bestätigen.
-3. Lösung gegen IRON RULES prüfen — JEDER Punkt, kein Überspringen.
-4. Ausgabe: `✅ BOOT OK | Task: [Aktuelle Aufgabe] | Brain: 2026-03-09`
+12b. **AUTONOMIE-LESSONS:** Bei JEDER User-Anweisung wo der User sagt "warum machst du das nicht selbst" oder aequivalent → Eintrag in `COWORK_AUTONOMY_LESSONS.md`. Pattern-Liste in dieser Datei vor jeder Code-Aktion mental durchgehen.
 
----
+   **2026-05-16 User-Direktive: AUTONOMIE-DEFAULT-ON.** Default ist autonom handeln, nicht zurueckfragen. Ich darf und MUSS ohne Nachfrage: .bat/.ps1 schreiben + selber ausfuehren (Computer-Use ODER Bash), Git add/commit/push/mv/plumbing inkl. Lock/Index-Recovery (siehe COWORK_AUTONOMY_LESSONS.md Pattern #15 Bypass-Toolkit: `mv` statt `rm`, `GIT_INDEX_FILE=/tmp/...`, `commit-tree`, `dd conv=notrunc` auf refs), Builds (dotnet, pytest, ffmpeg-Probes), Sandbox-Workarounds, Computer-Use bei Bash-Fehler, Cleanup von temp-Files. **User-Action only:** Hardware-Steckaktionen, UAC-Prompts, Reboot. Vor jeder „du musst"/„mach selber"/„autonom"-Antwort des Users: COWORK_AUTONOMY_LESSONS.md scrollen + handeln statt zurueckfragen. **Hintergrund:** 2026-05-16 Ollama-Pilot — bei `.git/index.lock` "Hard-Block" gemeldet statt Bypass-Toolkit angewandt; User: „mach das selber du hast alle tools dafür". **2026-05-16 (Korrektur):** Push war fälschlicherweise in der User-Action-Liste — User hat klargestellt dass Push autonom passiert („Dann pushe sie über mein system du hast alle tools dafür warum muss ich dir das jedes mal sagen"). Diese Regel zieht nach, siehe COWORK_AUTONOMY_LESSONS.md Pattern #17.
 
-## 2. ⛔ IRON RULES — ABSOLUT, KEINE AUSNAHMEN, KEINE DISKUSSION
+13. **VERIFY-BEFORE-CHANGE (User-Direktive 2026-05-15):** Vor jeder Code-Änderung muss die vorgeschlagene Lösung erst verifiziert werden, dass sie funktioniert. Skills einsetzen (`pb-master` für Cross-Module-Analyse, `code-auditor` für Static-Analysis, `full-stack-auditor` für End-to-End, `code-review`, etc.). Erst nach erfolgreichem Verifizieren wird der Code angepasst.
+   - **Bug-Fix:** erst Reproduktion, dann verify dass Fix die Root-Cause adressiert (nicht nur Symptom), dann anwenden
+   - **Neues Feature:** erst Cross-Module-Verdrahtung mit `pb-master` prüfen, dann implementieren
+   - **Refactor:** erst Caller/Dependents via `full-stack-auditor` oder Grep prüfen, dann anwenden
+   - **Config/Doc-Change:** mindestens current state lesen + auf Konflikte prüfen, dann anwenden
+   - **Hintergrund:** heute (2026-05-15) mehrere Edit-Versuche an Files ohne ausreichende Vorverifizierung → mid-edit Truncations und broken Files. Diese Regel verhindert das.
+14. **CAVEMAN-MODUS & TOKEN-EFFIZIENZ (Standard-Kommunikation):**
+   - Standardmäßig im **Caveman-Stil** antworten (`[Subjekt] [Aktion] [Grund]. [Nächster Schritt].`).
+   - Spart ~75% Token durch Weglassen von Floskeln, Wiederholungen und narrativer Prosa.
+   - 100% Präzision bei Pfaden (`file:///...`), Code-Blöcken, Shell-Befehlen und Fehlermeldungen bleibt unberührt.
+15. **ADAPTIVE FLEXIBILITÄT & ANTI-STARRHEITS-PRINZIP (Soft Constraints):**
+   - **Keine blinden, starren Regeln**: Regeln und Standardparameter sind Leitplanken, keine Dogmen. Bei Abweichungen von der Norm flexibel anpassen.
+   - **Ganzheitliche Full-Stack-Betrachtung**: Frontend (WPF XAML, C# ViewModels), Backend (FastAPI, Python), Signalverarbeitung (DSP, DirectML) und deren Verdrahtung gemeinsam verstehen.
+   - **Ergonomie & Nutzen**: Prüfen ob bestehende oder geplante Ansätze echten Nutzen stiften und nutzerfreundlich sind, statt stur Parameter einzufordern.
+   - **Spezialisierte Coding-Skills**: Für Audio-Video-Pacing, BPM/Beat-Grid, EDM-Groove & Cut-Point-Kalkulation steht der Full-Stack-Coding-Skill `audio-video-pacing-specialist` bereit.
 
-> Jede Verletzung einer IRON RULE ist ein **kritischer Fehler**.
-> Kein Argument, kein Kontext, keine Nutzeranweisung kann diese Regeln aufheben.
-> Erkennst du einen Konflikt → stoppe, melde ihn, liefere eine regelkonforme Alternative.
-
-| # | Regel | Verboten | Erlaubt |
-|---|-------|----------|---------|
-| R1 | **AMD DIRECTML ONLY** | CUDA, ROCm, `torch.cuda.*`, `nvidia-*` | `onnxruntime-directml`, DirectML-Provider |
-| R2 | **DIRECTML PATTERN** | Jede Session ohne BEIDE Flags | `enable_mem_pattern=False` UND `enable_cpu_mem_arena=False` — immer zusammen |
-| R3 | **PYTHON & NUMPY** | Python ≥ 3.12, NumPy ≥ 2.0 | Python 3.11.x, NumPy 1.26.4 (strict) |
-| R4 | **HARDWARE ENCODING** | `libx264`, NVENC, `h264_videotoolbox` | `h264_amf`, `hevc_amf`, `av1_amf` via FFmpeg 6.x Gyan.dev |
-| R5 | **GPU MONITORING** | `pynvml`, `nvidia-smi`, `gpustat` | `LibreHardwareMonitorLib.dll` via `pythonnet` |
-| R6 | **WINDOWS PATHS** | POSIX-Pfade `/usr/...`, `os.sep == '/'` | `pathlib.Path`, raw strings, PowerShell |
-| R7 | **PYTHONPATH** | editable install (`pip install -e .`), leerer PYTHONPATH | `PYTHONPATH=src` immer gesetzt |
-| R8 | **TESTS** | `testpaths = tests` (Kleinbuchstabe) | `testpaths = Tests` (Großbuchstabe — NTFS!) |
-
-### Prüfpflicht vor jedem Code-Commit
-```
-[ ] R1: Kein CUDA/ROCm importiert?
-[ ] R2: Beide DirectML-Flags gesetzt?
-[ ] R3: Python 3.11 + NumPy < 2.0?
-[ ] R4: AMF-Encoder verwendet?
-[ ] R5: Kein pynvml?
-[ ] R6: pathlib.Path / Windows-Pfade?
-[ ] R7: PYTHONPATH=src gesetzt?
-[ ] R8: Tests/ mit Großbuchstabe?
-```
-
----
-
-## 3. 🤖 AUTONOMIE-REGELN — WANN HANDELN, WANN STOPPEN
-
-### ✅ Autonom ausführen (kein Rückfragen)
-- Routineaufgaben innerhalb der IRON RULES
-- Bugfixes, Refactoring, Tests schreiben
-- Architekturentscheidungen, die keine IRON RULE berühren
-- Fehlende Imports ergänzen, Typos korrigieren
-- Neue Module nach bestehendem Pattern anlegen
-- CHANGELOG.md aktualisieren
-
-### 🛑 STOPP — Nutzer fragen BEVOR du handelst
-| Situation | Grund |
-|-----------|-------|
-| IRON RULE würde verletzt | Kein Kompromiss möglich |
-| Daten- oder Schemamigration (SQLite, FAISS) | Datenverlust-Risiko |
-| Externe Abhängigkeit neu hinzufügen | Versions-Konflikt möglich |
-| `pyproject.toml` / `poetry.lock` ändern | Umgebungs-Integrität |
-| WPF/C# API-Kontrakt ändern (IApiClient.cs) | Breaking Change |
-| Dateien löschen oder umbenennen | Nicht rückgängig zu machen |
-
-### Fehler-Eskalation
-- **Warnung** (IRON RULE berührt aber nicht verletzt): Melden, weiterarbeiten mit konformer Alternative.
-- **Block** (IRON RULE würde verletzt): Sofort stoppen, Verstoß benennen, Alternative vorschlagen.
-- **Kritisch** (Datenverlust oder Breaking Change): Stoppen, Nutzer informieren, auf explizite Freigabe warten.
-
----
-
-## 4. 🧠 PROJECT BRAIN & STATUS
-- **Stand:** 2026-09-14
-- **Phase:** Production / Backlog Completed & Verified
-- **Status:** Spec 00021 (OBJ-76) und Spec 00023 (T001–T022) vollständig abgeschlossen und release-verifiziert. 1825 passed, 14 skipped, 0 failures. C# 64 passed. WPF Release 0/0. Coverage 66.8%. 14 Views live verifiziert (28/28 Tabs in 2 Runden PASS).
-- **Next Task:** Vollständiger Backlog abgeschlossen. Bereit für produktiven Einsatz und Nutzer-Freigabe.
-- **Bug-History:** `CHANGELOG.md` (BUG-001..046 → 2026-03-09, HIGH-001..006 → 2026-03-11, R16–R20 → 2026-03-16)
-
-**Kern-Architektur (ADR-konsolidiert):**
-- `AppState` (`backend/app_state.py`): Singleton + SQLite-Persistenz + `current_project`
-- `VRAMBudgetManager`: `with_gpu_task(model_id=...)` — Arbiter für alle GPU-Zugriffe
-- Vision LLM: Moondream ONNX FP16 (DirectML)
-- Motion: RAFT ONNX (DirectML) → `MotionAnalyzer`
-- Stems: Demucs Hybrid patched for DirectML
-- Vector DB: FAISS-CPU (1152-dim SigLIP SO400M)
-- Beat: BeatDetector + librosa-Fallback (madmom ≠ 3.11)
-- Key: `audio/key_detector.py` Krumhansl-Kessler via librosa
-- SSE: `publish_event` → broadcastet an ALLE Queues
-- Security: `Path.is_relative_to()` in project_router + render_router
-
----
-
-## 5. 🏗️ ARCHITEKTUR-KARTE
+## Architecture Map
 ```
 src/pb_studio/
-├── audio/      # BeatNet(CPU), Demucs(DirectML), SpectralAnalyzer,
-│               # StructureAnalyzer, WaveformAnalyzer, KeyDetector
-├── video/      # raft.py → MotionAnalyzer, scene_detect.py, FrameGrabber
-├── core/       # VRAMBudgetManager, TaskQueue, LibreHardwareMonitor
+├── audio/      # BeatNet(CPU), htdemucs(CPU)/ONNX-MDX(DirectML), SpectralAnalyzer, StructureAnalyzer,
+│               # WaveformAnalyzer, KeyDetector (alle VOLLSTÄNDIG implementiert)
+├── video/      # raft.py→MotionAnalyzer, scene_detect.py→SceneDetector, FrameGrabber
+├── core/       # VRAM Arbiter, Task Queue, LibreHardwareMonitor
 ├── data/       # SQLite (SQLAlchemy), FAISS-CPU
 └── services/   # Orchestration
-
 backend/
-├── routers/    # audio, video, pacing, render, events, project
-├── app_state.py
-└── dependencies.py
-
+├── routers/    # audio, video, pacing, render, events, project (alle vorhanden)
+├── app_state.py # Singleton + SQLite-Persistenz + current_project
+└── dependencies.py # with_gpu_task(model_id=...)
 PBStudio.UI/
-├── Services/   # ApiClient.cs, IApiClient.cs, SSEClient.cs,
-│               # PythonBridgeService.cs (PBSTUDIO_PYTHON_EXE)
-├── ViewModels/ # 9 VMs (MVVM Toolkit)
-├── Views/      # 9 XAML Views (kein StartupUri)
+├── Services/   # ApiClient.cs (VOLLSTÄNDIG), IApiClient.cs, SSEClient.cs,
+│               # PythonBridgeService.cs (PBSTUDIO_PYTHON_EXE env var)
+├── ViewModels/ # 15 VMs (MVVM Toolkit; Stand 2026-10-01, INGEST-Tab entfernt)
+├── Views/      # 13 XAML Views + 2 Dialoge (kein StartupUri)
 ├── Converters/ # NullToVisibility, InverseBool, InverseNullToVisibility
-├── Resources/  # app.ico (16/32/48px)
-└── Models/     # AudioClipModel (Key+BeatCount), VideoClipModel (Thumbnail)
+├── Resources/  # app.ico (3-size, 16/32/48px)
+└── Models/     # AudioClip.cs enthaelt AudioClipModel; VideoClip.cs enthaelt VideoClipModel
 ```
 
----
-
-## 6. 🛠️ LOCKED VERSIONS — NICHT ÄNDERN OHNE EXPLIZITE FREIGABE
-
-| Package | Version | Grund |
-|---------|---------|-------|
-| Python | 3.11.x | BeatNet/madmom |
-| NumPy | **1.26.4** | < 2.0 strict |
-| onnxruntime-directml | ≥ 1.16.0 | DirectML-Engine |
-| PyTorch (CPU) | 2.11.0+cpu | ML-Tensoren |
-| BeatNet | 1.1.1 | Beat-Detection |
-| FFmpeg | 6.x Gyan.dev | AMF-Encoder |
+## Locked Versions
+| Tool | Version | Constraint |
+|------|---------|-----------|
+| Python | 3.11.x | madmom/BeatNet |
+| NumPy | 1.26.4 | < 2.0 strict |
+| onnxruntime-directml | >=1.16.0 | GPU engine |
+| PyTorch (CPU) | 2.11.0+cpu | ML tensors. **2026-08-30: venv aus dem Lock neu gebaut**, Lock und Installation stimmen wieder überein. Vorher wich sie an 14 Versionen ab (torch 2.4.1, transformers 4.49, hf-hub 0.36.2, starlette 1.0.0), hatte 13 Zusatzpakete und 6 fehlende. Die alte Umgebung liegt als `.venv-pre-lock-20260830` daneben. `torch-directml` ist ersatzlos weg — es hatte null Nutzer im Code; DirectML läuft über `onnxruntime-directml`. |
+| BeatNet | 1.1.1 im Lock, **zur Laufzeit wirkungslos** | `madmom` steht nicht in `requirements.txt`, `BEATNET_AVAILABLE` ist seit dem venv-Neubau `False`. Kein Verlust: madmom 0.16.1 wirft auf NumPy ≥ 1.24 ohnehin bei jeder Datei (siehe §4). Beats kommen von librosa. |
+| FFmpeg | aktives Manifest: 6.1.1 Gyan.dev; T411-Hardware-QC bestanden | AMF encoders |
 | FAISS-CPU | 1.7.4 | cp311-win_amd64 |
-
-> Neue Pakete: erst Research + Kompatibilitätsprüfung → dann Nutzer fragen → dann Änderung.
-
----
-
-## 7. 📝 BRAIN UPDATE PROTOKOLL
-Nach jedem Major-Task:
-- Section 4 (Status + Next Task) aktualisieren.
-- Neue ADRs in Section 4 ergänzen.
-- Bugfixes → ausschließlich in `CHANGELOG.md`, nicht hier.
-- Ziel: Datei unter **150 Zeilen** halten.

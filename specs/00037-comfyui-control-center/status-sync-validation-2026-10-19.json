@@ -1,0 +1,25 @@
+{
+  "t002-spectral-structure-2026-10-19": {
+    "sources": 3,
+    "repeats_per_source": 2,
+    "protection_equal": true,
+    "probe_parses": true,
+    "all_six_raw_result_hashes_confirmed": true
+  },
+  "t002-scenes-2026-10-19": {
+    "sources": 6,
+    "repeats_per_source": 2,
+    "protection_equal": true,
+    "probe_parses": true
+  },
+  "original_packages_done": [
+    "T001",
+    "T003",
+    "T004",
+    "T005",
+    "T006"
+  ],
+  "T002_still_open": true,
+  "ki_hirn_exact_readback": true,
+  "ki_hirn_id": "1792439934078"
+}

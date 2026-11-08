@@ -5,13 +5,32 @@ Tests waveform extraction, filtering, caching, and downsampling.
 """
 import pytest
 import numpy as np
-from pathlib import Path
+import wave
 from pb_studio.audio.waveform_analyzer import WaveformAnalyzer
 from pb_studio.audio.waveform_cache import WaveformCache
 
 
 class TestWaveformAnalyzer:
     """Test cases for WaveformAnalyzer."""
+
+    @pytest.fixture
+    def test_audio_path(self, tmp_path):
+        """Create deterministic real PCM media for file-path integration tests."""
+        sample_rate = 44100
+        duration_seconds = 2
+        time = np.arange(sample_rate * duration_seconds) / sample_rate
+        samples = sum(
+            np.sin(2 * np.pi * frequency * time)
+            for frequency in (80, 800, 8000)
+        ) / 3
+        pcm = (samples * 30000).astype("<i2")
+        audio_path = tmp_path / "three_band_fixture.wav"
+        with wave.open(str(audio_path), "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(sample_rate)
+            output.writeframes(pcm.tobytes())
+        return str(audio_path)
 
     def test_init(self):
         """Test analyzer initialization."""
@@ -115,14 +134,11 @@ class TestWaveformAnalyzer:
 
         assert {len(values) for values in result.values()} == {1000}
 
-    @pytest.mark.skipif(not Path("tests/fixtures/test_audio.mp3").exists(),
-                        reason="Test audio file not available")
-    def test_extract_3band_waveform(self):
+    def test_extract_3band_waveform(self, test_audio_path):
         """Test full 3-band extraction from audio file."""
         analyzer = WaveformAnalyzer()
 
-        test_file = "tests/fixtures/test_audio.mp3"
-        waveform = analyzer.extract_3band_waveform(test_file)
+        waveform = analyzer.extract_3band_waveform(test_audio_path)
 
         # Check structure
         assert 'low' in waveform
@@ -138,16 +154,13 @@ class TestWaveformAnalyzer:
         assert len(waveform['low']) == len(waveform['mid'])
         assert len(waveform['mid']) == len(waveform['high'])
 
-    @pytest.mark.skipif(not Path("tests/fixtures/test_audio.mp3").exists(),
-                        reason="Test audio file not available")
-    def test_downsampled_waveform(self):
+    def test_downsampled_waveform(self, test_audio_path):
         """Test downsampled waveform for GUI display."""
         analyzer = WaveformAnalyzer()
 
-        test_file = "tests/fixtures/test_audio.mp3"
         target_points = 500
 
-        waveform = analyzer.get_downsampled_waveform(test_file, target_points)
+        waveform = analyzer.get_downsampled_waveform(test_audio_path, target_points)
 
         # Check structure
         assert 'low' in waveform
@@ -159,14 +172,11 @@ class TestWaveformAnalyzer:
             # Should be downsampled to approximately target_points
             assert len(band_data) <= target_points * 1.1  # Allow 10% margin
 
-    @pytest.mark.skipif(not Path("tests/fixtures/test_audio.mp3").exists(),
-                        reason="Test audio file not available")
-    def test_frequency_content_analysis(self):
+    def test_frequency_content_analysis(self, test_audio_path):
         """Test overall frequency content distribution."""
         analyzer = WaveformAnalyzer()
 
-        test_file = "tests/fixtures/test_audio.mp3"
-        content = analyzer.analyze_frequency_content(test_file)
+        content = analyzer.analyze_frequency_content(test_audio_path)
 
         # Check structure
         assert 'low_pct' in content

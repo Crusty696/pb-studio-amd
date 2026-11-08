@@ -112,14 +112,6 @@ def _thumbnail_exists_for_clip(
     return any(p.exists() for p in candidates)
 
 
-def resolve_active_project_root(state: "AppState", fallback_root: str | Path) -> Path:
-    """Gibt den aktiven Projekt-Root zurück, sonst den konfigurierten Fallback."""
-    current = state.current_project or {}
-    current_path = current.get("path") if isinstance(current, dict) else None
-    if current_path:
-        return Path(current_path).resolve()
-    return Path(fallback_root).resolve()
-
 
 def resolve_project_db_id(project_data: Optional[dict]) -> int:
     """Extrahiert die DB-Projekt-ID aus current_project; Fallback bleibt 1 für Legacy-Fälle."""
@@ -637,6 +629,11 @@ class AppState:
         with self._state_lock:
             return list(self.current_timeline)
 
+    def get_timeline_state_snapshot(self) -> tuple[list[dict], Optional[str]]:
+        """Timeline and its audio path from one atomic project-state read."""
+        with self._state_lock:
+            return list(self.current_timeline), self.current_audio_path
+
     def set_timeline(self, timeline: list[dict]) -> None:
         """Thread-safe Setzen der Timeline."""
         with self._state_lock:
@@ -797,7 +794,24 @@ class AppState:
         project_id = self.require_current_project_db_id()
         in_memory = self._find_audio_clip_by_path(clip_data["path"])
         if in_memory:
-            return in_memory
+            clip = {**in_memory, **clip_data, "id": in_memory["id"]}
+            if in_memory.get("audio_hash") != clip_data.get("audio_hash"):
+                for key in (
+                    "bpm", "key", "beat_count", "beats", "energy_curve",
+                    "structure_segments", "spectral_data", "subtrack_segments",
+                    "tempo_curve", "onset_times", "kick_times", "snare_times",
+                    "hihat_times", "chunk_evidence", "downbeats", "beat_grid",
+                    "downbeat_provenance", "beat_grid_provenance",
+                ):
+                    clip.pop(key, None)
+                clip["is_analyzed"] = False
+                clip["has_audio_embedding"] = False
+            self.persist_audio_clip(clip, project_id=project_id)
+            if in_memory.get("audio_hash") != clip_data.get("audio_hash"):
+                with self._state_lock:
+                    self.audio_analysis_cache.pop(clip["id"], None)
+            self.set_audio_clip(clip["id"], clip)
+            return clip
 
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
@@ -810,27 +824,39 @@ class AppState:
                 meta = json.loads(row.get("metadata_json") or "{}")
                 if meta.get("clip_type") == "audio" and meta.get("clip_id") is not None:
                     clip_id = int(meta["clip_id"])
+                    current_hash = clip_data.get("audio_hash")
+                    stored_hash = meta.get("audio_hash") or row.get("file_hash")
+                    same_content = bool(
+                        current_hash and stored_hash and current_hash == stored_hash
+                    )
                     clip = {
+                        **clip_data,
                         "id": clip_id,
-                        "name": meta.get("name", clip_data.get("name", "")),
                         "path": row.get("file_path") or clip_data["path"],
-                        "duration_seconds": row.get("duration_sec") or clip_data.get("duration_seconds", 0.0),
-                        "sample_rate": meta.get("sample_rate", clip_data.get("sample_rate", 44100)),
-                        "channels": meta.get("channels", clip_data.get("channels", 2)),
-                        "format": meta.get("format", clip_data.get("format", "")),
-                        # L-N2: audio_hash mit-uebernehmen — wenn schon persisted dann nutzen,
-                        # sonst Wert aus Import (frisches hashing) behalten.
-                        "audio_hash": (
-                            meta.get("audio_hash")
-                            or row.get("file_hash")
-                            or clip_data.get("audio_hash")
-                        ),
-                        # L-AUDIO-8 (CD-1): stems_paths mit-uebernehmen
-                        "stems_paths": (
-                            meta.get("stems_paths")
-                            or clip_data.get("stems_paths")
-                        ),
                     }
+                    if same_content:
+                        clip["stems_paths"] = (
+                            meta.get("stems_paths") or clip_data.get("stems_paths")
+                        )
+                    else:
+                        # Same path is not same media. Keep derived state only
+                        # when the fresh import hash proves content identity.
+                        for key in (
+                            "bpm", "key", "beat_count", "beats", "energy_curve",
+                            "structure_segments", "spectral_data", "subtrack_segments",
+                            "tempo_curve", "onset_times", "kick_times", "snare_times",
+                            "hihat_times", "chunk_evidence", "downbeats", "beat_grid",
+                            "downbeat_provenance", "beat_grid_provenance",
+                            "analysis_status", "stage_status", "stage_errors",
+                        ):
+                            clip.pop(key, None)
+                        clip["is_analyzed"] = False
+                        clip["has_audio_embedding"] = False
+                        with self._state_lock:
+                            self.audio_analysis_cache.pop(clip_id, None)
+                    self.persist_audio_clip(clip, project_id=project_id)
+                    if not same_content:
+                        repo.invalidate_analysis(int(row["id"]))
                     self.set_audio_clip(clip_id, clip)
                     with self._lock:
                         self._audio_next_id = max(self._audio_next_id, clip_id + 1)
@@ -854,7 +880,22 @@ class AppState:
         project_id = self.require_current_project_db_id()
         in_memory = self._find_video_clip_by_path(clip_data["path"])
         if in_memory:
-            return in_memory
+            clip = {**in_memory, **clip_data, "id": in_memory["id"]}
+            if in_memory.get("video_hash") != clip_data.get("video_hash"):
+                for key in (
+                    "is_analyzed", "avg_motion", "peak_motion", "motion_category",
+                    "embedding_dim", "embedding_samples", "has_embedding", "tag_source",
+                    "analysis_status", "stage_status", "stage_errors",
+                ):
+                    clip.pop(key, None)
+                clip["tags"] = []
+                clip["thumbnail_available"] = False
+            self.persist_video_clip(clip, project_id=project_id)
+            if in_memory.get("video_hash") != clip_data.get("video_hash"):
+                with self._state_lock:
+                    self.video_analysis_cache.pop(clip["id"], None)
+            self.set_video_clip(clip["id"], clip)
+            return clip
 
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
@@ -870,24 +911,35 @@ class AppState:
                     # BUG-058 FIX: Update next_id strictly via max() to avoid collisions
                     with self._lock:
                         self._video_next_id = max(self._video_next_id, clip_id + 1)
+                    current_hash = clip_data.get("video_hash")
+                    stored_hash = meta.get("video_hash") or row.get("file_hash")
+                    same_content = bool(
+                        current_hash and stored_hash and current_hash == stored_hash
+                    )
                     clip = {
+                        **clip_data,
                         "id": clip_id,
-                        "name": meta.get("name", clip_data.get("name", "")),
                         "path": row.get("file_path") or clip_data["path"],
-                        "duration_seconds": row.get("duration_sec") or clip_data.get("duration_seconds", 0.0),
-                        "width": meta.get("width", clip_data.get("width", 1920)),
-                        "height": meta.get("height", clip_data.get("height", 1080)),
-                        "fps": meta.get("fps", clip_data.get("fps", 30.0)),
-                        "codec": meta.get("codec", clip_data.get("codec", "")),
-                        "thumbnail_available": False,
-                        "tags": [],
-                        # L-VIDEO-3: video_hash aus DB-Meta + frischem clip_data fallback.
-                        "video_hash": (
-                            meta.get("video_hash")
-                            or row.get("file_hash")
-                            or clip_data.get("video_hash")
-                        ),
                     }
+                    if not same_content:
+                        # Do not restore analysis, captions or embeddings from
+                        # a prior file merely because its path stayed stable.
+                        for key in (
+                            "is_analyzed", "analysis_status", "stage_status",
+                            "stage_errors", "avg_motion", "peak_motion",
+                            "motion_category", "embedding_dim", "embedding_samples",
+                            "has_embedding", "tag_source",
+                        ):
+                            clip.pop(key, None)
+                        clip["is_analyzed"] = False
+                        clip["has_video_embedding"] = False
+                        clip["tags"] = []
+                        clip["thumbnail_available"] = False
+                        with self._state_lock:
+                            self.video_analysis_cache.pop(clip_id, None)
+                    self.persist_video_clip(clip, project_id=project_id)
+                    if not same_content:
+                        repo.invalidate_analysis(int(row["id"]))
                     self.set_video_clip(clip_id, clip)
                     with self._lock:
                         self._video_next_id = max(self._video_next_id, clip_id + 1)
@@ -1703,6 +1755,8 @@ class AppState:
                             # L-M8: SigLIP-Embedding-Metadaten nach Reload zeigen
                             "embedding_dim": int(ai_data.get("embedding_dim", 0) or 0),
                             "embedding_samples": int(ai_data.get("embedding_samples", 0) or 0),
+                            "embedding_model_name": ai_data.get("embedding_model_name"),
+                            "embedding_model_version": ai_data.get("embedding_model_version"),
                             "audio_key": ai_data.get("audio_key"),
                             # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10)
                             "avg_brightness": float(ai_data.get("avg_brightness", 0.5) or 0.5),

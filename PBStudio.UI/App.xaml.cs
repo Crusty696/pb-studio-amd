@@ -169,7 +169,6 @@ public partial class App : Application
         // ViewModels (Transient — jeder Tab bekommt seine eigene Instanz via Ioc.Default)
         services.AddTransient<MainViewModel>();
         services.AddTransient<ProjectOverviewViewModel>();
-        services.AddTransient<MediaIngestViewModel>();
         services.AddTransient<AudioLibraryViewModel>();
         services.AddTransient<VideoLibraryViewModel>();
         services.AddTransient<AnchorViewModel>();

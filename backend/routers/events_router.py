@@ -135,7 +135,7 @@ async def _event_stream(
                 continue
 
             event_type = event.get("event", "message")
-            if event_filter and event_type not in event_filter:
+            if event_filter and event_type not in event_filter and event_type != "replay_gap":
                 continue
 
             data = json.dumps(event.get("data", {}), ensure_ascii=False)
@@ -179,6 +179,8 @@ async def progress_stream(request: Request) -> StreamingResponse:
         "gpu_error",
         "llm_status",
         "persist_error",
+        # 2026-10-01: API/chat project open/close must reach the WPF.
+        "project_changed",
     }
     return StreamingResponse(
         _event_stream(request, client_id=client_id, event_filter=progress_events),

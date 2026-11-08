@@ -44,6 +44,8 @@ def _valid_video() -> dict:
         "has_embedding": True,
         "embedding_dim": 1152,
         "embedding_samples": 2,
+        "embedding_model_name": "siglip_vision",
+        "embedding_model_version": "onnx-dml-v2",
         "audio_key": "G Major",
         "stage_status": {
             "motion": "completed",

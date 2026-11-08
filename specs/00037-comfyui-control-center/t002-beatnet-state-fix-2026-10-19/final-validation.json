@@ -1,0 +1,15 @@
+{
+  "pytest": {
+    "tests": 63,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "code_hashes_match": true,
+  "media_passed": true,
+  "original_hashes_equal": true,
+  "protected_hashes_equal": true,
+  "fixture_hashes_equal": true,
+  "completed_marker": true,
+  "qc_marker": true
+}

@@ -1,0 +1,242 @@
+[
+  {
+    "id": "CC01",
+    "severity": "HIGH",
+    "title": "Batchbasis erst nach Consumer",
+    "problem": "T014 benötigt ProductionBatch vor T041.",
+    "correction": "T010/T011 definieren/persistieren minimale Batchbasis; T041 erweitert Longform.",
+    "future_test": "T014 ohne T041: create/reorder/pause/restart/CAS funktionieren.",
+    "tasks": [
+      "T010",
+      "T011",
+      "T014",
+      "T041"
+    ]
+  },
+  {
+    "id": "CC02",
+    "severity": "HIGH",
+    "title": "Fehlende PB-Mutationsroutes",
+    "problem": "Workflowregister/Enable/Settings/Priority/Reorder/manualImport fehlten in routedefiniertem Vertrag.",
+    "correction": "D-Routen ergänzen, typed Requests/Responses/Ownership/CAS/Idempotency; lokaler Importintent.",
+    "future_test": "WPF nur PB erreichbar; jede Aktion sowie cross-project/stale/duplicate Fälle.",
+    "tasks": [
+      "T022",
+      "T023",
+      "T024",
+      "T025"
+    ]
+  },
+  {
+    "id": "CC03",
+    "severity": "HIGH",
+    "title": "Routerregistrierung ohne zuständiges Paket",
+    "problem": "T022 erstellt Router nach letztem main.py-Owner T021.",
+    "correction": "T022 erhält main.py für include_router/DI/Startupbindung.",
+    "future_test": "Echte App/OpenAPI enthält Pflichtpfade; disabled Startup funktioniert.",
+    "tasks": [
+      "T022"
+    ]
+  },
+  {
+    "id": "CC04",
+    "severity": "HIGH",
+    "title": "Persistierter AnalysisRun ohne Vorgänger",
+    "problem": "T019/T020 konsumieren Run, aber T009 war nicht in Dependencyclosure.",
+    "correction": "T009 vor T019/T020, vor ADD persistierten Run/Hash/Space prüfen.",
+    "future_test": "Fehlender Run kein ADD; gleicher Run/Operation idempotent; MVP ohne T031 möglich.",
+    "tasks": [
+      "T009",
+      "T019",
+      "T020"
+    ]
+  },
+  {
+    "id": "CC05",
+    "severity": "HIGH",
+    "title": "Terminalretry widersprüchlich",
+    "problem": "Retry versprach neuen Attempt trotz terminalem unveränderlichem Intent.",
+    "correction": "Nichtterminal nur bestätigter retry_wait; failed neuer linked Intent; ready/cancelled/obsolete/unresolved409.",
+    "future_test": "Retrymatrix bewahrt Originalzustände; Unknown nie Resubmit.",
+    "tasks": [
+      "T014",
+      "T022"
+    ]
+  },
+  {
+    "id": "CC06",
+    "severity": "HIGH",
+    "title": "Manifest-only Workflowlieferung",
+    "problem": "T027/T032–T036 fehlten API-Prompts/Fixtures/Profilreceipts im Create-Scope.",
+    "correction": "Executable Bundlefiles je Familie deklarieren; externe Inputs nur mit gepinntem Vertrag.",
+    "future_test": "Saubere Installation mit deklarierter Lieferung lädt Bundle; Manifest-only kein qualified.",
+    "tasks": [
+      "T027",
+      "T032",
+      "T033",
+      "T034",
+      "T035",
+      "T036"
+    ]
+  },
+  {
+    "id": "CC07",
+    "severity": "MEDIUM",
+    "title": "WPF-DI/Controlverdrahtung unvollständig",
+    "problem": "T024/T025 schaffen Views/StateService ohne App/ApiClient-Kontraktowner.",
+    "correction": "App.xaml.cs und erforderliche ApiClient/IApiClientfiles ergänzen.",
+    "future_test": "Reale AppDI/Navigation/Subscriptions, kein manuell verdrahtetes VM als Integrationsbeleg.",
+    "tasks": [
+      "T024",
+      "T025"
+    ]
+  },
+  {
+    "id": "CC08",
+    "severity": "MEDIUM",
+    "title": "AUTO-/O02-Status inkonsistent",
+    "problem": "AUTO als OPTIONAL bezeichnet; O02 in Traceability verbindlich/geschlossen trotz unbestätigter Policy.",
+    "correction": "AUTO späterer Pflichtzielumfang außerhalb MVP; O02 war beim Audit offen; am 2026-10-13 als Betriebsregel bestätigt, technische Abnahme offen.",
+    "future_test": "O02-Betriebsregel seit 2026-10-13 bestätigt; keine Implementierungs-/Runtime-/Migrationsfreigabe daraus ableiten; technische Pause/Detach/Reconciliation-Abnahme bleibt offen.",
+    "tasks": [
+      "T001",
+      "T039"
+    ]
+  },
+  {
+    "id": "CC09",
+    "severity": "HIGH",
+    "title": "Cancel nach Katalogcommit ohne Abschluss",
+    "problem": "Q3 Quarantänepfad endete vor catalog_committed.",
+    "correction": "Cancel-vs-Catalog-CAS; nach Commit Media erhalten/Eignung sperren, konsistent drainen→locally_cancelled.",
+    "future_test": "Cancel an jeder Catalog/Analyse/Vektorgrenze, keine Löschung/unerlaubte Timelinefreigabe.",
+    "tasks": [
+      "T019",
+      "T020",
+      "T021"
+    ]
+  },
+  {
+    "id": "CC10",
+    "severity": "HIGH",
+    "title": "Compaction invalidiert completed Receipts",
+    "problem": "IDverschiebung nach completed ADD lässt historische ID/Generation veralten.",
+    "correction": "MVP Compaction/Reindex sperren bis Remapspec; immutable Receipt von IndexMembership trennen.",
+    "future_test": "Completed opB ID1→Compaction ID0; Gate blockiert oder qualifizierter Remap, kein stale Replay.",
+    "tasks": [
+      "T020",
+      "T021",
+      "T037"
+    ]
+  },
+  {
+    "id": "CC11",
+    "severity": "HIGH",
+    "title": "Writerdrain unter äußerem Projektguard",
+    "problem": "VideoRouter1525–1526 hält Kontextguard beim inneren Vektoradd.",
+    "correction": "Aufrufer split: Preflight/drain außerhalb Projekt-/Recoverylocks, Kontext danach kurz revalidieren.",
+    "future_test": "Projektwechsel+Native/Sagaadd+Snapshot/Close ohne Joindeadlock/stale Commit.",
+    "tasks": [
+      "T020",
+      "T021"
+    ]
+  },
+  {
+    "id": "CC12",
+    "severity": "HIGH",
+    "title": "Unbounded Writerjoin",
+    "problem": "Bestehender join ohne Timeout; persistent Dirty/Publishfailure kann Drain blockieren.",
+    "correction": "Endliche Profildeadline, Abbruch repair_required; lebender Writer kein Erfolg/zweiter Writer.",
+    "future_test": "Diskfull/RecoveryBusy/repeated Publishfail/Deadline; bounded Rückkehr mit sichtbarem Fehler.",
+    "tasks": [
+      "T020",
+      "T021"
+    ]
+  },
+  {
+    "id": "CC13",
+    "severity": "MEDIUM",
+    "title": "Teilresultat kann nicht needs_decision werden",
+    "problem": "Q1 erlaubte active→needs_decision, nicht available_partial.",
+    "correction": "Neue Kante mit Konflikt-/Missingreceiptguard.",
+    "future_test": "Slot A importiert, Slot B Hashkonflikt/fehlend: Zustand needs_decision, kein Resubmit.",
+    "tasks": [
+      "T010",
+      "T019"
+    ]
+  },
+  {
+    "id": "CC14",
+    "severity": "MEDIUM",
+    "title": "Vektorlose Completion nur im Text",
+    "problem": "Strenge Q3-Tabelle verbot die im Absatz versprochene direkte Completion.",
+    "correction": "analysis_pending→completed mit explizitem No-vector-Qualityguard in Tabelle.",
+    "future_test": "Technikprofil ohne Vektor kann lokal komplett sein; semantische Eligibility nicht zugesagt.",
+    "tasks": [
+      "T010",
+      "T018",
+      "T019"
+    ]
+  },
+  {
+    "id": "CC15",
+    "severity": "HIGH",
+    "title": "IDmengenvalidator beweist keine Vektoridentität",
+    "problem": "Bestehender Restorepredicate prüft IDs/Bounds statt Operation/Media/Space/Hash.",
+    "correction": "T021 verifiziert identitätsgebundene Operation-/Vektorreceipts im Restorevalidator.",
+    "future_test": "Vertauschte Media-/Operationmarker bei identischen IDs oder andere Bytes fail-closed.",
+    "tasks": [
+      "T020",
+      "T021"
+    ]
+  },
+  {
+    "id": "CC16",
+    "severity": "HIGH",
+    "title": "Autoritativer externer Cancel nicht repräsentierbar",
+    "problem": "queued/running→cancelled fehlte ohne eigenen Cancelrequest.",
+    "correction": "Kante ausschließlich bei konkretem Providerterminalreceipt; leere History bleibt Unknown.",
+    "future_test": "Provider-confirmed external cancel darstellbar; bloß verlorener Queueeintrag nicht cancelled.",
+    "tasks": [
+      "T010",
+      "T013",
+      "T014"
+    ]
+  },
+  {
+    "id": "CC17",
+    "severity": "HIGH",
+    "title": "Manifestprüfung als Egressdurchsetzung",
+    "problem": "PBpolicy allein kann serverseitige Callbacks/Replacements/Netzwerk nicht sperren.",
+    "correction": "Assurance declared_only/audited_frozen/enforced trennen; Garantie nur passende Durchsetzung, sonst unqualified.",
+    "future_test": "Isolierter Callback ersetzt Localnode durch ungeprüften externen Dienstaufruf; keine lokale Qualifikation allein aus Manifest.",
+    "tasks": [
+      "T006",
+      "T007"
+    ]
+  },
+  {
+    "id": "CC18",
+    "severity": "HIGH",
+    "title": "EffectiveGraph verpflichtend und gleichzeitig optional",
+    "problem": "Standard Acceptreceipt enthält keinen effective hash; DTO optional, Claims trotzdem vollständig.",
+    "correction": "Submitted/effective getrennt; unknown sperrt darauf beruhende Claims, frozen Alternative ausdrücklich geprüft.",
+    "future_test": "Callback verändert Prompt/Seed: effective hash anders/unknown, kein erfundener Gleichheitsnachweis.",
+    "tasks": [
+      "T005",
+      "T006",
+      "T007"
+    ]
+  },
+  {
+    "id": "CC19",
+    "severity": "MEDIUM",
+    "title": "G8 Outputdauer beweist keine Generationslast",
+    "problem": "Reuse-only Langvideo kann G8 scheinbar Freshgenerations-Endurance erfüllen.",
+    "correction": "Receipt trennt Laufzeit/Videodauer/fresh/reused/imported/Profile/ausgeübte Fehlerfenster.",
+    "future_test": "Alle Assets vorher accepted: Export-/Reusebeleg, kein Freshgeneration-Enduranceclaim.",
+    "tasks": [
+      "T041"
+    ]
+  }
+]

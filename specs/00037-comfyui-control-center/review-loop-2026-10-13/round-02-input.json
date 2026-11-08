@@ -1,0 +1,41 @@
+{
+  "captured_utc": "2026-10-13T02:30:32.509749+00:00",
+  "files": [
+    {
+      "file": "spec.md",
+      "sha256": "eedc23c940f154ab72dd1b9f341869c56dd79c2601a2d3635dae3cfe1a4dce40"
+    },
+    {
+      "file": "plan.md",
+      "sha256": "0d53f2e96fa56a2e56c46d7720a6913d4fbebf5adcabe59d0e2285150d61544c"
+    },
+    {
+      "file": "tasks.md",
+      "sha256": "91012a858b190fe820783202a0ab0ded2fbaa2ed0f8f0ea84b95b1001599ba18"
+    },
+    {
+      "file": "work-packages.json",
+      "sha256": "ef2a08d3a2ccd39709633278a17471d5ee17398f6d7a3c859293fbd29f96fd9d"
+    },
+    {
+      "file": "traceability.md",
+      "sha256": "993966d2037f84acec6a2a77924b9d2a3d108d85dcb4e460e6148c9abdfbf1a0"
+    },
+    {
+      "file": "clarifications.md",
+      "sha256": "40e6a63cc291d073ac164170af5d3df4102005a1aedfc6a859e789917f77ed8b"
+    },
+    {
+      "file": "communication-contract.md",
+      "sha256": "d18f305cd8a777a4af238688c4d70850003ad5e71d3dee05cffeee9885873f5d"
+    },
+    {
+      "file": "domain-contracts.md",
+      "sha256": "857bda28fe440dfa988d5bf3595a3221e452291262100db3752930464f80acb3"
+    },
+    {
+      "file": "review-loop-2026-10-13/contracts.md",
+      "sha256": "ffc6bf2c431eb13526f22b16b7432221d552d790f8c3e945bd1259dc2a815279"
+    }
+  ]
+}

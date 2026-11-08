@@ -11,11 +11,6 @@ This module provides:
 """
 
 try:
-    from .engine import VideoGenerator
-except ImportError:
-    pass
-
-try:
     from .scene_detect import SceneDetector
 except ImportError:
     pass  # scenedetect nicht verfügbar (z.B. Linux CI ohne Windows-.venv)
@@ -57,7 +52,6 @@ except ImportError:
 
 __all__ = [
     # Bestehende Module
-    'VideoGenerator',
     'SceneDetector',
     'MotionAnalyzer',
     'create_motion_analyzer',

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from pb_studio.pacing.clip_selector import ClipSelector
+from pb_studio.embedding_identity import current_video_embedding_identity
 
 
 class _VectorStore:
@@ -15,7 +16,7 @@ class _VectorStore:
         self.error = error
         self.search_calls = 0
 
-    def search(self, _embedding, *, k):
+    def search(self, _embedding, *, k, query_identity=None):
         self.search_calls += 1
         if self.error is not None:
             raise self.error
@@ -48,6 +49,8 @@ def _direct_embedding_clips(embedding_key: str) -> list[dict]:
             embedding_key: [-1.0, 0.0],
         }
     )
+    for clip in clips:
+        clip.update(current_video_embedding_identity())
     return clips
 
 
@@ -99,7 +102,7 @@ def test_faiss_metadata_paths_are_normalized_across_supported_keys(tmp_path):
     equivalent = tmp_path / "folder" / ".." / "target.mp4"
     vector_store = _VectorStore(
         ntotal=1,
-        results=[({"file_path": canonical}, 0.99)],
+        results=[({"file_path": canonical, **current_video_embedding_identity()}, 0.99)],
     )
     selector = ClipSelector(strategy="semantic", vector_store=vector_store)
     selector._get_text_embedding = lambda _prompt: np.array(
@@ -121,14 +124,15 @@ def test_faiss_metadata_paths_are_normalized_across_supported_keys(tmp_path):
 
 def test_missing_query_embedding_keeps_audio_aware_motion_fallback():
     selector = ClipSelector(strategy="semantic")
+    selector.use_motion_matching = True
     selector._get_text_embedding = lambda _prompt: None
     selector.bass_curve = np.zeros(10, dtype=np.float32)
     selector.duration_seconds = 10.0
 
     selected = selector.select_clip(
         [
-            {"id": "intense", "file_path": "intense.mp4", "motion_score": 0.9},
-            {"id": "calm", "file_path": "calm.mp4", "motion_score": 0.1},
+            {"id": "intense", "file_path": "intense.mp4", "motion_score": 27.0},
+            {"id": "calm", "file_path": "calm.mp4", "motion_score": 3.0},
         ],
         trigger_strength=0.6,
         trigger_type="beat",

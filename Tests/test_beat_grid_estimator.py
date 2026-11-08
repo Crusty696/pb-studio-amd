@@ -173,7 +173,12 @@ def test_grid_below_chance_agreement_is_not_called_plausible() -> None:
     dabei hoch, weil das Signal selbst sauber gepulst ist.
     """
     signal, times = _click_track(174.0, duration=30.0)
-    offset_kicks = [t + 0.110 for t in times]
+    # Seit T003 (2026-09-30) zieht der Schaetzer den Anker um eine Hop-Dauer
+    # (512/22050 s = 23,2 ms) vor, und die Gegenprobe laeuft am ausgelieferten
+    # Raster. Damit der Abstand Kick <-> ausgeliefertes Raster wie im
+    # urspruenglichen Aufbau 110 ms betraegt, liegen die Kicks um diese
+    # Hop-Dauer naeher an den Anschlaegen.
+    offset_kicks = [t + 0.110 - 512 / SR for t in times]
 
     grid = estimate_beat_grid(signal, SR, kick_times=offset_kicks)
 

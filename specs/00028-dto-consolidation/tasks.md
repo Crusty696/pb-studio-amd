@@ -1,13 +1,14 @@
-# Tasks: C#-Transporttypen auf NSwag konsolidieren
+# Tasks: DTO-Konsolidierung – Revalidierung 2026-11-08
 
-**Status:** READY FOR GATE REVIEW, nicht implementiert. **Basis:** spec.md, plan.md.
+**Status:** OPEN / NOT RELEASE-READY. Neue aktive Aufgabenliste zur Prüfung der vollständigen Abnahme, keine Behauptung fehlender historischer Implementierung.
 
-- [X] T001 {TR-001} Aktuellen Code-, Consumer- und Vertragsbestand sowie vorgelagertes OBJ-75-Gate in specs/00028-dto-consolidation/evidence/baseline.md erfassen; vorgeschlagene Entscheidungen gegen reale Dateien bestätigen.
-- [X] T002 {FR-001,TR-001} Konkrete Dateiliste und Owner aus plan.md festlegen; offene API-/Architekturentscheidungen vor Umsetzung in specs/00028-dto-consolidation/evidence/design-review.md dokumentieren.
-- [X] T003 {FR-001} Reproduktion und Grenzfälle gemäß spec.md in den in plan.md benannten Tests implementieren und erwartetes Vorher-Verhalten belegen.
-- [X] T004 {FR-001} Vollständigen Featurevertrag aus sämtlichen FR-/TR-Anforderungen von spec.md in den in plan.md benannten Produktdateien implementieren; jede Anforderung in specs/00028-dto-consolidation/evidence/requirements-matrix.md auf Code und Verifikation abbilden.
-- [X] T005 {FR-001,TR-001} Sämtliche Abnahmeszenarien aus spec.md fokussiert prüfen und unabhängiges Code-/Vertragsreview in specs/00028-dto-consolidation/evidence/review.md aufnehmen; Restfehler korrigieren.
-- [X] T006 {FR-001} Parent: sichtbare echte Backend-/GUI-Abnahme und Schutzinvarianten aus spec.md in specs/00028-dto-consolidation/evidence/live.md nachweisen; reine Fixtures nicht als Live-PASS zählen.
-- [X] T007 {TR-001} Parent: angemessene finale Vollsuite, C#-Tests/Release-Build und Gate-Prüfungen ohne konkurrierende Testläufe in specs/00028-dto-consolidation/evidence/final-checks.md erfassen.
-- [X] T008 {FR-001,TR-001} Vollständigkeitsmatrix unabhängig prüfen; erst danach specs/00028-dto-consolidation/.completed, qc-report.md und nach tatsächlicher QC .qc-passed erzeugen; Parent aktualisiert Brain-Log.
+Die bisherige Liste ist unverändert in `evidence/legacy-2026-11-08/tasks.md` erhalten. Ihre historischen [X] wurden nicht rückwärts geändert. Die folgenden Aufgaben sind neue Revalidierungsaufträge; gleichlautende IDs gelten nur innerhalb dieser aktiven Version. Historische Tests werden als datierte Belege verwertet, nicht als aktuelle Gesamtabnahme ausgegeben.
 
+- [ ] T001 [OBJ-1] {(TR-001)} Vorhandenen Implementierungsstand und vorgelagertes OBJ-75-Gate mit `specs/00028-dto-consolidation/evidence/baseline.md` abgleichen und offene Grenzen dokumentieren.
+- [ ] T002 [OBJ-1] {(FR-001)} {(TR-001)} Konkrete Endpoint-/DTO-/Consumer-Matrix und Entscheidungen anhand `specs/00028-dto-consolidation/evidence/design-review.md` auf Vollständigkeit prüfen.
+- [ ] T003 [OBJ-1] {(FR-002)} {(FR-004)} Aussagekraft vorhandener Vertragsfixtures und fehlende Grenzfälle in `Tests/test_openapi_snapshot_drift.py` sowie `PBStudio.UI.Tests/TransportContractTests.cs` prüfen; gezielt fehlende Nachweise erfassen.
+- [ ] T004 [OBJ-1] {(FR-001)} {(FR-002)} {(FR-003)} {(FR-004)} {(TR-001)} {(TR-002)} Alle Anforderungen in `specs/00028-dto-consolidation/evidence/requirements-matrix.md` auf konkrete Umsetzung und belastbare Belege abbilden.
+- [ ] T005 [OBJ-1] {(FR-003)} {(FR-004)} Unabhängiges Review von Vertrag, Adaptern und Abnahmeabdeckung in `specs/00028-dto-consolidation/evidence/review.md` aktualisieren.
+- [ ] T006 [OBJ-1] {(FR-003)} {(FR-004)} Sichtbare echte Backend-/GUI-Hauptflows und Schutzinvarianten in `specs/00028-dto-consolidation/evidence/live.md` nachweisen; Fixtures ersetzen diese Abnahme nicht.
+- [ ] T007 [OBJ-1] {(TR-001)} {(TR-002)} Vorhandene finale Suite-/C#-/Release-/Gatebelege in `specs/00028-dto-consolidation/evidence/final-checks.md` hinsichtlich Stand und Scope zuordnen; nur begründet erneut prüfen.
+- [ ] T008 [OBJ-1] {(FR-001)} {(TR-001)} Nach vollständiger Revalidierung `specs/00028-dto-consolidation/qc-report.md` aktualisieren und erst dann echte commit-/hashgebundene Completion-/QC-Marker erzeugen; offene Abnahme nicht als PASS umdeuten.

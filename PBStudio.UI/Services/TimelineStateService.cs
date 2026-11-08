@@ -14,6 +14,7 @@ public class TimelineStateService
     private readonly object _sync = new();
 
     private Task<TimelineResponse?>? _inFlightRefresh;
+    private Task<bool> _pendingSave = Task.FromResult(true);
     private ProjectOperationContext? _inFlightContext;
     private long _refreshGeneration;
     private string? _selectedClipId;
@@ -36,6 +37,27 @@ public class TimelineStateService
     {
         lock (_sync)
             return (_selectedClipId, _selectedStartTime);
+    }
+
+    public void TrackPendingSave(Task<bool> saveTask)
+    {
+        ArgumentNullException.ThrowIfNull(saveTask);
+        lock (_sync)
+            _pendingSave = saveTask;
+    }
+
+    public void MarkSaveRequired()
+    {
+        lock (_sync)
+            _pendingSave = Task.FromResult(false);
+    }
+
+    public async Task<bool> WaitForPendingSaveAsync()
+    {
+        Task<bool> pending;
+        lock (_sync)
+            pending = _pendingSave;
+        return await pending.ConfigureAwait(false);
     }
 
     public TimelineStateService(
@@ -79,6 +101,7 @@ public class TimelineStateService
             _refreshGeneration++;
             _inFlightRefresh = null;
             _inFlightContext = null;
+            _pendingSave = Task.FromResult(true);
             CurrentTimeline = null;
             _selectedClipId = null;
             _selectedStartTime = 0;

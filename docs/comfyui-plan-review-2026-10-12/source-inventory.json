@@ -1,0 +1,6690 @@
+[
+  {
+    "path": "src\\pb_studio\\__init__.py",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\ai\\__init__.py",
+    "lines": 62,
+    "sha256": "01ff45c04c8afa3eb1a533d30d6adb3dbbe88ea591f12f7a54f5da3999cf48a8",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\ai\\chat_agent.py",
+    "lines": 1237,
+    "sha256": "f022011c3be832598136f436207221e2d5c060746a774714068f54ac53d25c16",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "reset_pinned_chat_models",
+        "line": 58,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "set_status_publisher",
+        "line": 62,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_publish_status",
+        "line": 67,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ChatEvent",
+        "line": 110,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_PendingToolConfirmation",
+        "line": 119,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ToolConfirmationBroker",
+        "line": 129,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ChatAgent",
+        "line": 213,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\clap_wrapper.py",
+    "lines": 396,
+    "sha256": "d78fdcd872d1e6703cfb923c8f0aae6404f73d824a38e411020a99aac050744e",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "CLAPAnalyzer",
+        "line": 56,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\config_loader.py",
+    "lines": 33,
+    "sha256": "c5f984e01a49a22535e21a8a94536ebaa49b7837cc900f2f1eaa81badc5d28f4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "load_ai_config",
+        "line": 13,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\llm_provider.py",
+    "lines": 171,
+    "sha256": "88e200cdc8695b2c36708a626d4b548de7fe161d93afee624a4feaab24a95684",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_load_config",
+        "line": 48,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_provider",
+        "line": 60,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_base_url",
+        "line": 66,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_llm_client",
+        "line": 80,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_alive_client",
+        "line": 112,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\lmstudio_client.py",
+    "lines": 1064,
+    "sha256": "38d1bcad1a756fd8b673bfdb8281cb7afb9294de61326327d5024ceee81540cb",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_is_audio_generation_model",
+        "line": 75,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "LMStudioError",
+        "line": 100,
+        "type": "ClassDef"
+      },
+      {
+        "name": "LMStudioConnectionError",
+        "line": 104,
+        "type": "ClassDef"
+      },
+      {
+        "name": "LMStudioResponseError",
+        "line": 108,
+        "type": "ClassDef"
+      },
+      {
+        "name": "is_provider_failure",
+        "line": 121,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "LMStudioModelInfo",
+        "line": 134,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_encode_image_data_uri",
+        "line": 182,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_messages_with_images",
+        "line": 237,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_ollama_options_to_openai",
+        "line": 271,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_openai_to_ollama_chat_response",
+        "line": 299,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "LMStudioClient",
+        "line": 328,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\model_inventory.py",
+    "lines": 555,
+    "sha256": "be4933ff14168098051ec987cb3a24e73be6e11823cb3ef1b6d38321341c4cd8",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_utc_now",
+        "line": 31,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_public_base_url",
+        "line": 35,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_public_probe_error",
+        "line": 52,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_unique_matching_name",
+        "line": 57,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ProviderInventory",
+        "line": 82,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelInventoryEntry",
+        "line": 93,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelInventorySnapshot",
+        "line": 122,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_LoadedProbe",
+        "line": 138,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelInventoryService",
+        "line": 143,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_model_inventory_service",
+        "line": 542,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\model_registry.py",
+    "lines": 885,
+    "sha256": "d0e13bc48776f03c23734449c29a9cea5bd9e8b1a2f4c1d007fb4e387a4da564",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ModelRegistryError",
+        "line": 84,
+        "type": "ClassDef"
+      },
+      {
+        "name": "NoSuitableModelError",
+        "line": 88,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelSelectionReceipt",
+        "line": 93,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelFailoverExhaustedError",
+        "line": 108,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_parse_parameter_size",
+        "line": 124,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_sort_models_by_mode",
+        "line": 145,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_normalize_model_name",
+        "line": 172,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_name_matches",
+        "line": 176,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ModelRegistry",
+        "line": 193,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_is_unloadable_error",
+        "line": 756,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_unloadable_models",
+        "line": 762,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "reset_unloadable_models",
+        "line": 776,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "execute_with_model_failover",
+        "line": 781,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\siglip_wrapper.py",
+    "lines": 330,
+    "sha256": "544b73faa005510bcfad294dcc0128db4519ed617303f21876653b4c8262d2c6",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_sha256",
+        "line": 47,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_siglip_text_capability",
+        "line": 55,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "SigLIPWrapper",
+        "line": 123,
+        "type": "ClassDef"
+      },
+      {
+        "name": "encode_image",
+        "line": 328,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\smart_director.py",
+    "lines": 1596,
+    "sha256": "9e369209c3ec5a97597b778700d01cfdc2baae1059d8cfa53e819cc13cefc6b4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "SemanticAudioUnavailableError",
+        "line": 46,
+        "type": "ClassDef"
+      },
+      {
+        "name": "MoodCategory",
+        "line": 50,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AudioAnalysis",
+        "line": 64,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ClipAnalysis",
+        "line": 84,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TimelineClip",
+        "line": 105,
+        "type": "ClassDef"
+      },
+      {
+        "name": "Timeline",
+        "line": 125,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SmartDirector",
+        "line": 146,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\tool_registry.py",
+    "lines": 1072,
+    "sha256": "034c34c99cd03742f4e5d0e2d4446369e20e8c490780a59c66ae6da36da0745a",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_render_encoder_values",
+        "line": 35,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_backend_base_url",
+        "line": 57,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "project_capability_scope",
+        "line": 62,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_owner_headers_for_loopback",
+        "line": 71,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "Tool",
+        "line": 109,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ToolRegistry",
+        "line": 157,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_normalize_response",
+        "line": 208,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_call",
+        "line": 241,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_empty_schema",
+        "line": 275,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_schema",
+        "line": 279,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_coerce_int",
+        "line": 291,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_coerce_float",
+        "line": 300,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_coerce_bool",
+        "line": 309,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_coerce_str",
+        "line": 323,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_coerce_int_list",
+        "line": 329,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_h_project_create",
+        "line": 360,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_project_open",
+        "line": 372,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_project_save",
+        "line": 383,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_project_close",
+        "line": 387,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_project_info",
+        "line": 391,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_audio_import",
+        "line": 396,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_audio_list_clips",
+        "line": 407,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_audio_analyze",
+        "line": 417,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_audio_get_beats",
+        "line": 430,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_audio_get_structure",
+        "line": 437,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_audio_get_spectral",
+        "line": 444,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_audio_separate_stems",
+        "line": 451,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_video_import",
+        "line": 464,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_video_list_clips",
+        "line": 477,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_video_analyze",
+        "line": 487,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_video_get_scenes",
+        "line": 501,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_video_get_motion",
+        "line": 508,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_pacing_generate",
+        "line": 516,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_pacing_timeline",
+        "line": 543,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_pacing_preview",
+        "line": 547,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_brain_suggest",
+        "line": 558,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_brain_feedback",
+        "line": 573,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_brain_learning_session",
+        "line": 587,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_brain_stats",
+        "line": 591,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_brain_explain",
+        "line": 595,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_render_start",
+        "line": 609,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_render_status",
+        "line": 633,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_render_cancel",
+        "line": 640,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_models_list",
+        "line": 648,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_models_available",
+        "line": 652,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_models_recommendations",
+        "line": 656,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_system_health",
+        "line": 667,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_h_system_gpu_status",
+        "line": 671,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "build_default_registry",
+        "line": 678,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\ai\\video_specialist.py",
+    "lines": 561,
+    "sha256": "500c302e8c504618201fc1eee9e55a37b133ec2a79ad92b9c336d643a8652a6b",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "VideoClip",
+        "line": 25,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VideoSpecialist",
+        "line": 64,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\__init__.py",
+    "lines": 78,
+    "sha256": "5c79e7be9794629205c8716c6b06d4ac71e1fa13f9f5bd44a77820ee92112dcb",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\audio\\analyzer.py",
+    "lines": 208,
+    "sha256": "9fc0769b22124fc25ec5c164ed91a4b44067ebf9c416c5b0c3407e28d3cef5ff",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "AudioAnalyzer",
+        "line": 7,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\audio_embedder.py",
+    "lines": 106,
+    "sha256": "9b7c2d3ebdb3a3da64ae63dd460573229a438f1a21cf1b056907c7073c4a3dc5",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "AudioEmbeddingResult",
+        "line": 33,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_audio_embedder",
+        "line": 45,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "AudioEmbedder",
+        "line": 56,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_pad_to",
+        "line": 101,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\band_params.py",
+    "lines": 67,
+    "sha256": "83bb9381e2dc56ff4d58bfbebb534db38d7fd3ab2241d1eb24d2db48a7a0b61a",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "band_stft_params",
+        "line": 41,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\beat_detector.py",
+    "lines": 459,
+    "sha256": "5a3df2a5589a5caa1db0e8f1908a5440f0519f7fdca8aca3455bcd8eebb14579",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "BeatDetector",
+        "line": 128,
+        "type": "ClassDef"
+      },
+      {
+        "name": "is_beatnet_available",
+        "line": 436,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_beat_detector",
+        "line": 441,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\beat_grid.py",
+    "lines": 654,
+    "sha256": "9247dad8ef5e08a7d0597c43cfb273ff8bc537947c85224d26d4f895708c9d5b",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_kick_tolerance",
+        "line": 189,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_chance_rates",
+        "line": 204,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "BeatGrid",
+        "line": 236,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_phase_scores",
+        "line": 270,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_interp_on_grid",
+        "line": 296,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_contrast",
+        "line": 315,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_tempo_candidates",
+        "line": 326,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_refine_span",
+        "line": 348,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_refine",
+        "line": 365,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_kick_agreement",
+        "line": 384,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_resolve_phase",
+        "line": 410,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "estimate_beat_grid",
+        "line": 457,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\beat_grid_segments.py",
+    "lines": 779,
+    "sha256": "a1dcee811be32cc15fa5afeec2d87c0ee4d024649968cc304aad9f542a8ef0ad",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_tempo_match_rel",
+        "line": 92,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "GridSegment",
+        "line": 132,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_consensus_tempo",
+        "line": 187,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_fold_to_consensus",
+        "line": 222,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_best_phase",
+        "line": 244,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_phase_continues",
+        "line": 284,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_tempo_matches",
+        "line": 303,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_merge_short_segments",
+        "line": 313,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_chain_windows",
+        "line": 367,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "segment_beat_grids",
+        "line": 429,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "segment_beat_grids_from_file",
+        "line": 570,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "segments_as_payload",
+        "line": 748,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\beat_this_tracker.py",
+    "lines": 232,
+    "sha256": "6140938136b293f08e2b9dc5d7869e96835e06528a6829c997a7de0c8066070f",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "validate_assets",
+        "line": 49,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "deduplicate_peaks",
+        "line": 70,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "postprocess",
+        "line": 84,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "BeatThisTracker",
+        "line": 102,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\dj_mix_analyzer.py",
+    "lines": 258,
+    "sha256": "03ecb93897b708525f23591bd920df81e5cb2d88945360051c771f494f82d017",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "DJMixAnalyzer",
+        "line": 40,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\downbeat_alignment.py",
+    "lines": 76,
+    "sha256": "811365789a78b1e5e0e35a03b854b6b7cfba8498242e0b239b47858675d32976",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "BeatThisUnavailable",
+        "line": 11,
+        "type": "ClassDef"
+      },
+      {
+        "name": "validate_neural_events",
+        "line": 15,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "align_downbeats",
+        "line": 31,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\key_detector.py",
+    "lines": 131,
+    "sha256": "3074d017189090686bc8122070af5668c6a2c3bd02bbb84a003ea07a382e82e8",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "KeyDetector",
+        "line": 55,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\separator.py",
+    "lines": 506,
+    "sha256": "0dc3d76e98d2b81355d63e152948af44ed6fe5267e28a284c57530e77a6d1953",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "StemCheckpointError",
+        "line": 34,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_box_iou",
+        "line": 42,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_ensure_torchvision_stub",
+        "line": 60,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_vram_model_id",
+        "line": 118,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "StemSeparator",
+        "line": 129,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\spectral_analyzer.py",
+    "lines": 307,
+    "sha256": "c2b5715b079634edada7f158b53a1868ca09faea4e8c5af1f0931b657c5aae8f",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "add_aggregate_bands",
+        "line": 60,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "SpectralAnalyzer",
+        "line": 93,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\streaming_analyzer.py",
+    "lines": 1453,
+    "sha256": "102ce03dc4ecf155f204b5b726cbaac8f260e387ecefe0d4e4e58c6a147b4162",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "StreamingAnalysisResult",
+        "line": 43,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_RunningBPMEstimator",
+        "line": 72,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_BeatAccumulator",
+        "line": 98,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_EnergyAggregator",
+        "line": 183,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StreamingAudioAnalyzer",
+        "line": 275,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\structure_analyzer.py",
+    "lines": 585,
+    "sha256": "5d4891784d70daeea1248084c3af443014e27c4c6b6caa724edf1f8a994a81bb",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "StructureAnalyzer",
+        "line": 29,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\subtrack_detector.py",
+    "lines": 881,
+    "sha256": "2b749010a66c8794f969000b1676ad6fd6380d0c06e3d00bfcc247a13e9d0f8f",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "SubtrackBoundary",
+        "line": 33,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SubtrackResult",
+        "line": 40,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SubtrackDetector",
+        "line": 77,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_normalize",
+        "line": 875,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\waveform_analyzer.py",
+    "lines": 365,
+    "sha256": "43e6c734f1358115710aeb179c8b13b128d338f1713212ff59be64e73249aa1e",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "WaveformAnalyzer",
+        "line": 17,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\audio\\waveform_cache.py",
+    "lines": 236,
+    "sha256": "aaedc2362481731d842d67838b93eba76ecdf62c741a95f28b6d6d2fb93f1e81",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "WaveformCache",
+        "line": 19,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\__init__.py",
+    "lines": 30,
+    "sha256": "4bc383b20768dc6b73398e5ab0233f83590bd0a937b87089198f07a103ca0509",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\brain\\brain_service.py",
+    "lines": 539,
+    "sha256": "2683d8c6aef47e27eb64aaaeaa491679d5427c0ccc76f5e894c9e1d2ca2a00d8",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "BrainProjectNotBoundError",
+        "line": 35,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StaleBrainProjectLeaseError",
+        "line": 39,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainProjectIdentity",
+        "line": 44,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_ProjectConnectionSlot",
+        "line": 54,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainStateLease",
+        "line": 62,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainService",
+        "line": 146,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\bridge_dimensions.py",
+    "lines": 259,
+    "sha256": "d36267eb524b632e08872105c3a9de4102bd8bc53f3bb309ddf3062d892856cf",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "canonical_mood_tags",
+        "line": 82,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "CandidateFeatures",
+        "line": 95,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BridgeDimensions",
+        "line": 127,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_clip01",
+        "line": 200,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_axis_is_available",
+        "line": 206,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_audio_mood_score",
+        "line": 217,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cosine_zero_one",
+        "line": 236,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\cold_start.py",
+    "lines": 32,
+    "sha256": "d2f87e38225d438270dff1d0ec00174e2ad09b875f91be26c24f858106a5d0e5",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\brain\\context_resolver.py",
+    "lines": 150,
+    "sha256": "35e169545076e5e84668616156cb419d458487083550ef31d6c68d9c33a61c0e",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "CutContext",
+        "line": 22,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ContextResolver",
+        "line": 48,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\cross_modal_projector.py",
+    "lines": 685,
+    "sha256": "fbbcd4ea763cfe205f9033f010353bd4925a39c93ede6be31796a43d36c6be14",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "prepare_training_embedding",
+        "line": 58,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "CrossModalProjector",
+        "line": 82,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_default_projector",
+        "line": 623,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "publish_default_projector",
+        "line": 649,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "restore_v1_projector",
+        "line": 657,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "reset_default_projector",
+        "line": 681,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\feature_adapter.py",
+    "lines": 569,
+    "sha256": "2b1327f7db03389fbe8f77da429e5a6b27bd7f7d24ab08a7837e5f328b8df3a6",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "CanonicalFeatureAdapter",
+        "line": 13,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_analysis_confidence",
+        "line": 283,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_analysis_stage_valid",
+        "line": 305,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_motion_measurement",
+        "line": 320,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_motion_value",
+        "line": 336,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_has_scene_boundary",
+        "line": 340,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_build_axis_status",
+        "line": 352,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_normalize_unit_curve",
+        "line": 442,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_has_finite_sequence",
+        "line": 448,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_normalize_percentile_curve",
+        "line": 457,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_value_at_time",
+        "line": 470,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_nearest_scene_distance",
+        "line": 478,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_canonical_segment",
+        "line": 490,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_semantic_availability",
+        "line": 513,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_valid_embedding",
+        "line": 530,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_canonical_semantic_status",
+        "line": 546,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_clip01",
+        "line": 551,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_nonnegative",
+        "line": 555,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_optional_float",
+        "line": 559,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_finite_float",
+        "line": 567,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\feedback_logger.py",
+    "lines": 844,
+    "sha256": "f530c21cabd903643e37b28ae042af6355a7f8fd820d65965dd85482c6cf1314",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "FeedbackOperationConflictError",
+        "line": 64,
+        "type": "ClassDef"
+      },
+      {
+        "name": "FeedbackLogResult",
+        "line": 69,
+        "type": "ClassDef"
+      },
+      {
+        "name": "FeedbackLogger",
+        "line": 74,
+        "type": "ClassDef"
+      },
+      {
+        "name": "build_credit_assignments",
+        "line": 785,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_levels_for_axis",
+        "line": 835,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\llm_narrator.py",
+    "lines": 608,
+    "sha256": "666698c98f5e033b2f989e663bbb79c4fe07dde23b1acb3ce27aeca46ffa6765",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "set_status_publisher",
+        "line": 47,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_publish_status",
+        "line": 52,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "reset_pinned_narrator_models",
+        "line": 116,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cache_get",
+        "line": 120,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cache_put",
+        "line": 124,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "clear_narrative_cache",
+        "line": 134,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_humanize_axis",
+        "line": 140,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_format_axis_list",
+        "line": 164,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_build_user_prompt",
+        "line": 182,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_content_hash",
+        "line": 210,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_post_process_narrative",
+        "line": 238,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_async_generate_explanation",
+        "line": 280,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "generate_explanation",
+        "line": 547,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\loader_cache.py",
+    "lines": 99,
+    "sha256": "54849f10d0996bc2b3fc22cc7777092ae04760b14b8f5a7cd1382f08d145c900",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "LoaderCache",
+        "line": 22,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_default_loader_cache",
+        "line": 84,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "clear_default_loader_cache",
+        "line": 94,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\post_processor.py",
+    "lines": 455,
+    "sha256": "6e10df222d7de26cc4745fba518a8c4f2fc6ba8736930519a4aa1a53c77f720d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "annotate_cuts_with_brain",
+        "line": 29,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_annotate_and_maybe_persist_cut",
+        "line": 167,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_enclosing_subtrack",
+        "line": 283,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_audio_embedding",
+        "line": 303,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_video_embedding",
+        "line": 324,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cached_lookup",
+        "line": 345,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_embedding_dimension",
+        "line": 383,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_ensure_timeline",
+        "line": 410,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_persist_cut",
+        "line": 426,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\projector_trainer.py",
+    "lines": 333,
+    "sha256": "81111a25531d3b166db8c8eea3ff67f7401f0557b83ad77a0a3d7e9fbfd0be33",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ProjectTrainingSource",
+        "line": 55,
+        "type": "ClassDef"
+      },
+      {
+        "name": "collect_training_pairs",
+        "line": 63,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_usable_embedding",
+        "line": 132,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "run_fit_step",
+        "line": 145,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "run_v2_fit_step",
+        "line": 176,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\reranker.py",
+    "lines": 50,
+    "sha256": "ba56062375d520a8c80c4ce66c162547fccb8e5dd9ff84aa840e6fdf25fce90d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "RerankInput",
+        "line": 20,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainReranker",
+        "line": 25,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\scorer.py",
+    "lines": 43,
+    "sha256": "d5e9c8cf6027a50748cbe041fe07170a5bcf297f61ad2de917bbbc1e1e4fd8a4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ScoredCandidate",
+        "line": 14,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainScorer",
+        "line": 22,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\smart_sampler.py",
+    "lines": 162,
+    "sha256": "0ef56da5cf1ecc5052eaff1285667c36051cf4895bc1261b5a216473c1c151c2",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "CutForSampling",
+        "line": 30,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SmartSampler",
+        "line": 39,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\brain\\weight_store.py",
+    "lines": 307,
+    "sha256": "8d28c6bea92a44e6219c8505e5778303d3a8afe0de4c8397d2a1d5474b42b8f6",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "WeightStore",
+        "line": 40,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\config_manager.py",
+    "lines": 483,
+    "sha256": "3501ab180c42182f538b03f3b45aeb2fe50c61c2a34f65f1bcf2eec7c944ebaf",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ConfigManager",
+        "line": 40,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\__init__.py",
+    "lines": 87,
+    "sha256": "670688a6a05ed3392a8e6fea59863ffba83315aa9e364e91105e1baa8f4b1932",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\core\\crash_handler.py",
+    "lines": 37,
+    "sha256": "5a3235298e5da4bb54e72477b3cc6973edbbd35aa20c5bd1112219c15ef283ad",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "CrashHandler",
+        "line": 7,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\directml_adapter.py",
+    "lines": 493,
+    "sha256": "a09a5544b23349ed5ec27fd876302fb3bd4162eae92f48c42deaf01ed592bfee",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "DirectMLAdapterError",
+        "line": 22,
+        "type": "ClassDef"
+      },
+      {
+        "name": "DirectMLAdapter",
+        "line": 27,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_unsigned_hresult",
+        "line": 98,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_check_hresult",
+        "line": 102,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_com_method",
+        "line": 109,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_release",
+        "line": 130,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_query_interface",
+        "line": 135,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_format_luid",
+        "line": 153,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_adapter_desc",
+        "line": 160,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_high_performance_luid",
+        "line": 172,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "enumerate_dxgi_adapters",
+        "line": 202,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validated_device_id",
+        "line": 270,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_with_selection",
+        "line": 278,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "select_directml_adapter",
+        "line": 304,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_directml_adapter",
+        "line": 388,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_directml_provider",
+        "line": 424,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "configure_directml_session_options",
+        "line": 430,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "enforce_directml_session",
+        "line": 442,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\gpu_lock.py",
+    "lines": 13,
+    "sha256": "0063a3670400374ce58acc65e9e214fea5f9c0058ae42f2c896c868defc8a950",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\core\\media_hash.py",
+    "lines": 51,
+    "sha256": "e5f4e36e694acfada226c5aa5255021e6e3249104462b8e3475f097cd38e6576",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "media_hash",
+        "line": 20,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\model_loader.py",
+    "lines": 581,
+    "sha256": "09e8083d2bf0365595bd37895b43b990ae1a5799e1558943baec129a7588884b",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ModelType",
+        "line": 41,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelSpec",
+        "line": 49,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelLoader",
+        "line": 134,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_model_loader",
+        "line": 555,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "load_model",
+        "line": 560,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "unload_model",
+        "line": 574,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_session",
+        "line": 579,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\system_monitor.py",
+    "lines": 674,
+    "sha256": "0783fef796850b4ea2b8c693ee27a47cc99b3f6447a11783d0893ede97cb9edd",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_read_local_regular_file",
+        "line": 30,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_verified_lhm_bundle",
+        "line": 41,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "SystemMonitor",
+        "line": 145,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\task_queue.py",
+    "lines": 41,
+    "sha256": "f65b6b98f559c866439cdf07d918f70e75b125d8256fdc50992ee01852769c78",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "TaskPriority",
+        "line": 9,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TaskItem",
+        "line": 15,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TaskQueue",
+        "line": 22,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\thread_pool.py",
+    "lines": 80,
+    "sha256": "17a4f99e7c7f9eb65a02a2399b7a0af5384e14a1293f3adde60e76e4b929b8ae",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "Worker",
+        "line": 10,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ThreadPoolManager",
+        "line": 59,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\vram_budget_manager.py",
+    "lines": 1090,
+    "sha256": "214bfc38f6933692117271a16af5cbf9cb5a7ab3f5cf49d2c28b39aec3858d9f",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ModelPriority",
+        "line": 37,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VRAMAllocationError",
+        "line": 46,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelBudget",
+        "line": 52,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_duration_bucket_label",
+        "line": 110,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_vram_bucket_label",
+        "line": 118,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_empty_duration_histogram",
+        "line": 126,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_empty_vram_histogram",
+        "line": 132,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "TelemetryEntry",
+        "line": 139,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VRAMBudgetManager",
+        "line": 177,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VRAMContext",
+        "line": 1021,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_vram_manager",
+        "line": 1088,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\core\\worker_signals.py",
+    "lines": 27,
+    "sha256": "6fb3b93cf5abfb8c42b090afefaad8b4738c7bc366c60111b97950c27dbd3156",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "WorkerSignals",
+        "line": 3,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\data\\__init__.py",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\data\\database_core.py",
+    "lines": 450,
+    "sha256": "189b80ea4fc27bbcdfc522ab35358384f18a08c899899c9953fa29112b2a5239",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "legacy_project_uuid",
+        "line": 16,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_iter_sql_statements",
+        "line": 26,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "normalize_media_path",
+        "line": 175,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "DatabaseCore",
+        "line": 187,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\data\\repositories\\__init__.py",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\data\\repositories\\media_repository.py",
+    "lines": 420,
+    "sha256": "000458a73ec1616950cf92e724d1ac239686a1fd6e3bf981ad6da0aee2865e54",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_is_video_path",
+        "line": 30,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_migrate_metadata_for_path",
+        "line": 34,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_migrate_ai_data_for_path",
+        "line": 45,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_serialize_meta",
+        "line": 56,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_deserialize_meta_str",
+        "line": 75,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_is_retryable_lock_error",
+        "line": 108,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_retry_on_database_lock",
+        "line": 125,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "MediaRepository",
+        "line": 175,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\data\\repositories\\project_repository.py",
+    "lines": 259,
+    "sha256": "4938db8b6d174338c6c629aabb27e6f1213f3b9d1538b530740a66c05a695f2b",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_project_payload_with_uuid",
+        "line": 16,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_is_retryable_lock_error",
+        "line": 24,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_retry_on_database_lock",
+        "line": 29,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ProjectRepository",
+        "line": 62,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\data\\schemas\\__init__.py",
+    "lines": 1,
+    "sha256": "a25ddeb9de0d776dd50f2d7b7f3f5f53dc9fe91a23b6e068831e34ed9843e1ce",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\data\\schemas\\media_json_schema.py",
+    "lines": 182,
+    "sha256": "f2937aff22e1f9e1429487b61129c90be94707c9df449de1a4dd02af6b860082",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "has_schema_version",
+        "line": 38,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "bump_schema",
+        "line": 43,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_migrate_with_chain",
+        "line": 49,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_v0_to_v1_audio_metadata",
+        "line": 87,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_v0_to_v1_audio_ai_data",
+        "line": 98,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "migrate_audio_metadata",
+        "line": 115,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "migrate_audio_ai_data",
+        "line": 119,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_v0_to_v1_video_metadata",
+        "line": 127,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_v0_to_v1_video_ai_data",
+        "line": 134,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "migrate_video_metadata",
+        "line": 177,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "migrate_video_ai_data",
+        "line": 181,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\data\\vector_operation_outbox.py",
+    "lines": 328,
+    "sha256": "1262011dee3bb1cd756a74282c83409b9fcc4c068cbf31266fd749ec2e2cffa2",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "VectorOperationOutbox",
+        "line": 25,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\data\\vector_store.py",
+    "lines": 912,
+    "sha256": "b7ca1695595a9fa41a58106421abd454c9c361354d1029fba6bd2aa10abd6bf0",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_RestrictedMetadataUnpickler",
+        "line": 33,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_validate_legacy_metadata",
+        "line": 42,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_legacy_json_value",
+        "line": 56,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "VectorStore",
+        "line": 96,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\models\\__init__.py",
+    "lines": 46,
+    "sha256": "48868cd77f67a99245a960b3ecd926f139a28983b2c901074fd2e82dbd1c7e89",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\models\\audio.py",
+    "lines": 177,
+    "sha256": "ea2ab88c3c09f82333e9de5ee829016a933f42be308567e5b0c0bd5e06533b13",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "AudioMetadata",
+        "line": 11,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BeatInfo",
+        "line": 40,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AudioAnalysisResult",
+        "line": 66,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StemResult",
+        "line": 115,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AudioEmbeddingResult",
+        "line": 147,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\models\\timeline.py",
+    "lines": 269,
+    "sha256": "30b3f29706a3a0f52e8be9ca413db596025058f28e45c1ed0e488d8f7f87f18d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "TransitionType",
+        "line": 12,
+        "type": "ClassDef"
+      },
+      {
+        "name": "CutPoint",
+        "line": 22,
+        "type": "ClassDef"
+      },
+      {
+        "name": "CutPlan",
+        "line": 81,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RenderSegment",
+        "line": 149,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RenderResult",
+        "line": 214,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\models\\video.py",
+    "lines": 192,
+    "sha256": "486f88243e585a321e92f6f443e105d813963d2a8852245b0da8208fde6eb8c5",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "VideoMetadata",
+        "line": 10,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SceneInfo",
+        "line": 63,
+        "type": "ClassDef"
+      },
+      {
+        "name": "MotionData",
+        "line": 104,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VideoAnalysisResult",
+        "line": 152,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\pacing\\__init__.py",
+    "lines": 48,
+    "sha256": "cc0839bab409f5da30c18d6f349d6d60895077f2c2983751db1a3fda7c07b77f",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\pacing\\advanced_pacing_engine.py",
+    "lines": 2625,
+    "sha256": "842de0a3e67e1bf070d9ad8090236c1411edfa8148b43e4b6a49c41d8e77ae29",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_key_compatibility_score",
+        "line": 116,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "SyncMode",
+        "line": 137,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TransitionType",
+        "line": 145,
+        "type": "ClassDef"
+      },
+      {
+        "name": "PacingConfig",
+        "line": 155,
+        "type": "ClassDef"
+      },
+      {
+        "name": "CutPoint",
+        "line": 185,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AdvancedPacingEngine",
+        "line": 202,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\pacing\\clip_selector.py",
+    "lines": 1660,
+    "sha256": "0f2bd7c8c0521b4a5261f997c4f479c972d6f8555f23b008588d3a06da063c5d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "LRUCache",
+        "line": 44,
+        "type": "ClassDef"
+      },
+      {
+        "name": "belongs_to_theme",
+        "line": 121,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ClipMetadata",
+        "line": 155,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ClipSelector",
+        "line": 175,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\pacing\\constants.py",
+    "lines": 103,
+    "sha256": "2226f0fb4b4693acc6761c365004a20db503d8221b206b620d04d7cff6493c6f",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\pacing\\pacing_models.py",
+    "lines": 236,
+    "sha256": "dc9638148ecfa1b5aadd0a1bcc6c76b92c431a0bb914a63cf5235fb565c30e2c",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "PacingCut",
+        "line": 21,
+        "type": "ClassDef"
+      },
+      {
+        "name": "CutListEntry",
+        "line": 35,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SelectionProvenance",
+        "line": 44,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SelectedClip",
+        "line": 100,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TriggerSettings",
+        "line": 145,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SongSection",
+        "line": 212,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TimelineEntry",
+        "line": 226,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\pacing\\timeline_models.py",
+    "lines": 46,
+    "sha256": "5cc2b1c6321fb60e1b455b78b285ff64ed19a77e812303e9427352a54c0536d1",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "TimelineClip",
+        "line": 17,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\rendering\\__init__.py",
+    "lines": 25,
+    "sha256": "012e2177bf686ab23105d0c925cf8ea5fbe09a8f12d881d2c33ceb456a4bf9c5",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\rendering\\preview_renderer.py",
+    "lines": 261,
+    "sha256": "61a89dc64cb352c579d42bedb4def6cc8b10112566353d86acf34c441cb8e49d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_preview_encoder_args",
+        "line": 29,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "TimelineEntry",
+        "line": 36,
+        "type": "ClassDef"
+      },
+      {
+        "name": "PreviewGenerator",
+        "line": 53,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\rendering\\render_queue.py",
+    "lines": 712,
+    "sha256": "d795492615cf707c8f3383437e1dde520ae5f4a6e93d99d6e06a6ac624d434a0",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "normalize_progress_percent",
+        "line": 87,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "select_terminal_retention",
+        "line": 105,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_normalize_settings",
+        "line": 203,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "compute_settings_hash",
+        "line": 208,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "compute_job_hash",
+        "line": 214,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "RenderJob",
+        "line": 225,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RenderQueue",
+        "line": 258,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_render_queue",
+        "line": 689,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "reset_for_tests",
+        "line": 704,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\rendering\\render_service.py",
+    "lines": 2002,
+    "sha256": "70b9813ce086654cefb9314683e55d2858954dfcaf655e6e06afc5004d13b050",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "RenderCancelledError",
+        "line": 33,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_fps_fraction",
+        "line": 50,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_expected_frame_count",
+        "line": 64,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_clip_path_str",
+        "line": 69,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_clip_source_range",
+        "line": 87,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "RenderService",
+        "line": 112,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\runtime_contract.py",
+    "lines": 59,
+    "sha256": "e38c6e8247de0582e0ca7b76cd7132ddb19e2c93b56cd4132da123fe069a2255",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_manifest",
+        "line": 14,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_sha256",
+        "line": 24,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "verified_ffmpeg_pair",
+        "line": 33,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ffmpeg_path",
+        "line": 54,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ffprobe_path",
+        "line": 58,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\services\\__init__.py",
+    "lines": 23,
+    "sha256": "1f72c41f2b2e4b7c08b191320e7df54f67562025c0a2e866741312fa5374d8cf",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\services\\audio_service.py",
+    "lines": 74,
+    "sha256": "745c0473b8db195de9f1ff875e39ef1e6093f6ea83d89cd99e4a1985b0530aaa",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "AudioService",
+        "line": 17,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_audio_service",
+        "line": 67,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\services\\pacing_service.py",
+    "lines": 1715,
+    "sha256": "dbd0c20d3de2e784c93f45850d9bad3f3a0869c2d883664f790f63c3e15f7371",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "select_theme_for_chapter",
+        "line": 36,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_uses_advanced_pacing",
+        "line": 56,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_repair_legacy_trigger_settings",
+        "line": 68,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "PacingService",
+        "line": 95,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\__init__.py",
+    "lines": 11,
+    "sha256": "e6ce91c4d51f236fd991b6885524d894411de33d86594236606ad6041ef578ec",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\storage\\backup.py",
+    "lines": 85,
+    "sha256": "43039e88ac2c6aa1d4491d66bfabd74547e2e401087d0f41171f8eb33ff68ae4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "backup_brain_store",
+        "line": 19,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "prune_backups",
+        "line": 68,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\brain_store.py",
+    "lines": 155,
+    "sha256": "66c1e7c42be36b0ae3d72aedf0d714255b08185d339b0c735993eebb9f11c8be",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "default_brain_dir",
+        "line": 31,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "BrainStore",
+        "line": 39,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\embedding_cache.py",
+    "lines": 218,
+    "sha256": "2c98e35412147f24e90e694acfef10a82d9b2a28f4b18782ec09245fec8462be",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "CacheEntry",
+        "line": 30,
+        "type": "ClassDef"
+      },
+      {
+        "name": "EmbeddingCache",
+        "line": 40,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\embedding_repository.py",
+    "lines": 429,
+    "sha256": "d9025d73115b92147b94adbe3a950c36e46e69ca58292743264cd08b962de129",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "AudioUnit",
+        "line": 29,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VideoUnit",
+        "line": 41,
+        "type": "ClassDef"
+      },
+      {
+        "name": "KnnHit",
+        "line": 57,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_migrations_root",
+        "line": 63,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "EmbeddingRepository",
+        "line": 67,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\migration_runner.py",
+    "lines": 227,
+    "sha256": "caa14dffa529162fc9d275a0b65fa15f5827516368fc30cec49acf97378ad26e",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "split_sql_statements",
+        "line": 19,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "migrate",
+        "line": 76,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "migrate_project_state",
+        "line": 147,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\recovery_adapters.py",
+    "lines": 789,
+    "sha256": "b53192e29276c8c3ed437b20a1ae228e7aaf1d58d1f010e122183f83afef503c",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "RecoveryOwnerAdapterError",
+        "line": 25,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RecoveryOwnerSnapshot",
+        "line": 30,
+        "type": "ClassDef"
+      },
+      {
+        "name": "OwnerGenerationValidation",
+        "line": 44,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_sha256_bytes",
+        "line": 50,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_sha256_file",
+        "line": 54,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_json_object",
+        "line": 62,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_json_value",
+        "line": 72,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_sqlite_connection",
+        "line": 79,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_table_exists",
+        "line": 93,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_paths_below_key",
+        "line": 100,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_catalog_inventory",
+        "line": 119,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_resolved_projects",
+        "line": 229,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "owner_snapshot_digests",
+        "line": 251,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_empty_outbox",
+        "line": 270,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_vector_triplet",
+        "line": 280,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_vector",
+        "line": 289,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_project_files",
+        "line": 328,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_brain_files",
+        "line": 360,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_logical_id",
+        "line": 396,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_unique_paths",
+        "line": 401,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_configured_stem_run_roots",
+        "line": 406,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_add_absence_tombstone",
+        "line": 418,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_add_previous_inventory_tombstones",
+        "line": 445,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "add_owner_snapshot",
+        "line": 523,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "create_owner_generation",
+        "line": 736,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "validate_owner_generation",
+        "line": 759,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\recovery_barrier.py",
+    "lines": 136,
+    "sha256": "48abf50df4012bfbb9035c17538f59e99c12846f286a63ad418109ca056951b0",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "RecoveryBusyError",
+        "line": 13,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RecoveryWriteBarrier",
+        "line": 17,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_recovery_write_barrier",
+        "line": 102,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "recovery_write_operation",
+        "line": 109,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\recovery_generation.py",
+    "lines": 998,
+    "sha256": "7d9fec134aecdb3b092bf7c8ff5f63db560291ee242592f2e4e1ef51ebf754f2",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "RecoveryGenerationError",
+        "line": 30,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RecoveryGenerationValidationError",
+        "line": 34,
+        "type": "ClassDef"
+      },
+      {
+        "name": "CommittedGeneration",
+        "line": 39,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RetentionPlan",
+        "line": 47,
+        "type": "ClassDef"
+      },
+      {
+        "name": "request_restore_generation",
+        "line": 56,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_ArtifactSpec",
+        "line": 99,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_ExternalReferenceSpec",
+        "line": 113,
+        "type": "ClassDef"
+      },
+      {
+        "name": "fixed_control_root",
+        "line": 122,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_utc_now",
+        "line": 130,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_generation_id",
+        "line": 134,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_digest",
+        "line": 144,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_sha256",
+        "line": 150,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_fsync_file",
+        "line": 158,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_fsync_parent",
+        "line": 163,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_atomic_write_json",
+        "line": 180,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_read_json",
+        "line": 194,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_volume_id",
+        "line": 208,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_is_reparse_point",
+        "line": 213,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_generation_dir",
+        "line": 222,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_artifact_relpath",
+        "line": 239,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_copy_file_durable",
+        "line": 245,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_backup_sqlite",
+        "line": 257,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "validate_generation",
+        "line": 299,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "load_current_generation",
+        "line": 406,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "validate_committed_journal",
+        "line": 428,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "RecoveryGenerationWriter",
+        "line": 461,
+        "type": "ClassDef"
+      },
+      {
+        "name": "plan_protected_retention",
+        "line": 887,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "apply_protected_retention",
+        "line": 953,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\storage\\sqlite_init.py",
+    "lines": 29,
+    "sha256": "667ab860799eac56e8e12ed58efe10717862c15d1689d1cb2fd8a2052d11a8e0",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "init_connection",
+        "line": 21,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "checkpoint",
+        "line": 27,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\utils\\__init__.py",
+    "lines": 22,
+    "sha256": "8af52d3d1867f4c48f36e9ebfb5bd0d8af08a3050ff7a8843b06ad228399717c",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\utils\\cache_manager.py",
+    "lines": 92,
+    "sha256": "9edc7783d1a2ff342ca31a8881e07e790bfe66ae1c5daff208bb17b814300bf5",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "CacheManager",
+        "line": 17,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\utils\\log_rotation.py",
+    "lines": 220,
+    "sha256": "d93d1426805409222cba85ed49efad8b1a6f10d75fa2b0224c7123c320e1aa7d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_gzip_namer",
+        "line": 59,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_gzip_rotator",
+        "line": 68,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "cleanup_old_logs",
+        "line": 92,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "create_rotating_handler",
+        "line": 137,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "setup_rotating_logging",
+        "line": 169,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\utils\\path_helpers.py",
+    "lines": 40,
+    "sha256": "69bdd37c04f5f78fcf9b6256e670dc29b243453634df5c911c1ae207a332e779",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "get_clip_path",
+        "line": 12,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_clip_path_str",
+        "line": 20,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "normalize_path",
+        "line": 26,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ensure_parent_exists",
+        "line": 31,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "escape_path_for_ffmpeg",
+        "line": 37,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\utils\\profiling.py",
+    "lines": 34,
+    "sha256": "85a8527aa7836b54688c9a83597eb23648f9d1a6a228caad5531e94333aade87",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "profile_block",
+        "line": 11,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "Profiler",
+        "line": 21,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\__init__.py",
+    "lines": 68,
+    "sha256": "68a90ab536d3b4e4095dca5c95466210af40de3a20b5d86245d61fe02458e117",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "src\\pb_studio\\video\\audio_key_detector.py",
+    "lines": 127,
+    "sha256": "eb9b62bac14cc7886150be2f9e89d0206668de9e9782d42fe7631c5419cea95d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "has_video_audio_stream",
+        "line": 21,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "detect_video_audio_key",
+        "line": 55,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\auto_tagger.py",
+    "lines": 91,
+    "sha256": "3b533dc167c8132c496cabca4bc4ee6ec7f197fb80136b9f9e81412e470ee7d0",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "extract_tags",
+        "line": 64,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "aggregate_clip_tags",
+        "line": 78,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\clip_audio_peaks.py",
+    "lines": 59,
+    "sha256": "91218f9686764a5f36bb49ecec4c0928a4e92751e1ae0d0bc5509ba2210dc3a5",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "extract_peaks",
+        "line": 17,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\encoder_utils.py",
+    "lines": 376,
+    "sha256": "6f9a559064e6170ef0d5454744afbf269247d35220889efb4db2581e5b0a91af",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "Codec",
+        "line": 27,
+        "type": "ClassDef"
+      },
+      {
+        "name": "Quality",
+        "line": 34,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RateControl",
+        "line": 41,
+        "type": "ClassDef"
+      },
+      {
+        "name": "EncoderConfig",
+        "line": 50,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_get_ffmpeg_path",
+        "line": 70,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_ffprobe_path",
+        "line": 75,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_amf_device_args",
+        "line": 80,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "check_ffmpeg_available",
+        "line": 88,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "invalidate_encoder_cache",
+        "line": 96,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "check_amf_available",
+        "line": 102,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "check_av1_amf_available",
+        "line": 175,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_encoder_config",
+        "line": 217,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_preview_encoder",
+        "line": 294,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_export_encoder",
+        "line": 311,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "build_ffmpeg_encode_args",
+        "line": 334,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "reset_availability_cache",
+        "line": 349,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_encoder_info",
+        "line": 358,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\frame_extractor.py",
+    "lines": 140,
+    "sha256": "3181360000a5fd96a53131c7fc14b463672eaa0189ef177c907e9c8f3e78a5eb",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_bounded_duration",
+        "line": 18,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "FrameGrabber",
+        "line": 31,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\lmstudio_vision_wrapper.py",
+    "lines": 802,
+    "sha256": "26c0063ccb82aec8c1e23872d5573da720ff976ad0470098cef8f140e81072be",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_ist_warm_unlocked",
+        "line": 87,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_ist_warm",
+        "line": 101,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cold_start_lock_for",
+        "line": 107,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "begin_vision_task_lease",
+        "line": 112,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "end_vision_task_lease",
+        "line": 119,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "active_vision_task_lease",
+        "line": 132,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "reset_pinned_vision_models",
+        "line": 157,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_acquire_cold_start_lock",
+        "line": 165,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "set_status_publisher",
+        "line": 177,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_publish_status",
+        "line": 182,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_normalize_tag",
+        "line": 235,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_is_invalid_response",
+        "line": 288,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_looks_like_prose",
+        "line": 295,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_parse_tags",
+        "line": 322,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_frame_hash",
+        "line": 400,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cache_get",
+        "line": 415,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cache_put",
+        "line": 419,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_async_extract_tags",
+        "line": 431,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "extract_tags_and_model_via_lmstudio_async",
+        "line": 637,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "extract_tags_and_model_via_lmstudio",
+        "line": 699,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "extract_tags_via_lmstudio",
+        "line": 737,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "clear_tag_cache",
+        "line": 771,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\moondream.py",
+    "lines": 727,
+    "sha256": "7496c1bc9e5fac3952ddff9114fb648d8062de5e6da5712b327f6f3f62e01474",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "onnx_models_available",
+        "line": 65,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "MoondreamAnalyzer",
+        "line": 94,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\moondream_wrapper.py",
+    "lines": 276,
+    "sha256": "bdef1a0379e52a5551e795bbb6fe1e8a0cb7c0ed98d3c6f60c6d765c762dd375",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_extract_dominant_color_clusters",
+        "line": 20,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "extract_dominant_colors",
+        "line": 74,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "extract_dominant_colors_with_weights",
+        "line": 91,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "compute_color_features",
+        "line": 99,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "extract_tags_via_moondream",
+        "line": 201,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\raft.py",
+    "lines": 804,
+    "sha256": "39a4a5cf50d239e4220ab754e8482b6474b45015be46f203c45dbb3dba5fa37d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "MotionAnalyzer",
+        "line": 43,
+        "type": "ClassDef"
+      },
+      {
+        "name": "create_motion_analyzer",
+        "line": 783,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\scene_detect.py",
+    "lines": 83,
+    "sha256": "e7920da0f03916667395614e32200a17f87dde06e396ba4ecb1d331d24510a51",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "SceneDetector",
+        "line": 6,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\thumbnail_generator.py",
+    "lines": 92,
+    "sha256": "6dc680b6bc5b8c109fe77960b8a1be43e8c9ae17bf01c063b6dcc320a51810f5",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "generate_clip_thumbnail",
+        "line": 15,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "batch_generate_thumbnails",
+        "line": 69,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\video_embedder.py",
+    "lines": 125,
+    "sha256": "b736e79148b2b2179a06881690373901c2b82c36fcb0fed451af33ddb0ffbbb5",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "VideoEmbeddingResult",
+        "line": 35,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_video_embedder",
+        "line": 46,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "VideoEmbedder",
+        "line": 57,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_resize_emb",
+        "line": 120,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "src\\pb_studio\\video\\visual_curves.py",
+    "lines": 102,
+    "sha256": "7c64a880ace48e5f4b3b966a6cddc542de0e7353aebe04cf40abef258fc3a500",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "VisualCurveResult",
+        "line": 22,
+        "type": "ClassDef"
+      },
+      {
+        "name": "compute_visual_curves",
+        "line": 29,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_frame_metrics",
+        "line": 82,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\__init__.py",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "backend\\_brain_singleton.py",
+    "lines": 122,
+    "sha256": "323df0ec740d65758df386a5a439fcfb05ca5dcc1e6ab67518c426a9860272f4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "get_brain_service",
+        "line": 24,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "set_project_state",
+        "line": 28,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "project_state_lease",
+        "line": 49,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "current_project_state_path",
+        "line": 66,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "current_project_state_identity",
+        "line": 70,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "clear_project_state",
+        "line": 74,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\app_state.py",
+    "lines": 1845,
+    "sha256": "6de94ffbb9071429e5820170898e81bc93d1dca920e74353d63d58071063d11b",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "PersistenceError",
+        "line": 36,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_emit_persist_error",
+        "line": 44,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_persistence_error",
+        "line": 74,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "persistence_error",
+        "line": 83,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_thumbnail_exists_for_clip",
+        "line": 92,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "resolve_project_db_id",
+        "line": 116,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ProjectOperationContext",
+        "line": 129,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ProjectContextChangedError",
+        "line": 137,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ProjectContextUnavailableError",
+        "line": 141,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AppState",
+        "line": 152,
+        "type": "ClassDef"
+      },
+      {
+        "name": "get_app_state",
+        "line": 1843,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\config.py",
+    "lines": 116,
+    "sha256": "d10bf72be828d691d4a2a06b4b218b427e6b69168c1976f35df50aa95627a820",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_default_documents_dir",
+        "line": 24,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ServerConfig",
+        "line": 69,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\dependencies.py",
+    "lines": 550,
+    "sha256": "4fcd0ac8383d4d062f657683690a3de6a5f5156853a4c93f332ee26cc995cf3e",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "with_gpu_task",
+        "line": 29,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "set_main_loop",
+        "line": 256,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_event_queue",
+        "line": 262,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "unregister_event_queue",
+        "line": 281,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_event_queue_drop_metrics",
+        "line": 289,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_record_event_drop",
+        "line": 297,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_enqueue_event",
+        "line": 312,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_next_event_sequence",
+        "line": 396,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_journaled_events_since",
+        "line": 402,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_event_journal_gap",
+        "line": 425,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "reset_event_journal",
+        "line": 442,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_fanout_event",
+        "line": 450,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "publish_event",
+        "line": 474,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "publish_event_threadsafe",
+        "line": 483,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "publish_log",
+        "line": 508,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "SSELogHandler",
+        "line": 521,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\main.py",
+    "lines": 824,
+    "sha256": "efe0cabf99bc2a6865bd375aef0f1508cde110ee0559f74dc43f1a339761fae8",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "get_uptime",
+        "line": 127,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_sweep_stale_temp_artifacts",
+        "line": 142,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "lifespan",
+        "line": 175,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_downgrade_openapi_to_3_0",
+        "line": 455,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_custom_openapi",
+        "line": 482,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "GpuStatusResponse",
+        "line": 522,
+        "type": "ClassDef"
+      },
+      {
+        "name": "GpuCleanupResponse",
+        "line": 538,
+        "type": "ClassDef"
+      },
+      {
+        "name": "health_check",
+        "line": 544,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "health_proof",
+        "line": 554,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "heartbeat",
+        "line": 560,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "gpu_status",
+        "line": 566,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "gpu_cleanup",
+        "line": 621,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "shutdown",
+        "line": 702,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_check_gpu_available",
+        "line": 735,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_force_exit",
+        "line": 744,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\media_path_policy.py",
+    "lines": 230,
+    "sha256": "7e0b820e237baaf64e31f31105838ca6b9c47a98d307b5ad782c024c1eae8e48",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "MediaPathPolicyError",
+        "line": 18,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_reject_unsafe_reference",
+        "line": 22,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "canonical_local_media_file",
+        "line": 51,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "canonical_local_media_reference",
+        "line": 65,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_path_key",
+        "line": 100,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "validate_registered_media_path",
+        "line": 104,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "validate_timeline_media_paths",
+        "line": 133,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "validate_media_catalog",
+        "line": 172,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "validate_owned_media_file",
+        "line": 214,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\middleware\\__init__.py",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "backend\\middleware\\gpu_lock.py",
+    "lines": 83,
+    "sha256": "1287440fe48e59cd86ba46e078251d9a9e61bceecb7dc635cb0017ed3882b039",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "GPULockMiddleware",
+        "line": 32,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\middleware\\owner_capability.py",
+    "lines": 122,
+    "sha256": "ce266b0d5e06ddeab62fac06c6dc5b48a2710bc15fa17331ea89c17c877263b4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_project_conflict",
+        "line": 29,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_shutdown_response",
+        "line": 36,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_call_next_or_shutdown",
+        "line": 46,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "OwnerCapabilityMiddleware",
+        "line": 61,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\owner_capability.py",
+    "lines": 53,
+    "sha256": "349ffb0f3af056e7d8d701689245f839c205dba20dacb694ad064da162c5276e",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "get_owner_capability",
+        "line": 19,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "authorize_owner",
+        "line": 24,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "create_health_proof",
+        "line": 37,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\recovery_bootstrap.py",
+    "lines": 1049,
+    "sha256": "d7e21208039475be13bdc358ba9930260f2e8a574bf2f1aaec9d154373c9faf7",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "RecoveryBootstrapError",
+        "line": 34,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RecoveryBootstrapResult",
+        "line": 39,
+        "type": "ClassDef"
+      },
+      {
+        "name": "fixed_control_root",
+        "line": 45,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_sha256",
+        "line": 53,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_read_json",
+        "line": 61,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_fsync_file",
+        "line": 71,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_fsync_parent",
+        "line": 76,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_atomic_write_json",
+        "line": 93,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_is_reparse_point",
+        "line": 108,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_generation_dir",
+        "line": 117,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_generation",
+        "line": 137,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_artifact_record",
+        "line": 177,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_delete_scope",
+        "line": 218,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_is_stem_owner_name",
+        "line": 255,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_replace_target",
+        "line": 273,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_delete_owned_target",
+        "line": 294,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_artifact_target_matches",
+        "line": 310,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_apply_generation",
+        "line": 316,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_delete_manifest_only_targets",
+        "line": 353,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_delete_dirty_new_targets",
+        "line": 392,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_recover_generation",
+        "line": 418,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_external_references",
+        "line": 459,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_current_pointer",
+        "line": 483,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validated_current",
+        "line": 488,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_runtime_variable_inventory",
+        "line": 508,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_scan_runtime_variable_targets",
+        "line": 574,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_runtime_dirty",
+        "line": 603,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_dirty_matches_current",
+        "line": 630,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_dirty_matches_journal_previous",
+        "line": 641,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_clear_runtime_dirty_file",
+        "line": 653,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_acquire_backend_lock",
+        "line": 666,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "mark_runtime_dirty",
+        "line": 703,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "clear_runtime_dirty",
+        "line": 723,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_committed_journal",
+        "line": 742,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_commit_current",
+        "line": 767,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "ensure_recovery_ready",
+        "line": 782,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\recovery_runtime.py",
+    "lines": 101,
+    "sha256": "118b847b04e216224ee82c057f9111297e94a91fb1b2734c5d33e514ab8f50f7",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_recover_cold_brain_outbox",
+        "line": 10,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "create_runtime_recovery_generation",
+        "line": 44,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\__init__.py",
+    "lines": 19,
+    "sha256": "186a06fba66a22905b10443e6ce8b57f9eb1bb4b3aaf11da8bf80a0760642bc2",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "backend\\routers\\audio_router.py",
+    "lines": 3538,
+    "sha256": "c03587565b998305b2ae20fbc131dd7bb0a899e4629f484fb7b00b0db5bee748",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_same_audio_source",
+        "line": 61,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stem_timeout_for_duration",
+        "line": 78,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_find_reusable_stem_files",
+        "line": 84,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_required_stem_roles",
+        "line": 153,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_exact_stem_role",
+        "line": 162,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stem_source_identity",
+        "line": 173,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stem_artifact_file_identity",
+        "line": 185,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stem_model_identity",
+        "line": 210,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stem_cache_marker_path",
+        "line": 249,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stem_partial_marker_path",
+        "line": 268,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stem_run_output_dir",
+        "line": 279,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validated_stem_output_record",
+        "line": 299,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_partial_stem_outputs",
+        "line": 342,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_checkpoint_partial_stem",
+        "line": 392,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_write_stem_cache_marker",
+        "line": 451,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_beat_detector",
+        "line": 514,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "import_audio",
+        "line": 537,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_import_audio_in_context",
+        "line": 552,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "list_clips",
+        "line": 694,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "delete_clip",
+        "line": 754,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "delete_clips_batch",
+        "line": 777,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_has_current_audio_embedding",
+        "line": 810,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_store_audio_embedding_in_brain_cache",
+        "line": 836,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_AudioAnalysisInterrupted",
+        "line": 940,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_evaluate_beat_grid",
+        "line": 981,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_audio_stage_result_is_valid",
+        "line": 1086,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_plan_audio_analysis",
+        "line": 1131,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_audio_plan_has_work",
+        "line": 1148,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_audio_stream_resume_checkpoints",
+        "line": 1155,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_merge_audio_chunk_checkpoint_evidence",
+        "line": 1181,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_merge_audio_analysis_result",
+        "line": 1222,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "analyze_audio",
+        "line": 1292,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_analyze_audio_in_context",
+        "line": 1318,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_beats",
+        "line": 1715,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_onsets",
+        "line": 1738,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_waveform",
+        "line": 1764,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "separate_stems",
+        "line": 1813,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_separate_stems_in_context",
+        "line": 1828,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_structure",
+        "line": 2057,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_spectral",
+        "line": 2083,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_require_completed_audio_stage",
+        "line": 2109,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_legacy_audio_stage_payload_available",
+        "line": 2134,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_probe_audio_info",
+        "line": 2156,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_emit_analysis_progress",
+        "line": 2196,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_track_neural_downbeats",
+        "line": 2211,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_run_audio_analysis",
+        "line": 2274,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_extract_waveform",
+        "line": 3293,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_run_stem_separation",
+        "line": 3336,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\brain_router.py",
+    "lines": 853,
+    "sha256": "d87a9cac97516e48c12d2891493539837b594df34749c9d62c541ed8921bf8d8",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_project_identity_for_context",
+        "line": 53,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_acquire_project_state_lease",
+        "line": 59,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_authorize_reset_owner",
+        "line": 77,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "suggest",
+        "line": 82,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "feedback",
+        "line": 151,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "learning_session",
+        "line": 295,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_fit_projector_v2",
+        "line": 387,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_maybe_train_projector",
+        "line": 473,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "stats",
+        "line": 499,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "reset",
+        "line": 625,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "explain",
+        "line": 670,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\chat_router.py",
+    "lines": 535,
+    "sha256": "fdc80bc0d7d1c1f0e973131cdbd8d9fcc06da3dc0c8901c7f0058f995e04ec90",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_ChatHistoryStore",
+        "line": 44,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_bind_history_to_active_project",
+        "line": 238,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "ChatHistoryEntry",
+        "line": 261,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ChatMessageRequest",
+        "line": 266,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ToolInventoryEntry",
+        "line": 277,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ToolInventoryResponse",
+        "line": 286,
+        "type": "ClassDef"
+      },
+      {
+        "name": "HistoryResponse",
+        "line": 291,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StatusResponse",
+        "line": 296,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_sse_frame",
+        "line": 303,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "post_message",
+        "line": 309,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "approve_tool_confirmation",
+        "line": 478,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "reject_tool_confirmation",
+        "line": 491,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_tools",
+        "line": 504,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_history",
+        "line": 517,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "clear_history",
+        "line": 528,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\events_router.py",
+    "lines": 276,
+    "sha256": "617fe7c5242256a148567639c925f441ab049826e257150305455318e43e7f84",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_register_client_queue",
+        "line": 35,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_cleanup_client_queue",
+        "line": 47,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_event_stream",
+        "line": 61,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_parse_last_event_id",
+        "line": 151,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "progress_stream",
+        "line": 164,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "log_stream",
+        "line": 197,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "gpu_stream",
+        "line": 213,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\health_router.py",
+    "lines": 158,
+    "sha256": "c13e3da067f4dfbee81f5a1bceb84488f31a45ea6046f6e3963fc9de5ac3767e",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "vram_health",
+        "line": 36,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_persist_vram_limit",
+        "line": 77,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "update_vram_limit",
+        "line": 117,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\models_router.py",
+    "lines": 1433,
+    "sha256": "8ddfd696281a191dbe14c7ca1daf5afc021b52d81c8e2d637abddd1fbd8a396d",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ModelListEntry",
+        "line": 101,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ProviderStatusEntry",
+        "line": 134,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelListResponse",
+        "line": 144,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AvailableModelEntry",
+        "line": 159,
+        "type": "ClassDef"
+      },
+      {
+        "name": "DiscoverAction",
+        "line": 175,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AvailableModelsResponse",
+        "line": 182,
+        "type": "ClassDef"
+      },
+      {
+        "name": "PullRequest",
+        "line": 192,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RecommendationResponse",
+        "line": 201,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModeRequest",
+        "line": 216,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ProviderRequest",
+        "line": 220,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ActivateRequest",
+        "line": 224,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TestRequest",
+        "line": 241,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelSelectionReceiptSchema",
+        "line": 251,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModelTestResponse",
+        "line": 274,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_enrich_model_entry",
+        "line": 284,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_ai_config",
+        "line": 382,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_resolve_inventory_matches",
+        "line": 394,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_provider_root",
+        "line": 423,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_unload_provider_models",
+        "line": 430,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "unload_all_llm_runtimes_for_standby",
+        "line": 480,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_require_selected_provider",
+        "line": 488,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_require_idle_vision_runtime",
+        "line": 502,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_model_smoke_response_text",
+        "line": 518,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "select_provider",
+        "line": 529,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "list_models",
+        "line": 611,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "list_available_models",
+        "line": 737,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "ollama_pull_generator",
+        "line": 823,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "pull_model",
+        "line": 878,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "delete_model",
+        "line": 928,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "recommend_model",
+        "line": 1035,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "activate_model",
+        "line": 1098,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "update_ki_mode",
+        "line": 1274,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "test_model",
+        "line": 1312,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\pacing_router.py",
+    "lines": 1383,
+    "sha256": "21c2e487b6f8699793ca14dfb2562fa08a19397e092a66242ed02834174551e7",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "TimelineUpdateBodyLimitRoute",
+        "line": 51,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_collect_runtime_degradations",
+        "line": 122,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_resolve_stem_paths",
+        "line": 213,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_ui_anchors",
+        "line": 258,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_requires_video_analysis",
+        "line": 285,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_pacing_stage_payload_is_valid",
+        "line": 294,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stage_is_absent_by_capability",
+        "line": 360,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_missing_pacing_stages",
+        "line": 382,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_normalize_video_analysis_ids",
+        "line": 410,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_validate_pacing_analysis_preflight",
+        "line": 423,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "generate_cut_list",
+        "line": 509,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_generate_cut_list_for_project",
+        "line": 525,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_timeline",
+        "line": 836,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "update_timeline",
+        "line": 888,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_update_timeline_for_project",
+        "line": 904,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "generate_preview",
+        "line": 993,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_generate_preview_for_project",
+        "line": 1009,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_cap_entries_against_source",
+        "line": 1102,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_emit_pacing_progress",
+        "line": 1183,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_run_pacing_generation",
+        "line": 1208,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_render_preview",
+        "line": 1349,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\project_router.py",
+    "lines": 1165,
+    "sha256": "6f13c86765a7fdacfc31164e875c2a6cf3ad91b71bb97f1eb78f2e949c9f4702",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_announce_project_change",
+        "line": 52,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_utc_now_iso",
+        "line": 73,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_bind_brain_to_project",
+        "line": 77,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_project_meta_path",
+        "line": 103,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_timeline_path",
+        "line": 107,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_write_creation_owner",
+        "line": 111,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_prepare_project_state_db",
+        "line": 129,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_remove_owned_creation_directory",
+        "line": 141,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_compensate_project_creation",
+        "line": 171,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_find_or_create_project_db_record",
+        "line": 199,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_find_project_db_record_id",
+        "line": 219,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_catalog_project_uuid",
+        "line": 228,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_read_project_meta",
+        "line": 252,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_meta_name",
+        "line": 263,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_write_project_meta",
+        "line": 283,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_restore_file_snapshot",
+        "line": 298,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_normalize_timeline_entries",
+        "line": 311,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_timeline_into_state",
+        "line": 340,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_timeline_payload",
+        "line": 393,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "persist_timeline_for_context",
+        "line": 407,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_activate_project",
+        "line": 478,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "create_project",
+        "line": 536,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "open_project",
+        "line": 674,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "save_project",
+        "line": 839,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_save_project_in_context",
+        "line": 852,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "close_project",
+        "line": 958,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "AnchorEntry",
+        "line": 1035,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AnchorListResponse",
+        "line": 1043,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_anchors_path",
+        "line": 1048,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "load_project_anchors",
+        "line": 1052,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_anchors",
+        "line": 1084,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "set_anchors",
+        "line": 1104,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "project_info",
+        "line": 1151,
+        "type": "AsyncFunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\render_router.py",
+    "lines": 1650,
+    "sha256": "c26dc9d9f33f4e408913ec190ba6588a0311da843471e967f542239a2706fafa",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_reset_render_runtime_for_startup",
+        "line": 79,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_track_render_runtime_task",
+        "line": 86,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_shutdown_active_renders",
+        "line": 100,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_canonical_identity_path",
+        "line": 161,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stored_render_media_hashes",
+        "line": 166,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_compute_render_media_hash",
+        "line": 236,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_build_render_identity",
+        "line": 269,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_request_settings_dict",
+        "line": 293,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_queue_update_or_raise",
+        "line": 333,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_safe_queue_update",
+        "line": 363,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_preflight_render_request",
+        "line": 374,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_validate_render_media_contract",
+        "line": 401,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_reject_render_output_identity",
+        "line": 433,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_resume_media_state",
+        "line": 474,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_resume_render_queue_on_startup",
+        "line": 555,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "start_render",
+        "line": 749,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_start_render_for_project",
+        "line": 772,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "render_status",
+        "line": 956,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_cleanup_old_render_tasks",
+        "line": 967,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_finalize_timeline_for_render",
+        "line": 1036,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "cancel_render",
+        "line": 1087,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_run_render_task_bound",
+        "line": 1105,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_run_render_task",
+        "line": 1151,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_RenderCancelled",
+        "line": 1371,
+        "type": "ClassDef"
+      },
+      {
+        "name": "_acquire_gpu_lock_or_cancel",
+        "line": 1387,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_execute_render",
+        "line": 1404,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\routers\\video_router.py",
+    "lines": 3057,
+    "sha256": "35949e4d833ec18e09f00df039da43ac4237b9e18c66d9baca72414f9a351d9c",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "_capability_is_unavailable",
+        "line": 81,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_cached_motion_analyzer",
+        "line": 90,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_discard_cached_motion_analyzer",
+        "line": 101,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_cached_siglip_wrapper",
+        "line": 110,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_discard_cached_siglip_wrapper",
+        "line": 121,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_empty_video_analysis_result",
+        "line": 130,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_video_stage_data_is_valid",
+        "line": 154,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_stage_status_keys_for_phase",
+        "line": 210,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_drop_unknown_stage_keys",
+        "line": 215,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_video_stage_should_run",
+        "line": 237,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_video_analysis_resume_base",
+        "line": 256,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_merge_video_stage_outcome",
+        "line": 289,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_set_video_audio_key_outcome",
+        "line": 318,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_merge_frame_tags",
+        "line": 339,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_without_articles",
+        "line": 416,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_looks_english",
+        "line": 420,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_tag_stems",
+        "line": 424,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_same_tag_meaning",
+        "line": 431,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_derive_video_analysis_status",
+        "line": 453,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_video_analysis_status",
+        "line": 468,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_load_persisted_video_analysis",
+        "line": 484,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_persist_video_analysis_outcome",
+        "line": 510,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_compensate_new_video_embedding",
+        "line": 609,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_restore_video_embedding_after_compensation",
+        "line": 634,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_commit_pending_video_embedding",
+        "line": 660,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_store_video_embedding_in_brain_cache",
+        "line": 683,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_dedupe_old_video_embeddings",
+        "line": 738,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "import_videos",
+        "line": 770,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_import_videos_in_project",
+        "line": 786,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "list_clips",
+        "line": 931,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_thumbnail",
+        "line": 1058,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_thumbstrip",
+        "line": 1118,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_extract_thumbstrip",
+        "line": 1155,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "get_clipwave",
+        "line": 1180,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_extract_clip_peaks",
+        "line": 1202,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "delete_clip",
+        "line": 1214,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "delete_clips_batch",
+        "line": 1237,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "analyze_video",
+        "line": 1273,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_analyze_video_in_project",
+        "line": 1300,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_scenes",
+        "line": 1714,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "get_motion",
+        "line": 1753,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_get_video_info",
+        "line": 1789,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_generate_thumbnail",
+        "line": 1845,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_run_scene_detection",
+        "line": 1879,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_positive_duration",
+        "line": 1911,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_bound_scene_result_to_duration",
+        "line": 1922,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_representative_frame_indices",
+        "line": 1956,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_addressable_frame_count",
+        "line": 1979,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_read_sample_frame",
+        "line": 1994,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_select_motion_peak_frames",
+        "line": 2018,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_get_reusable_embedding_metadata",
+        "line": 2059,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_run_video_gpu_analysis",
+        "line": 2139,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_run_moondream_inference_on_frames",
+        "line": 2451,
+        "type": "FunctionDef"
+      },
+      {
+        "name": "_publish_caption_progress",
+        "line": 2470,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_caption_progress_heartbeat",
+        "line": 2495,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_run_color_and_caption_analysis",
+        "line": 2550,
+        "type": "AsyncFunctionDef"
+      },
+      {
+        "name": "_classify_motion",
+        "line": 3049,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\__init__.py",
+    "lines": 1,
+    "sha256": "219595cc2674854dddad34047e25a782daa4dec28f647e43155abc5ac0e43e05",
+    "parse": "pass",
+    "symbols": []
+  },
+  {
+    "path": "backend\\schemas\\audio_schemas.py",
+    "lines": 169,
+    "sha256": "e5dec1a23f8f472b52f13f4279ab221cdb3b256b295c472821412115b14a21f0",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "AudioImportRequest",
+        "line": 8,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AudioClipInfo",
+        "line": 13,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SubtrackSegment",
+        "line": 37,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AudioAnalyzeRequest",
+        "line": 46,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BeatData",
+        "line": 57,
+        "type": "ClassDef"
+      },
+      {
+        "name": "AudioAnalysisResult",
+        "line": 64,
+        "type": "ClassDef"
+      },
+      {
+        "name": "WaveformRequest",
+        "line": 106,
+        "type": "ClassDef"
+      },
+      {
+        "name": "WaveformData",
+        "line": 111,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StemModel",
+        "line": 119,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StemSeparateRequest",
+        "line": 128,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StemResult",
+        "line": 134,
+        "type": "ClassDef"
+      },
+      {
+        "name": "StructureSegment",
+        "line": 145,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SpectralData",
+        "line": 154,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\brain_schemas.py",
+    "lines": 173,
+    "sha256": "9585c7e62c19ea5ee291036bfa31e39edecfa80dfddfc399211f77950e76cc50",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "BrainScoreEntry",
+        "line": 10,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainSuggestRequest",
+        "line": 17,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainSuggestion",
+        "line": 23,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainSuggestResponse",
+        "line": 32,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainFeedbackRequest",
+        "line": 36,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainFeedbackResponse",
+        "line": 58,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainLearningSessionResponse",
+        "line": 65,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainStatsBucket",
+        "line": 69,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainStatsResponse",
+        "line": 84,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainResetRequest",
+        "line": 120,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainResetResponse",
+        "line": 124,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainAxisContribution",
+        "line": 130,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BrainExplainResponse",
+        "line": 148,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\common.py",
+    "lines": 163,
+    "sha256": "0606d9446c76e1c264e7b30fad485b6bcdb4315413d0f15f36a14c91e7eb512f",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "StatusResponse",
+        "line": 9,
+        "type": "ClassDef"
+      },
+      {
+        "name": "BatchDeleteRequest",
+        "line": 15,
+        "type": "ClassDef"
+      },
+      {
+        "name": "DeleteResponse",
+        "line": 20,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ErrorResponse",
+        "line": 26,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ProgressEvent",
+        "line": 33,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TaskStatus",
+        "line": 43,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TaskInfo",
+        "line": 52,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TimelineEntry",
+        "line": 62,
+        "type": "ClassDef"
+      },
+      {
+        "name": "validate_timeline",
+        "line": 79,
+        "type": "FunctionDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\health_schemas.py",
+    "lines": 118,
+    "sha256": "79be033455d37f425ad45ae758299fef029ff85e537627812af6a6aa8b5a602c",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "VramModelEntry",
+        "line": 18,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramBudgetStats",
+        "line": 26,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramDurationStats",
+        "line": 42,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramPeakStats",
+        "line": 50,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramTelemetryEntry",
+        "line": 57,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramTelemetrySummary",
+        "line": 68,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramTelemetryMulti",
+        "line": 76,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramHealthResponse",
+        "line": 86,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramHealthSingleResponse",
+        "line": 97,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramLimitRequest",
+        "line": 108,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VramLimitResponse",
+        "line": 113,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\pacing_schemas.py",
+    "lines": 180,
+    "sha256": "a822fb3c5b5a5a8f145d8a3ad617928269f52fe86f8d848004de5a91011aa1f8",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "PreviewRequest",
+        "line": 13,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TriggerSettingsSchema",
+        "line": 20,
+        "type": "ClassDef"
+      },
+      {
+        "name": "PacingConfigSchema",
+        "line": 56,
+        "type": "ClassDef"
+      },
+      {
+        "name": "CutListEntrySchema",
+        "line": 106,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ModeDegradationSchema",
+        "line": 118,
+        "type": "ClassDef"
+      },
+      {
+        "name": "CutListResponse",
+        "line": 131,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TimelineEntrySchema",
+        "line": 141,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TimelineResponse",
+        "line": 163,
+        "type": "ClassDef"
+      },
+      {
+        "name": "TimelineUpdateRequest",
+        "line": 170,
+        "type": "ClassDef"
+      },
+      {
+        "name": "PreviewResponse",
+        "line": 175,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\project_schemas.py",
+    "lines": 27,
+    "sha256": "a46f7546f6736d530a5085067aba7c6c63bf907469ab5c1171cb2721feeaa7f9",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "ProjectCreate",
+        "line": 7,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ProjectOpen",
+        "line": 13,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ProjectInfo",
+        "line": 18,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\render_schemas.py",
+    "lines": 106,
+    "sha256": "aada937e25b8356786a7898bb95de45adf8502d934fe3047b2cbe71a5c20c7a4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "RenderQuality",
+        "line": 11,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RenderEncoder",
+        "line": 19,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RenderRequest",
+        "line": 26,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RenderProgress",
+        "line": 62,
+        "type": "ClassDef"
+      },
+      {
+        "name": "RenderResult",
+        "line": 98,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "backend\\schemas\\video_schemas.py",
+    "lines": 137,
+    "sha256": "fb0ad930c1e00320733388fc5920cd55c494fe2bcb089a701c50d41cdaa978d4",
+    "parse": "pass",
+    "symbols": [
+      {
+        "name": "VideoImportRequest",
+        "line": 7,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VideoClipInfo",
+        "line": 12,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VideoAnalyzeRequest",
+        "line": 46,
+        "type": "ClassDef"
+      },
+      {
+        "name": "VideoAnalysisResult",
+        "line": 59,
+        "type": "ClassDef"
+      },
+      {
+        "name": "SceneInfo",
+        "line": 100,
+        "type": "ClassDef"
+      },
+      {
+        "name": "MotionData",
+        "line": 108,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ThumbstripResponse",
+        "line": 122,
+        "type": "ClassDef"
+      },
+      {
+        "name": "ClipwaveResponse",
+        "line": 129,
+        "type": "ClassDef"
+      }
+    ]
+  },
+  {
+    "path": "PBStudio.UI\\App.xaml",
+    "lines": 122,
+    "sha256": "87575e84bbfde9901064545f750320278ad79d0642349bb4f65ca4fe46b73d31",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\App.xaml.cs",
+    "lines": 269,
+    "sha256": "51b347d7a5f1063ffea4356477f0a1b424aa0020fa16ecf8cf2e9d3c09c444fd",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Controls\\CachedTabControl.cs",
+    "lines": 262,
+    "sha256": "46e2beb9b2a299a799310d4e8344d8fdb64994885e08b134c15a21d9d2a0755c",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Controls\\DepthRenderer.cs",
+    "lines": 111,
+    "sha256": "cc29d3c3877290ea1e0bd4076b9f58a23f48e03c426567cc873ef2cae67903a4",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Controls\\ProgressBarWithLabel.xaml",
+    "lines": 45,
+    "sha256": "4b9cad35af33f1502c25ebcf3d4c7ee19e93a6612d6899a0033919e7ab5d668e",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Controls\\ProgressBarWithLabel.xaml.cs",
+    "lines": 97,
+    "sha256": "0a388fbe64867423e5be71a86c3d14552070c2e91419a91fcecdf25f29bf2135",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Controls\\VirtualizingWrapPanel.cs",
+    "lines": 381,
+    "sha256": "451d794f1df2efcd5e3e08e04355c44cc90aceb6d3166c2d4214202b5f1ccc86",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Controls\\WaveformRenderer.cs",
+    "lines": 129,
+    "sha256": "10b4f9e7ced5e2dd9b6807243ef7db2ddcbb2e42a95026d8be18da550ea5403c",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Converters\\ConfidenceToBrushConverter.cs",
+    "lines": 44,
+    "sha256": "cf4f5c1fb9fc5b595ab7e11cc1f5f19e3985e4066b0efee8322de1b021e321d3",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Converters\\InverseBooleanToVisibilityConverter.cs",
+    "lines": 30,
+    "sha256": "355c13357df8a08cf5220353b4e2b1531b5d0e2c11b02da2b7a9588fef757de2",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Converters\\MotionToHeightConverter.cs",
+    "lines": 36,
+    "sha256": "58fcdb5240e406d0798f8d3d0780b8551e76e8798adb4bb32c1d50fbfef3f791",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Converters\\NullToVisibilityConverter.cs",
+    "lines": 48,
+    "sha256": "785c406be219886d1d9ea716d20b67ed0e9a27a9055d86608ff67b7bba695b5a",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Converters\\PeaksToWaveformGeometryConverter.cs",
+    "lines": 42,
+    "sha256": "1cc2ad5bf2dad3284e0747b2fb5eeaa53eff0cf97cd6984315ce93efa42b1ed2",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Converters\\StatusTextToBrushConverter.cs",
+    "lines": 31,
+    "sha256": "d44390bbc7b1c1f5ecd8e3a0833776ed4f6d31c16f8a66ea939d15b63db0e4a2",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Converters\\TimeToPixelConverter.cs",
+    "lines": 37,
+    "sha256": "018c2ddd473b704e9764c3b327fa1e4c217b71e573fb5b77dab7fdaa8a097e2c",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Helpers\\RulerRenderer.cs",
+    "lines": 66,
+    "sha256": "7a9f1da6825d6601f325d941e45024785b778044be33f4815e9aa370d5aaf9d6",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Helpers\\SnapEngine.cs",
+    "lines": 69,
+    "sha256": "34466ce9b71f3e4cb33968f29e27b39b2ee8dab0dd7eba7b80730332456a6dba",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Helpers\\TimelineSeekCalculator.cs",
+    "lines": 29,
+    "sha256": "973022de2322fdf55295a10614f6a8c6a54805e5765dd2eac9f729e71f1911e4",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\MainWindow.xaml",
+    "lines": 242,
+    "sha256": "0e2ecae244b4d1434ea467183af157ca8e4f14f40b27125b1a992401c24fe6fe",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\MainWindow.xaml.cs",
+    "lines": 109,
+    "sha256": "3529ed72d69a25bfce2ecda16086ddd98dc52173e1e5a8bd5f5daa538f485317",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\AnchorModels.cs",
+    "lines": 20,
+    "sha256": "762502d47a7d1fcd3c7c452db7159a775eb0a5c18c3c9e5136e602b31395676f",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\AudioClip.cs",
+    "lines": 63,
+    "sha256": "76165e5f1887dc8529e43898881a9efaa71b1be12c48b0563b47158c3a59d593",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\AvailableModelsResponse.cs",
+    "lines": 41,
+    "sha256": "d91769e97a2bbdc5b599322c213bda02395f41aa62e6160b368843b9616295af",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\BeatMarkerViewModel.cs",
+    "lines": 39,
+    "sha256": "bfdf68340a3b469e1b3e1641e2751cd9f7b5a6b5f7a93ed5c4dbfbd27b14b0d2",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\BrainExplainResponse.cs",
+    "lines": 41,
+    "sha256": "24aa0de2b2cedce04a18074a987d236c3d6dfe634c6fc626c3fd05c1b779e2c2",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\ChatEvent.cs",
+    "lines": 49,
+    "sha256": "15b12dc408307aacf68885c6fee950113662dfbf062507c1399f638c15d13fc5",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\ChatMessage.cs",
+    "lines": 52,
+    "sha256": "2571a09678d8b111bb41fd8f416b83ee8358891e6dbe5cc3042a92fd66d880f6",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\ClipwaveResponse.cs",
+    "lines": 2,
+    "sha256": "863d3c906c0da71cb1643c66fc9d249d1328e5eb381d195dbc296fd2994db3db",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\ModelListResponse.cs",
+    "lines": 63,
+    "sha256": "a093b2dd8c5df667a949955201f7b016e71b9e603b9c18bfc2be6d8eeabefb33",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\ModelRecommendationResponse.cs",
+    "lines": 25,
+    "sha256": "f9df7e83c1074b2379276c642251102e31cce3be40e90765a9b8b8ce33e00357",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\ModelTestResponse.cs",
+    "lines": 30,
+    "sha256": "1a5eaa41b3c39f62f54135badde4cc5c6c80fd4258e52fbdef1c074862e4d918",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\PullProgressEvent.cs",
+    "lines": 34,
+    "sha256": "cbb3b992a8fffdea1ccb4cdf9e1c965438a033bde1462333544c2f2f1c77a797",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\SongSegmentModel.cs",
+    "lines": 15,
+    "sha256": "554e59ca13a2c1ac1968681b3a0720f453c96ded3fee071f76c1ec5273c06953",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\SpectralDataModel.cs",
+    "lines": 44,
+    "sha256": "9d044b3ae8164a52b820dbd384be3d5fac67eb67f768266d9b14ba9955396f1c",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\ThumbstripResponse.cs",
+    "lines": 2,
+    "sha256": "dd89b1b10d54b790f654f66a78c07df5ce12281ce817dea19ae13dc6b389d31a",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\TimelineEntry.cs",
+    "lines": 69,
+    "sha256": "c693e191f60d5851481413a3395d6e1625bf1e6c69eb7fcf8394cb2b21e521d0",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\VideoClip.cs",
+    "lines": 97,
+    "sha256": "58a24fc634c72090f83302cd4748fcbbcc3b946562e1d522e3223610391f8823",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\VramTelemetry.cs",
+    "lines": 50,
+    "sha256": "24b681d1c44423d8baadc5fb441c5ef6a3db443f39337a4f4ca7f71c1c32e520",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Models\\WaveformBarModel.cs",
+    "lines": 10,
+    "sha256": "dfef8b104372ac847988ff4a89adba68114cfd1b49379026204e6c9ec417d57d",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\PBStudio.UI.csproj",
+    "lines": 54,
+    "sha256": "58229db3acc19d5df830435bd49867c35b54a42c223ca9d2708e648df8c5e10a",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\ApiClient.cs",
+    "lines": 1618,
+    "sha256": "b984eb117d441a1aa508b610bb8468bd9612c37d673d70a4d28716a7e5c87ce4",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\AudioLibraryStateService.cs",
+    "lines": 102,
+    "sha256": "b288c4264d8c220b54e0a7cd69184fb2c46c181ea416ffd9cbf6168e3b0b78b5",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\BackendOwnerCapability.cs",
+    "lines": 284,
+    "sha256": "8bb70f56a1a70845d2b94b361d4629b53b269e6c41762bd4b7dfb1fc875cc454",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\BrainFeedbackAppliedMessage.cs",
+    "lines": 20,
+    "sha256": "9b8de2880fd3dc594342266a3e376c1f09069df18063b0498883c738649c72bd",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\DialogService.cs",
+    "lines": 76,
+    "sha256": "22fa44607440ff03c12218e89086f32cc26e566446360133a0d0d4fe5829b08e",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\FileLoggerProvider.cs",
+    "lines": 116,
+    "sha256": "4769947bb416ff242f66f8d71bf5722d4fff28ebcaea33b41a18412f0bb1e58b",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\IApiClient.cs",
+    "lines": 165,
+    "sha256": "6957fb57a573b0e136b306704bb81700c3c52a95945946db15d3dcd89362282b",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\IDialogService.cs",
+    "lines": 34,
+    "sha256": "bc35f4f16ec71ad8ddcd9041f3cf878a9c3ce351b9db963b4dbf6847b7d17bc9",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\IProviderSelectionApi.cs",
+    "lines": 10,
+    "sha256": "57a45ff28d158b227e475dcef60b132ad52c9ed98f40838017072bc8dfe8b1fa",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\LocalMediaPathPolicy.cs",
+    "lines": 115,
+    "sha256": "6a932dee639339526470c0ce721619a9306ce356bbeccb9437384c9e269f18b7",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\Messages\\AppMessages.cs",
+    "lines": 36,
+    "sha256": "c37742184f883af21fe9af488739bfc28ff1dcf4d64bc23630abb771b792c87b",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\OwnerCapabilityRequestHandler.cs",
+    "lines": 57,
+    "sha256": "da55a74d6c1d83caf23bf44c1f188fadda5713c5caba958163eaa04cd3283acd",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\ProjectService.cs",
+    "lines": 396,
+    "sha256": "572830247158658c40e85368ca0dd420954f4cec4a5e4af64429360f922f5ba8",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\PromptDialog.cs",
+    "lines": 60,
+    "sha256": "a44dc638b54e63ce80bfdb9b875e1f049ee5521ac559c8a9cb8d348fb72a5ff8",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\PythonBridgeService.cs",
+    "lines": 874,
+    "sha256": "a9752f219ad0df9aa11c3fb4611f7c8a08651497cc61af81ffcca3394d86b278",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\SettingsService.cs",
+    "lines": 474,
+    "sha256": "434b93e5f08a55df3f5a90efc72242444ee3e23e82fceee07f86fdc13abe8289",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\SSEClient.cs",
+    "lines": 717,
+    "sha256": "dbb04d9f45d0a6cc3a7c2adc38cdc892d4c46b09149114569290c65732a01389",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\TerminalLogBuffer.cs",
+    "lines": 94,
+    "sha256": "b95ab71373ae956cd2ecc0cacfcc421a7ec8ba8ce481454f6b36b86c2e197ef9",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\TerminalLoggerProvider.cs",
+    "lines": 124,
+    "sha256": "9f6aee3784ffaf0e57967ae8bf472965126824dd16651673814b50598934c38b",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\TimelineStateService.cs",
+    "lines": 159,
+    "sha256": "9da373eb50f91fc89eac742973dc4115678ee0592b35830fd52a2c3786a8bd14",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Services\\VideoLibraryStateService.cs",
+    "lines": 108,
+    "sha256": "99d2c5fdfee9e2c0a505d13b58158f2ce36142f42304855b1fae0b12a712f2b9",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\AnchorViewModel.cs",
+    "lines": 643,
+    "sha256": "af8b44586b8293d233ee4e334a3ac5f9ea03d61d3cd2397b4d7ccb50acce46e5",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\AudioLibraryViewModel.cs",
+    "lines": 941,
+    "sha256": "ae0d6050a3ddd18a949351613f97617c636e1d553f6e69e7f791686ba5fe4665",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\BrainViewModel.cs",
+    "lines": 439,
+    "sha256": "96bb4b1dc7c6533ded45256c87ebdb5c056eb3954919944a23f3a0f5e100033f",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\ChatViewModel.cs",
+    "lines": 618,
+    "sha256": "72ab386691129b5902f388d3ebed49fd883138755f47723a560ccb21a43a7041",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\DirectorViewModel.cs",
+    "lines": 693,
+    "sha256": "1fddb214a1185a43a5bab8c9eaa8ab5a84f6d3ab748e41dbe3a9466967c59be8",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\LearningSessionViewModel.cs",
+    "lines": 313,
+    "sha256": "66675eaa7ab662bc620d985f81d2ea32778400b397ce7cc7c0142b2a984d02a3",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\MainViewModel.cs",
+    "lines": 318,
+    "sha256": "32dcf0a383ecaf26f131beb69813009f166c1f0779d4075788a9d28539d82327",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\ModelManagerViewModel.cs",
+    "lines": 814,
+    "sha256": "8f7fd8e90061376c938652f9ba6760e5f912bba50a2bd0ce9087977a7fb9d699",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\ProductionViewModel.cs",
+    "lines": 610,
+    "sha256": "df67e6893745db91f8bb1133d7337928e606d3946aab0e7f00ef0be188e6a299",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\ProjectOverviewViewModel.cs",
+    "lines": 250,
+    "sha256": "c89fc92c59516825a227d5d183d84089ca8e1548ac1f68e28f7cf7be177e4cee",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\SettingsViewModel.cs",
+    "lines": 609,
+    "sha256": "e21c09135b559ed864eb00fdabf80546cf7b6e260709a6a1966f31efea5181df",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\TerminalViewModel.cs",
+    "lines": 101,
+    "sha256": "65c86b3c6d6c9bebcb0a1e7de95dcc835b6691ae583ac8f0ec1c00ce7f81bbe0",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\TimelineViewModel.cs",
+    "lines": 1630,
+    "sha256": "287a5f7bd0b786cae1772b75b695d00fecc8806d114f35931a0e0887dfbaa5fa",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\VideoLibraryViewModel.cs",
+    "lines": 1370,
+    "sha256": "e218111087304cbe745dee23c2addad56ac043506098845e7d42b25a87a7a0d5",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\ViewModels\\VramTelemetryViewModel.cs",
+    "lines": 339,
+    "sha256": "28bedfa7949f00edd51efa96dca251a5cd93996ee4db74196836364764d8cbb2",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\AnchorView.xaml",
+    "lines": 251,
+    "sha256": "2305303294761268faec9f657033488ad08f370cc26904ea93521880786e6c8e",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\AnchorView.xaml.cs",
+    "lines": 36,
+    "sha256": "76fb54a858ad247f749a44ba348e84127eda0e80c466977dd95371ade629dfaa",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\AudioLibraryView.xaml",
+    "lines": 417,
+    "sha256": "4ee2d9c843d84dabf3a6249029476cdc01d62647d97a4b85942017e382c5d353",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\AudioLibraryView.xaml.cs",
+    "lines": 49,
+    "sha256": "ee88b107f1e838a0d699627ab6ec53c4244c98b52d5f5058afa28248db8aaa89",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\BrainView.xaml",
+    "lines": 313,
+    "sha256": "ac4d1034f303fef4214ad0f5ec4ffaae65c2589c05593d7d59b5ba73e2095b8c",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\BrainView.xaml.cs",
+    "lines": 35,
+    "sha256": "818c5e47ba475c8d56e0c528f2de6f8afaca32950661abfa07650dca6bc29f17",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ChatView.xaml",
+    "lines": 300,
+    "sha256": "c443ac1fd02a5338a50ace761ff04234a2741c42e4a72969aa19a544cff9765f",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ChatView.xaml.cs",
+    "lines": 54,
+    "sha256": "ee7f70199c85e3d087f3f6a0756360ad7fb7e832b6c7215abd88f09f7004d4cb",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\DirectorView.xaml",
+    "lines": 790,
+    "sha256": "629b32ae2ac4683e1a830a7791cbfcc14a3b56bffc356c088b273fb54d4b7e4b",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\DirectorView.xaml.cs",
+    "lines": 52,
+    "sha256": "3ca9339d0996577f901a8baa18a889b472b60d1d315be988c1d614e024179d6c",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\DownloadProgressDialog.xaml",
+    "lines": 146,
+    "sha256": "31756903f27ce7cb58bdbaa7b95ac97e666ef3015fad65a06839f6b72a0ff09f",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\DownloadProgressDialog.xaml.cs",
+    "lines": 21,
+    "sha256": "52396bfe515a6bc076d6ede5698d976d948ba79bb33d51ae5adde44ef0ea3b26",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\LearningSessionDialog.xaml",
+    "lines": 171,
+    "sha256": "dd1e98a24d39c3548bbc05b720df9c353ca49be98a80b7453a89389836de16b3",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\LearningSessionDialog.xaml.cs",
+    "lines": 153,
+    "sha256": "58fbf0987a9273d9411ea13cecc4f00934270093d51ec5225e13eccff3cecaef",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ModelManagerView.xaml",
+    "lines": 619,
+    "sha256": "af7afa3b209135e86f18f686d6324881f776cd231db1759e43a832723fb5f5b3",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ModelManagerView.xaml.cs",
+    "lines": 43,
+    "sha256": "aff9aed2330614f19fcabf73e9b8beb97ffe02f208ed26766b4a7a43f6b6692b",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ProductionView.xaml",
+    "lines": 285,
+    "sha256": "3b4e54671b389ea4a5f22f3bcdeda739f3db3a7c5a66128154320b80d821eb6b",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ProductionView.xaml.cs",
+    "lines": 36,
+    "sha256": "ec8349357028bbe55b1665b0a7cfe9b2324b72024e5d22461d4f7c2fb1836c4e",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ProjectOverviewView.xaml",
+    "lines": 163,
+    "sha256": "3343629e1322222ef12a8d497f03c274402409c58b4efaa71b9394290b087195",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\ProjectOverviewView.xaml.cs",
+    "lines": 36,
+    "sha256": "6743beb8783f3c52890feee5ff226e598dbf644a2b9f179c2868247e532b19d6",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\SettingsView.xaml",
+    "lines": 483,
+    "sha256": "ed4760a44129d7e17335bdf13c8c511a09cefe15614273261b4f6f142b80822c",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\SettingsView.xaml.cs",
+    "lines": 36,
+    "sha256": "b4b3b727c117c739300a90982195e594043662f85e6de8c4397b23678414b2a3",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\TerminalView.xaml",
+    "lines": 104,
+    "sha256": "ff995ded5c38c5bfe2329a35b9f3086f0620f7808a38ec0e09c60610d0499b9a",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\TerminalView.xaml.cs",
+    "lines": 40,
+    "sha256": "7c177c6577d25e302706b9f081fdca7d1ae77158d893bae15b282eb56679a96d",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\TimelineView.xaml",
+    "lines": 852,
+    "sha256": "f1d7ed37b248a3b73446d5b0391b533406ef308753900cfbfe216d3b5ee49201",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\TimelineView.xaml.cs",
+    "lines": 1084,
+    "sha256": "f951c40ed448bd3533a0cf451dea4e0b4537d45a58ae581ae85afd9e826ef706",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\VideoLibraryView.xaml",
+    "lines": 649,
+    "sha256": "f10cb1c90ea655b943230ef81f59c38b3b1f83a78295caba6e6f591d627e2a10",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\VideoLibraryView.xaml.cs",
+    "lines": 100,
+    "sha256": "135f3b987c471690a3f98ffc5e8a1ae1eca70c5817a8b9e1b57e9322819b93f5",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\VramTelemetryView.xaml",
+    "lines": 319,
+    "sha256": "c73dd2cdf890df5e5380a7246b5737ef59b40ecd229f4c89ec15ae8b86ec27e1",
+    "parse": "not_tested"
+  },
+  {
+    "path": "PBStudio.UI\\Views\\VramTelemetryView.xaml.cs",
+    "lines": 54,
+    "sha256": "f28ada9350015f34bee5dc4a182360b62a7cab998c7904137d92b5a2f7d5f531",
+    "parse": "not_tested"
+  }
+]

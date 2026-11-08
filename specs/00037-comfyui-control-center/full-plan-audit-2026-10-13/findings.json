@@ -1,0 +1,350 @@
+[
+  {
+    "id": "FP01",
+    "severity": "high",
+    "title": "Audiozeitachse bis zum tatsächlichen Pacingconsumer",
+    "domain": "audio",
+    "sources": [
+      "src/pb_studio/services/pacing_service.py:508-528",
+      "src/pb_studio/pacing/advanced_pacing_engine.py:2292-2300"
+    ],
+    "baseline": "plan.md:278-280; tasks.md:1030-1052",
+    "tasks": [
+      "T031",
+      "T034"
+    ],
+    "correction": "Zeitstützstellen, Sourceoffset, halb offene Coverageintervalle, Endpunktkonvention und profilgebundene Interpolation bis zum Service/Engine-Consumer durchreichen. Keine Streckung von Teilbereichen auf Gesamtdauer und keine stille Extrapolation. Legacyprojektion nur als explizit qualifizierter Adapter.",
+    "acceptance": "Peak bei Sourcezeit40s in Range[30,50) eines120sMediums bleibt nach Service→Engine an40s; mehrere Hopraten, Chunkgrenzen und Coverage-Lücken prüfen. Toleranz O03 offen.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP02",
+    "severity": "medium",
+    "title": "Capability-Composer für gruppierte Legacy-Audiostages",
+    "domain": "audio",
+    "sources": [
+      "backend/routers/audio_router.py:907-936",
+      "backend/routers/audio_router.py:1243-1263",
+      "backend/routers/pacing_router.py:301-315"
+    ],
+    "baseline": "plan.md:244,545",
+    "tasks": [
+      "T009",
+      "T031"
+    ],
+    "correction": "Capability→Payloadfeld→Legacygruppe als versionierte FieldOwnershipMap definieren. ActiveAnalysisSnapshot bindet konsistent alle gewählten Run-/Stage-/Dependencyrevisionen. Gruppenstatus wird aus tatsächlichen Consumerpflichten abgeleitet; eine Capabilityaktivierung überschreibt keine fremden Resultate.",
+    "acceptance": "Nativebeats A, externe Energie B, Drums C: A→A2 verändert weder B/C noch deren Provenance; C unavailable führt nur zur ausdrücklich erlaubten Degradation. Reload liefert denselben Snapshot.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP03",
+    "severity": "high",
+    "title": "Timeline-CAS an sämtliche Schreiber anschließen",
+    "domain": "pacing",
+    "sources": [
+      "backend/schemas/pacing_schemas.py:170-172",
+      "backend/routers/pacing_router.py:973-975",
+      "backend/app_state.py:637-640"
+    ],
+    "baseline": "plan.md:655; tasks.md:1356-1377",
+    "tasks": [
+      "T040"
+    ],
+    "correction": "Persistierte timeline_uuid/timeline_revision getrennt von Assetplanrevision. Sämtliche manuellen/automatischen Schreib-, Lösch-, Reorder-, Reload-/Savepfade inventarisieren und an einen atomaren Commitvertrag binden. Slotübernahme prüft Projekt, Planrevision, Timelinebasisrevision und stabile Slot-ID gemeinsam. Gapi/Gmigration bleiben offen.",
+    "acceptance": "Manuelles Edit nach Jobstart, konkurrierende Commits und Restart: veraltete Übernahme liefert Konflikt; kein Überschreiben und keine still verlorenen Edits.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP04",
+    "severity": "high",
+    "title": "Feste UI-/Canvas-Anker in Coverage und Assetplan",
+    "domain": "pacing",
+    "sources": [
+      "backend/routers/project_router.py:1035-1040",
+      "src/pb_studio/services/pacing_service.py:772-817",
+      "src/pb_studio/services/pacing_service.py:1099-1117"
+    ],
+    "baseline": "plan.md:519-520; tasks.md:1371-1377",
+    "tasks": [
+      "T040"
+    ],
+    "correction": "AnchorSnapshot bindet wirksame UI-/Canvasanker, Quellen, aufgelöste reservierte Intervalle und Revision/Hash. Coverage respektiert Reservierungen; Änderungen invalidieren betroffene Entscheidungen. Fehlende/ungeeignete Anker werden sichtbar geklärt statt automatisch ersetzt.",
+    "acceptance": "Mit/ohne Anker, fehlendes Asset, Überlappung, Verschiebung während Generation und beide Pacingpfade: reservierte Bereiche bleiben erhalten; keine unnötigen Ersatzjobs.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP05",
+    "severity": "medium",
+    "title": "Coverage-Einstieg vor leerer Videolibrary-Sperre",
+    "domain": "pacing",
+    "sources": [
+      "PBStudio.UI/ViewModels/DirectorViewModel.cs:261-262,305",
+      "backend/routers/pacing_router.py:550-551"
+    ],
+    "baseline": "plan.md:697,1008-1010",
+    "tasks": [
+      "T040"
+    ],
+    "correction": "Separaten typisierten Director-Planungs-/Coverage-Request vor Cutgenerierung anbieten. Valide leere Library kann insufficient sein; unbekannte Analyse bleibt unknown. Nach qualifizierter Generation/Import/Eignung reguläre Cutgenerierung mit Media-IDs.",
+    "acceptance": "Audio plus valide leere Library erreicht Coverage; Profil/Budget kontrollieren Generation. Fehlende Analyse löst keine Generation aus; manuelle Cutgenerierung behält ihre Validierung.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP06",
+    "severity": "high",
+    "title": "Pflichtcacheconsumer an aktive Run-/Vektoridentität binden",
+    "domain": "video/brain",
+    "sources": [
+      "src/pb_studio/brain/post_processor.py:357-363",
+      "src/pb_studio/brain/loader_cache.py:37",
+      "src/pb_studio/brain/cross_modal_projector.py:145,161"
+    ],
+    "baseline": "plan.md:942; tasks.md:311-335,1256-1280",
+    "tasks": [
+      "T009",
+      "T031"
+    ],
+    "correction": "Roh- und Projektionscache verpflichtend an unveränderliche aktive Run-/Vektoridentität, Embeddingraum und Projektorrevision binden. Sourcehash+Modellname reicht nicht. Native-SigLIP-Fall gehört zum Pflichtumfang, unabhängig von optionalem T037.",
+    "acceptance": "Warmen Cache A füllen, B mit gleichem Source/Modell aber anderem Range/Sampling aktivieren: alle Brain/Pacingconsumer liefern B; Rückwahl A liefert A. Vergleich ohne Aktivierung verändert A nicht; Prozess/Restart prüfen.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP07",
+    "severity": "medium",
+    "title": "Partielle native Captionstages verlustfrei normalisieren",
+    "domain": "video",
+    "sources": [
+      "backend/routers/video_router.py:306-315"
+    ],
+    "baseline": "plan.md:265-274; tasks.md:1044-1050",
+    "tasks": [
+      "T008",
+      "T031",
+      "T035"
+    ],
+    "correction": "Stage.status enthält partial samt gültigen Teilresultaten, Coverage und Fehlergrund. Aggregate getrennt ableiten; profilgebundene Aktivierung/Eignung. Weder completed vortäuschen noch gültige Tags pauschal verwerfen.",
+    "acceptance": "Mindestens ein gültiger und ein fehlgeschlagener Captionframe: Tags und Lücken bleiben bis API/WPF/Director sichtbar. Vollfehler und valide leere Caption unterscheidbar.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP08",
+    "severity": "high",
+    "title": "Restorezaun verhindert erneuten Remoteversand",
+    "domain": "project/recovery",
+    "sources": [
+      "backend/recovery_bootstrap.py:816-828",
+      "backend/recovery_bootstrap.py:283",
+      "src/pb_studio/storage/recovery_generation.py:80-90"
+    ],
+    "baseline": "communication-contract.md:13,25; plan.md:601",
+    "tasks": [
+      "T011",
+      "T012",
+      "T013",
+      "T021"
+    ],
+    "correction": "Jeder tatsächliche Restore/Rücksprung einschließlich konsistenter automatischer Crashrecovery erzeugt neue Storegeneration und Dispatchfence. Restoreepoch außerhalb zurückgespielter Domainrecords dauerhaft binden; unbekannter Restorenachweis sperrt. Recovered pending/prepared/outbox beweist kein Nicht-Send. Fehlende jüngere Jobs/Cancelintents als Ungewissheit behandeln. Abgleich oder needs_decision; Startupscan allein hebt Sperre nicht auf.",
+    "acceptance": "Snapshot vor Send, Remote führt aus, anschließend Restore optional mit leerer History: null weitere POST/prompt. Verlorener Cancel/WPF-Neustart ebenfalls; Generation/Cursorreset und sichtbarer blockierter Zustand.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP09",
+    "severity": "medium",
+    "title": "Vorhandene kanonische Projekt-UUID wiederverwenden",
+    "domain": "project",
+    "sources": [
+      "src/pb_studio/data/database_core.py:163-169,335-364",
+      "src/pb_studio/data/repositories/project_repository.py:17-22,73-84",
+      "backend/routers/project_router.py:793-801,865-871",
+      "src/pb_studio/storage/recovery_adapters.py:239-246"
+    ],
+    "baseline": "plan.md:488",
+    "tasks": [
+      "T010",
+      "T011"
+    ],
+    "correction": "Bestehende stable_project_uuid-Migration/Backfill und Katalog-UUID verwenden. Neu sind dauerhafte Jobbindung und Übergang zum flüchtigen Commitkontext. Keine zweite UUIDvergabe/-migration für identifizierte Projekte; Datei/Katalogkonflikte blockieren Dispatch/Import.",
+    "acceptance": "Bestehendes Projekt öffnen, Job anlegen, reopen/Recovery: Katalog-, Datei- und Job-UUID unverändert. Absichtlich abweichende Datei-UUID blockiert vor Mutation.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP10",
+    "severity": "high",
+    "title": "Direkte Preview-/Render-GPU-Aufrufer in Admission aufnehmen",
+    "domain": "gpu",
+    "sources": [
+      "backend/dependencies.py:20,73",
+      "backend/routers/pacing_router.py:1053",
+      "backend/routers/render_router.py:1170,1387-1398"
+    ],
+    "baseline": "plan.md:368-370; tasks.md:497-504,528-533",
+    "tasks": [
+      "T015",
+      "T016"
+    ],
+    "correction": "Consumer-Matrix Audio/Video/Preview/Render und direkte synchrone Modellaufrufer verbindlich inventarisieren. Gemeinsame Admission vor allen lokalen Eintrittspunkten, auch direkten Locknutzern. Reihenfolge Ressourcenlease→Async-Lock→gpu_inference_lock; managed qualifiziert genau den kooperierenden Scope.",
+    "acceptance": "Jeder inventarisierte Eintrittspunkt konkurriert mit externer Reservierung: managed ohne lokale Umgehung; observed_shared ohne erfundene Exclusivityzusage.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP11",
+    "severity": "high",
+    "title": "Leaseownership bis zum physischen Workerende",
+    "domain": "gpu",
+    "sources": [
+      "backend/dependencies.py:114-133,174-211",
+      "backend/dependencies.py:171-172",
+      "backend/routers/render_router.py:1185-1200",
+      "backend/routers/pacing_router.py:1064-1070"
+    ],
+    "baseline": "plan.md:366-368; tasks.md:510,540",
+    "tasks": [
+      "T015",
+      "T016",
+      "T021"
+    ],
+    "correction": "Requesttimeout/Cancel überträgt Lease und Erneuerung an tatsächlichen Cleanupowner. Freigabe erst nach Workerende plus gefordertem Ressourcenreceipt. Lokaler Lock und externe Nutzungsberechtigung getrennt. Dead owner/ungeklärter Cleanup bleibt gesperrt/unknown; kein äußeres finally mit vorzeitiger Freigabe.",
+    "acceptance": "Blockierter Worker, Requesttimeout, externe Dispatchanfrage: keine frühe managed-Freigabe. Zweiter Cancel, Shutdown und Heartbeatausfall prüfen.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP12",
+    "severity": "medium",
+    "title": "VRAM-Buchhaltung nicht als gemessenen Hardwarepeak qualifizieren",
+    "domain": "gpu",
+    "sources": [
+      "backend/dependencies.py:112,141-148",
+      "src/pb_studio/core/vram_budget_manager.py:483-486,936-975",
+      "src/pb_studio/core/vram_budget_manager.py:359-425"
+    ],
+    "baseline": "plan.md:370,432,522",
+    "tasks": [
+      "T002",
+      "T007",
+      "T015"
+    ],
+    "correction": "estimated_committed_mb, beobachtetes Sensormaximum und qualifizierten Profilgrenzwert getrennt führen. Receipt bindet Quelle/Gerät/Abtastrate/Fenster/Abdeckung/Ausfälle/Fremdlast. Vorhandenes vram_peak_mb aus zwei Buchhaltungsständen ist kein Hardwarepeak; Stichprobenmaximum keine exakte Peakgarantie.",
+    "acceptance": "Kurzzeitspitze zwischen Start/Ende, Fremdlast und Sensorlücke: Buchhaltung wird niemals als Hardwaremessung freigegeben. Konkrete Grenzwerte bleiben O03 offen.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP13",
+    "severity": "medium",
+    "title": "Technischen Farb-/Streamvertrag qualifizieren",
+    "domain": "export",
+    "sources": [
+      "src/pb_studio/rendering/render_service.py:680,775-778,985",
+      "src/pb_studio/rendering/preview_renderer.py:185-202"
+    ],
+    "baseline": "plan.md:461; T018/T026",
+    "tasks": [
+      "T018",
+      "T026",
+      "T028",
+      "T029"
+    ],
+    "correction": "Versioniertes Profil für Streamauswahl, pix_fmt/Bittiefe, Primärfarben, Transfer, Matrix, Range und SAR. Zunächst ausdrücklich qualifizierte SDR-Familien; HDR/unknown außerhalb Profil nicht still akzeptieren. Separate qualifizierte Ableitung möglich, kein neuer pauschaler HDR-Support. Transformation/Profil bis Preview/Final/Derivatprovenance binden.",
+    "acceptance": "Freigegebene SDR limited/full und10bit/HDR-Fälle korrekt nach Profil behandeln oder sichtbar abweisen; Preview/Final mit Farbreferenz vergleichen. Messgrenzen O03 offen. Full Decode allein kein Farbbeweis.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP14",
+    "severity": "medium",
+    "title": "DTO-Katalog und neuer Kommunikationsvertrag widersprechen sich",
+    "domain": "contract consistency",
+    "sources": [
+      "specs/00037-comfyui-control-center/communication-contract.md:13-25,57-65"
+    ],
+    "baseline": "plan.md:344,523,525",
+    "tasks": [
+      "T010",
+      "T022",
+      "T024",
+      "T025"
+    ],
+    "correction": "ProviderJobEvent auf verbindlichen Invalidierungs-/Changefeedvertrag angleichen. Neue Kommunikations-DTOs im Katalog referenzieren statt alte Event-Deltastruktur parallel normativ zu behalten; Aliasregeln job_id/job_uuid explizit. Maschinenprüfbare Schemafixtures und ein normativer Typenowner vor Gapi.",
+    "acceptance": "Katalog/Schema/WPF/Python-Goldenfixtures enthalten denselben Event/Identity/Outcomevertrag; Job- und Batchänderung sowie unbekannte Pflichtsemantik prüfen.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP15",
+    "severity": "high",
+    "title": "Settings-CAS über Neustart, Diskfehler und Reloadrace",
+    "domain": "settings",
+    "sources": [
+      "src/pb_studio/config_manager.py:182,368-389,448-451",
+      "src/pb_studio/config_manager.py:220-223,256-279,413-414"
+    ],
+    "baseline": "plan.md:230,701; T003/T022/T023",
+    "tasks": [
+      "T003",
+      "T022",
+      "T023"
+    ],
+    "correction": "Opaquer ConfigToken bindet Backendinstanz, Revision und gültigen Snapshotdigest. GET/PATCH liefert bestätigten Snapshot+Token. Schema/Token/Diskdigest vor Mutation prüfen; Patch/Reload serialisieren oder beim Commit erneut vergleichen. Persistenz vor Veröffentlichung effektiven Snapshots, einheitliche Consumerbenachrichtigung; Savefailure erhält letzten gültigen Stand. Neue Jobs erhalten neuen Snapshot, vorhandene Attempts bleiben gepinnt.",
+    "acceptance": "Gleiche numerische Revision nach Neustart, zwei Settingsfenster, externe Edit, Write/Replacefehler und Watcher/PATCH-Rennen: Konflikt ohne Teilmutation; Publish erst nach Commit; UI-Erfolg nur bestätigtes Receipt.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP16",
+    "severity": "high",
+    "title": "Holdout vom bereits vorhandenen Brainlernen isolieren",
+    "domain": "brain/acceptance",
+    "sources": [
+      "src/pb_studio/brain/brain_service.py:159-165",
+      "backend/routers/brain_router.py:238-254,273-274,480-484",
+      "src/pb_studio/brain/feedback_logger.py:180-209",
+      "src/pb_studio/brain/projector_trainer.py:205-210,288-311"
+    ],
+    "baseline": "plan.md:425,972-974; tasks.md:1294-1313",
+    "tasks": [
+      "T002",
+      "T038",
+      "T039",
+      "T042"
+    ],
+    "correction": "Benchmark-/Holdoutratings verpflichtend in separatem Evaluationsspeicher; keine Weiterleitung an produktives /brain/feedback oder Generatortraining. Testprojekt allein isoliert gemeinsame Brainzustände nicht. Brain-/Directorvergleiche binden eingefrorenen Gewichtsstand, Projektorgeneration und Lernpolicy. T039 qualifiziert nur isolierte Benchmarks; T042 zusätzlich gebunden, nicht alleiniger Owner.",
+    "acceptance": "Holdoutrating verändert keine produktiven feedback_events, Gewichtsbuckets, total_clicks oder Projektorgeneration. Paralleles normales Feedback ändert eingefrorenen Vergleich nicht; Restart/Replay übernimmt Evaluation nie ins Training.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP17",
+    "severity": "high",
+    "title": "Parent-Sourcezeit auf Child-lokale Derivatzeit abbilden",
+    "domain": "timeline",
+    "sources": [
+      "PBStudio.UI/Views/TimelineView.xaml.cs:811-818",
+      "PBStudio.UI/Helpers/TimelineSeekCalculator.cs:11-13",
+      "PBStudio.UI/ViewModels/TimelineViewModel.cs:841-855,1075-1095",
+      "backend/routers/pacing_router.py:917,1151-1173,1361-1367"
+    ],
+    "baseline": "plan.md:325,474; T030",
+    "tasks": [
+      "T027",
+      "T030",
+      "T040"
+    ],
+    "correction": "DerivationTimeMap bindet Parent/Childhash, rationale Source-/Childbereiche, Fensterorigin/Handles, Mappingrevision und qualifizierte Transformation. Assetübernahme rechnet ausdrücklich in Child-local Sourcein/out um; keine Parentoffsets auf kurzen Child clippen. Unknown/nicht qualifiziertes nichtlineares Retime blockiert Übernahme.",
+    "acceptance": "Parentfenster[599,606), Ersatz[600,605), Child7s: Childrange[1,6) durch sichtbare Übernahme→Save→Reopen→Scrub→Preview→Export. Niemals Sourceoffset600; Grenzframes/Handles und FPSwechsel prüfen.",
+    "evidence_level": "static source/document inspection; future acceptance NOT RUN"
+  },
+  {
+    "id": "FP18",
+    "severity": "medium",
+    "title": "Native-AnalysisRun-Producer vor MVP eindeutig zuweisen",
+    "domain": "independent phase countercheck",
+    "sources": [
+      "specs/00037-comfyui-control-center/full-plan-audit-2026-10-13/baseline/tasks.md:311-324,660,876-882,1026-1043"
+    ],
+    "baseline": "T009 repository; T020 consumes AnalysisRun; T031 explicit producer after T026",
+    "tasks": [
+      "T019",
+      "T020",
+      "T026",
+      "T031"
+    ],
+    "correction": "Schmale Native-SigLIP→validierter/persistierter AnalysisRun-Anbindung ausdrücklich T020 zuweisen; T019 liefert Importclaim/Mediaidentität. Breite capabilityweise Native-Stage-/Consumeradaption bleibt T031 nach MVP. T020 darf nicht auf einen erst in T031 vorhandenen Producer angewiesen sein.",
+    "acceptance": "Reale Native-Erzeugung→persistierter Run→ADDreceipt→ready wird vor T026 abgenommen; kein selbstgebautes AnalysisRun-Fixture als alleiniger Integrationsnachweis. T031 bleibt nicht Voraussetzung für T026.",
+    "evidence_level": "document producer/consumer analysis; runtime NOT RUN"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-10-19T22:09:39.032834+02:00",
+  "write_response": {
+    "success": true,
+    "id": "1792440578287"
+  },
+  "text": "PB-STUDIO T053 CAPTION STATUS 2026-10-19. Ergaenzt STATUSSYNC T051 T052. T053 begrenzte Bildinhaltspruefung abgeschlossen: V01-V06 zuvor bewertete Standbilder je zweimal, 12 echte native Caption-Wrapper-Aufrufe, unveraenderter Produktprompt und Parser. Konfiguriertes qwen3.5-9b fehlt im aktuellen LM-Studio-Inventar. Vorhandenes google/gemma-4-e4b Q4_K_M mit Kontext4096 vorgeladen; native Auswahl verwendete Gemma ohne expliziten Wrapperoverride. Vulkan2.60.0 Prozess verifiziert. Keine Installation oder Configaenderung. GPU vor Laden 0Prozent/3MiB, kein Peaknachweis. Originale, Config, erfasste DB-Dateien und Recoverymarker Hashgleichheit bestaetigt. Eigenes Modell entladen, API alle not-loaded. Technischer Teilnachweis bestanden; semantische Qualitaet NICHT freigegeben: V02 unbelegte Gruppe/Gewaender/Innenraum, V03 Wasserfall fehlt und Wald unbelegt, V05 unbelegte Gruppe. Parser max10 schneidet in6von12 Antworten elften Tag ab, darunter Blitzschlag V05. Personen-zuerst-Prompt als Ursache nur Hypothese. T054 kontrollierter Prompt/Parservergleich als naechster Schritt, vor Produktfix. Keine Vollclip-, Router-, Persistenz-, SSE-, WPF- oder Holdoutabnahme. Dienst war bei einem Vorversuch vor Inferenz beendet; erneuter gemeinsamer Dienststart/Probe erfolgreich, Ursache des Dienstendes unbekannt. Keine Generierung, keine ComfyUI-Auftraege veraendert. Masterplan current-status.md/plan.md/tasks.md aktualisiert. Belege specs/00037-comfyui-control-center/t002-caption-2026-10-19/report.md und results.json. Urspruengliche45Pakete weiterhin5fertig/40offen, T002/G1/GesamtT045 offen. Obsidian ersetzt durch KI-Hirn.",
+  "text_sha256": "50800231c6a1bad94b4ba74b81578a48cb878910366bec88933d55688708224a",
+  "exact_readback_confirmed": true
+}

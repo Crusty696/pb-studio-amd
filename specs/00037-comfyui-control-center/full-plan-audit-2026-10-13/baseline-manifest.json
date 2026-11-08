@@ -1,0 +1,45 @@
+{
+  "captured_utc": "2026-10-13T02:06:43.084912+00:00",
+  "files": [
+    {
+      "path": "spec.md",
+      "sha256": "eedc23c940f154ab72dd1b9f341869c56dd79c2601a2d3635dae3cfe1a4dce40",
+      "bytes": 10115
+    },
+    {
+      "path": "plan.md",
+      "sha256": "f70f4f5f640ae6c95fc217f8839a1a0b60eb22e4bcd04ef0f593f5bfb0369d05",
+      "bytes": 121356
+    },
+    {
+      "path": "tasks.md",
+      "sha256": "0ad1c0afe15f30f760575c32953889bbd80c8bd2fc25d7031b04f5fb9552fad9",
+      "bytes": 145839
+    },
+    {
+      "path": "work-packages.json",
+      "sha256": "eea786d8174fbab75a243518fd4ce43229933061c8fb38daf514b6df8135240a",
+      "bytes": 61014
+    },
+    {
+      "path": "traceability.md",
+      "sha256": "38a692f80fd984052fff7fdce2f50cfa531a7b1bd1a84b852d834efc502155f3",
+      "bytes": 45660
+    },
+    {
+      "path": "clarifications.md",
+      "sha256": "40e6a63cc291d073ac164170af5d3df4102005a1aedfc6a859e789917f77ed8b",
+      "bytes": 4399
+    },
+    {
+      "path": "communication-contract.md",
+      "sha256": "31b01333c719fa8d293353d21690530d4bcbb8aee57393baa794b9ddc867a0c2",
+      "bytes": 23765
+    },
+    {
+      "path": "planning-validation.json",
+      "sha256": "2c13a25fa083eff54795b7e58c241bca9fdcc20fe9018f1a4e759194c6b0850e",
+      "bytes": 5725
+    }
+  ]
+}

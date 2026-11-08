@@ -262,6 +262,53 @@ public sealed class VirtualizingWrapPanelTests
         });
     }
 
+    [TestMethod]
+    public void RealizedCollectionMove_DoesNotRemoveGeneratorRangeTwice()
+    {
+        StaTest.Run(() =>
+        {
+            var items = new ObservableCollection<string>(
+                Enumerable.Range(0, 100).Select(i => $"Clip {i}"));
+            var listBox = new ListBox
+            {
+                Width = 800,
+                Height = 600,
+                ItemsSource = items
+            };
+            var factory = new FrameworkElementFactory(typeof(VirtualizingWrapPanel));
+            factory.SetValue(Panel.IsItemsHostProperty, true);
+            factory.SetValue(VirtualizingWrapPanel.ItemWidthProperty, 200.0);
+            factory.SetValue(VirtualizingWrapPanel.ItemHeightProperty, 200.0);
+            listBox.ItemsPanel = new ItemsPanelTemplate(factory);
+            var window = new Window
+            {
+                Width = 800,
+                Height = 600,
+                Content = listBox,
+                WindowStyle = WindowStyle.None,
+                ShowInTaskbar = false,
+                ShowActivated = false
+            };
+
+            try
+            {
+                window.Show();
+                listBox.UpdateLayout();
+
+                items.Move(0, 16);
+                listBox.UpdateLayout();
+
+                var panel = FindChild<VirtualizingWrapPanel>(listBox);
+                Assert.IsNotNull(panel);
+                Assert.IsTrue(VisualTreeHelper.GetChildrenCount(panel) > 0);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
     {
         int count = VisualTreeHelper.GetChildrenCount(parent);

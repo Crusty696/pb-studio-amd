@@ -1,0 +1,141 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+collected 7 items
+
+Tests\test_t055_siglip_preprocessing.py FFFFFFF                          [100%]
+
+================================== FAILURES ===================================
+______________ test_black_and_white_follow_siglip_range[0--1.0] _______________
+Tests\test_t055_siglip_preprocessing.py:58: in test_black_and_white_follow_siglip_range
+    np.testing.assert_allclose(actual, expected, atol=1e-6, rtol=0)
+..\..\AppData\Local\Programs\Python\Python311\Lib\contextlib.py:81: in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-06
+E   
+E   Mismatched elements: 442368 / 442368 (100%)
+E   Max absolute difference: 0.79226255
+E   Max relative difference: 0.79226255
+E    x: array([[[[-1.792263, -1.792263, -1.792263, ..., -1.792263, -1.792263,
+E             -1.792263],
+E            [-1.792263, -1.792263, -1.792263, ..., -1.792263, -1.792263,...
+E    y: array(-1.)
+______________ test_black_and_white_follow_siglip_range[255-1.0] ______________
+Tests\test_t055_siglip_preprocessing.py:58: in test_black_and_white_follow_siglip_range
+    np.testing.assert_allclose(actual, expected, atol=1e-6, rtol=0)
+..\..\AppData\Local\Programs\Python\Python311\Lib\contextlib.py:81: in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-06
+E   
+E   Mismatched elements: 442368 / 442368 (100%)
+E   Max absolute difference: 1.1458969
+E   Max relative difference: 1.14589691
+E    x: array([[[[1.930336, 1.930336, 1.930336, ..., 1.930336, 1.930336,
+E             1.930336],
+E            [1.930336, 1.930336, 1.930336, ..., 1.930336, 1.930336,...
+E    y: array(1.)
+____________ test_pattern_matches_local_huggingface_processor[RGB] ____________
+Tests\test_t055_siglip_preprocessing.py:68: in test_pattern_matches_local_huggingface_processor
+    np.testing.assert_allclose(actual, expected, atol=1e-6, rtol=0)
+..\..\AppData\Local\Programs\Python\Python311\Lib\contextlib.py:81: in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-06
+E   
+E   Mismatched elements: 442368 / 442368 (100%)
+E   Max absolute difference: 1.1458969
+E   Max relative difference: 85.68562
+E    x: array([[[[-1.792263, -1.792263, -1.763066, ...,  0.864651,  0.893848,
+E              0.908446],
+E            [-1.792263, -1.792263, -1.763066, ...,  0.864651,  0.893848,...
+E    y: array([[[[-1.      , -1.      , -0.984314, ...,  0.427451,  0.443137,
+E              0.45098 ],
+E            [-1.      , -1.      , -0.984314, ...,  0.427451,  0.443137,...
+___________ test_pattern_matches_local_huggingface_processor[RGBA] ____________
+Tests\test_t055_siglip_preprocessing.py:68: in test_pattern_matches_local_huggingface_processor
+    np.testing.assert_allclose(actual, expected, atol=1e-6, rtol=0)
+..\..\AppData\Local\Programs\Python\Python311\Lib\contextlib.py:81: in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-06
+E   
+E   Mismatched elements: 442368 / 442368 (100%)
+E   Max absolute difference: 1.1458969
+E   Max relative difference: 85.68562
+E    x: array([[[[-1.792263, -1.792263, -1.763066, ...,  0.864651,  0.893848,
+E              0.908446],
+E            [-1.792263, -1.792263, -1.763066, ...,  0.864651,  0.893848,...
+E    y: array([[[[-1.      , -1.      , -0.984314, ...,  0.427451,  0.443137,
+E              0.45098 ],
+E            [-1.      , -1.      , -0.984314, ...,  0.427451,  0.443137,...
+_____________ test_pattern_matches_local_huggingface_processor[L] _____________
+Tests\test_t055_siglip_preprocessing.py:68: in test_pattern_matches_local_huggingface_processor
+    np.testing.assert_allclose(actual, expected, atol=1e-6, rtol=0)
+..\..\AppData\Local\Programs\Python\Python311\Lib\contextlib.py:81: in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-06
+E   
+E   Mismatched elements: 442368 / 442368 (100%)
+E   Max absolute difference: 1.1458969
+E   Max relative difference: 85.68562
+E    x: array([[[[-1.792263, -1.792263, -1.748467, ...,  0.952242,  0.996037,
+E              1.010635],
+E            [-1.792263, -1.792263, -1.748467, ...,  0.952242,  0.996037,...
+E    y: array([[[[-1.      , -1.      , -0.976471, ...,  0.47451 ,  0.498039,
+E              0.505882],
+E            [-1.      , -1.      , -0.976471, ...,  0.47451 ,  0.498039,...
+_______________ test_batch_input_matches_independent_processor ________________
+Tests\test_t055_siglip_preprocessing.py:101: in test_batch_input_matches_independent_processor
+    np.testing.assert_allclose(session.inputs[0], expected, atol=1e-6, rtol=0)
+..\..\AppData\Local\Programs\Python\Python311\Lib\contextlib.py:81: in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-06
+E   
+E   Mismatched elements: 1769472 / 1769472 (100%)
+E   Max absolute difference: 1.1458969
+E   Max relative difference: 85.68562
+E    x: array([[[[-1.792263, -1.792263, -1.792263, ..., -1.792263, -1.792263,
+E             -1.792263],
+E            [-1.792263, -1.792263, -1.792263, ..., -1.792263, -1.792263,...
+E    y: array([[[[-1.      , -1.      , -1.      , ..., -1.      , -1.      ,
+E             -1.      ],
+E            [-1.      , -1.      , -1.      , ..., -1.      , -1.      ,...
+____________ test_single_encode_passes_processor_tensor_to_session ____________
+Tests\test_t055_siglip_preprocessing.py:112: in test_single_encode_passes_processor_tensor_to_session
+    np.testing.assert_allclose(session.inputs[0], expected, atol=1e-6, rtol=0)
+..\..\AppData\Local\Programs\Python\Python311\Lib\contextlib.py:81: in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-06
+E   
+E   Mismatched elements: 442368 / 442368 (100%)
+E   Max absolute difference: 1.1458969
+E   Max relative difference: 85.68562
+E    x: array([[[[-1.792263, -1.792263, -1.763066, ...,  0.864651,  0.893848,
+E              0.908446],
+E            [-1.792263, -1.792263, -1.763066, ...,  0.864651,  0.893848,...
+E    y: array([[[[-1.      , -1.      , -0.984314, ...,  0.427451,  0.443137,
+E              0.45098 ],
+E            [-1.      , -1.      , -0.984314, ...,  0.427451,  0.443137,...
+=========================== short test summary info ===========================
+FAILED Tests/test_t055_siglip_preprocessing.py::test_black_and_white_follow_siglip_range[0--1.0]
+FAILED Tests/test_t055_siglip_preprocessing.py::test_black_and_white_follow_siglip_range[255-1.0]
+FAILED Tests/test_t055_siglip_preprocessing.py::test_pattern_matches_local_huggingface_processor[RGB]
+FAILED Tests/test_t055_siglip_preprocessing.py::test_pattern_matches_local_huggingface_processor[RGBA]
+FAILED Tests/test_t055_siglip_preprocessing.py::test_pattern_matches_local_huggingface_processor[L]
+FAILED Tests/test_t055_siglip_preprocessing.py::test_batch_input_matches_independent_processor
+FAILED Tests/test_t055_siglip_preprocessing.py::test_single_encode_passes_processor_tensor_to_session
+============================== 7 failed in 9.11s ==============================

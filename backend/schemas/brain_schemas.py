@@ -16,7 +16,7 @@ class BrainScoreEntry(BaseModel):
 
 class BrainSuggestRequest(BaseModel):
     audio_clip_id: int
-    video_clip_ids: list[int] = []
+    video_clip_ids: list[int] = Field(default_factory=list)
     top_n: int = Field(20, ge=1, le=200)
 
 
@@ -26,11 +26,11 @@ class BrainSuggestion(BaseModel):
     start_time: float
     end_time: float
     final_score: float
-    brain_scores: dict[str, float] = {}
+    brain_scores: dict[str, float] = Field(default_factory=dict)
 
 
 class BrainSuggestResponse(BaseModel):
-    suggestions: list[BrainSuggestion] = []
+    suggestions: list[BrainSuggestion] = Field(default_factory=list)
 
 
 class BrainFeedbackRequest(BaseModel):
@@ -47,6 +47,12 @@ class BrainFeedbackRequest(BaseModel):
             "erneut zu lernen."
         ),
     )
+    project_identity: Optional[str] = Field(
+        default=None,
+        min_length=8,
+        max_length=4096,
+        description="Vom Desktop erwartete Projektidentität; verhindert Feedback nach Projektwechsel.",
+    )
 
 
 class BrainFeedbackResponse(BaseModel):
@@ -57,7 +63,7 @@ class BrainFeedbackResponse(BaseModel):
 
 
 class BrainLearningSessionResponse(BaseModel):
-    cuts: list[BrainSuggestion] = []
+    cuts: list[BrainSuggestion] = Field(default_factory=list)
 
 
 class BrainStatsBucket(BaseModel):
@@ -79,8 +85,8 @@ class BrainStatsResponse(BaseModel):
     total_clicks: int
     cold_start_axes: int
     learned_axes: int
-    top_positive: list[BrainStatsBucket] = []
-    top_negative: list[BrainStatsBucket] = []
+    top_positive: list[BrainStatsBucket] = Field(default_factory=list)
+    top_negative: list[BrainStatsBucket] = Field(default_factory=list)
     cold_start_axes_list: list[str] = Field(
         default_factory=list,
         description="Achsen aus BRIDGE_AXES, die noch nicht gelernt sind "
@@ -125,9 +131,8 @@ class BrainAxisContribution(BaseModel):
     """Pro-Achse-Aufschluesselung: bridge_value (raw) * posterior (gelerntes
     Gewicht) = score. Sortiert absteigend nach score in /brain/explain.
 
-    bridge_value/posterior haben keine harte Obergrenze, weil einige Cold-Start
-    Defaults (z.B. kick_weight=1.2, max_clip_length=8.0) ausserhalb 0..1 liegen.
-    score wird im Endpoint auf 0..1 geclippt.
+    bridge_value und posterior sind normalisiert. score wird im Endpoint
+    defensiv auf 0..1 geclippt.
     """
     axis: str
     bridge_value: float = Field(..., ge=0.0)
@@ -151,9 +156,9 @@ class BrainExplainResponse(BaseModel):
     end_time: float
     segment_type: Optional[str] = None
     final_score: float
-    context_keys: list[str] = []
-    top_axes: list[BrainAxisContribution] = []
-    bottom_axes: list[BrainAxisContribution] = []
+    context_keys: list[str] = Field(default_factory=list)
+    top_axes: list[BrainAxisContribution] = Field(default_factory=list)
+    bottom_axes: list[BrainAxisContribution] = Field(default_factory=list)
     cold_start_axes: list[str] = Field(
         default_factory=list,
         description="Achsen ohne genug Samples (< 10) -- Confidence kommt vom Default.",

@@ -167,6 +167,7 @@ def test_runtime_degradations_are_compact_and_mode_specific() -> None:
         cuts,
         use_semantic_matching=True,
         use_brain=True,
+        canvas_requested=False,
     )
 
     assert [item.mode for item in degradations] == [

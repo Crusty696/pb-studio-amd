@@ -1,0 +1,130 @@
+{
+  "model_inference_executed": false,
+  "filterbank_bitwise_equal": true,
+  "filterbank_max_abs": 0.0,
+  "frontend_max_abs": 0.0,
+  "frontend_shape": [
+    101,
+    128
+  ],
+  "output_ancestry": {
+    "beat": {
+      "value": "beat",
+      "op": "Add",
+      "inputs": [
+        {
+          "value": "/model/task_heads/Cast_output_0",
+          "op": "Cast",
+          "inputs": [
+            {
+              "value": "/model/task_heads/Squeeze_output_0",
+              "op": "Squeeze",
+              "inputs": [
+                {
+                  "value": "/model/task_heads/Split_output_0",
+                  "op": "Slice",
+                  "inputs": [
+                    {
+                      "value": "/model/task_heads/Transpose_output_0",
+                      "op": "Transpose",
+                      "inputs": [
+                        "/model/task_heads/beat_downbeat_lin/Add_output_0"
+                      ]
+                    },
+                    "/model/task_heads/Split__slice_0_starts",
+                    "/model/task_heads/Split__slice_0_ends",
+                    "/model/task_heads/Split__slice_0_axes"
+                  ]
+                },
+                {
+                  "value": "/model/task_heads/Constant_1_output_0",
+                  "op": "Constant",
+                  "inputs": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "value": "downbeat",
+          "op": "Cast",
+          "inputs": [
+            {
+              "value": "/model/task_heads/Squeeze_1_output_0",
+              "op": "Squeeze",
+              "inputs": [
+                {
+                  "value": "/model/task_heads/Split_output_1",
+                  "op": "Slice",
+                  "inputs": [
+                    {
+                      "value": "/model/task_heads/Transpose_output_0",
+                      "op": "Transpose",
+                      "inputs": [
+                        "/model/task_heads/beat_downbeat_lin/Add_output_0"
+                      ]
+                    },
+                    "/model/task_heads/Split__slice_1_starts",
+                    "/model/task_heads/Split__slice_1_ends",
+                    "/model/task_heads/Split__slice_1_axes"
+                  ]
+                },
+                {
+                  "value": "/model/task_heads/Constant_2_output_0",
+                  "op": "Constant",
+                  "inputs": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "downbeat": {
+      "value": "downbeat",
+      "op": "Cast",
+      "inputs": [
+        {
+          "value": "/model/task_heads/Squeeze_1_output_0",
+          "op": "Squeeze",
+          "inputs": [
+            {
+              "value": "/model/task_heads/Split_output_1",
+              "op": "Slice",
+              "inputs": [
+                {
+                  "value": "/model/task_heads/Transpose_output_0",
+                  "op": "Transpose",
+                  "inputs": [
+                    {
+                      "value": "/model/task_heads/beat_downbeat_lin/Add_output_0",
+                      "op": "Add",
+                      "inputs": [
+                        "model.task_heads.beat_downbeat_lin.bias",
+                        "/model/task_heads/beat_downbeat_lin/MatMul_output_0"
+                      ]
+                    }
+                  ]
+                },
+                "/model/task_heads/Split__slice_1_starts",
+                "/model/task_heads/Split__slice_1_ends",
+                "/model/task_heads/Split__slice_1_axes"
+              ]
+            },
+            {
+              "value": "/model/task_heads/Constant_2_output_0",
+              "op": "Constant",
+              "inputs": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "opset": [
+    [
+      "",
+      17
+    ]
+  ]
+}

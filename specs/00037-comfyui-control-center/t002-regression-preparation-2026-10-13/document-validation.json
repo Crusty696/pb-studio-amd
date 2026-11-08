@@ -1,0 +1,23 @@
+{
+  "status": "PASS_DOCUMENT_CONSISTENCY_ONLY",
+  "cases": 12,
+  "active_media": 9,
+  "regression_reserve_unique_files": 15,
+  "accepted_human_labels": 0,
+  "qualified_holdout": 0,
+  "new_media_runs": 0,
+  "new_product_tests": 0,
+  "generation_runs": 0,
+  "gpu_runs": 0,
+  "T002": "OPEN",
+  "checks": [
+    "case_ids_unique",
+    "all_sources_exist_in_manifest",
+    "previous_evidence_files_exist",
+    "unmeasured_metric_bounds_null",
+    "result_template_NOT_RUN",
+    "no_false_labels_or_holdout",
+    "user_execution_limits_preserved",
+    "no_root_completion_marker"
+  ]
+}

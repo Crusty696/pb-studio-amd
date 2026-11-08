@@ -1,0 +1,26 @@
+[
+  {
+    "source_second": 60,
+    "window_seconds": 12,
+    "sample_rate": 8000,
+    "abs_correlation": 0.9999467706125911,
+    "lag_samples": 0,
+    "scope": "mono downsampled waveform; searched +/-50ms at1ms increments; no exhaustive identity claim"
+  },
+  {
+    "source_second": 600,
+    "window_seconds": 12,
+    "sample_rate": 8000,
+    "abs_correlation": 0.9999049354987324,
+    "lag_samples": 0,
+    "scope": "mono downsampled waveform; searched +/-50ms at1ms increments; no exhaustive identity claim"
+  },
+  {
+    "source_second": 1800,
+    "window_seconds": 12,
+    "sample_rate": 8000,
+    "abs_correlation": 0.999910038617918,
+    "lag_samples": 0,
+    "scope": "mono downsampled waveform; searched +/-50ms at1ms increments; no exhaustive identity claim"
+  }
+]

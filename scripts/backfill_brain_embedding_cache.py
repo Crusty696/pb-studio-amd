@@ -18,6 +18,10 @@ Dieses Skript schliesst die Luecke ohne eine einzige Neuanalyse:
     FAISS.reconstruct(faiss_id)    -> 1152-D Vektor
     EmbeddingCache.store(media_hash=file_hash, media_type="video", ...)
 
+T056: Nur Vektoren mit expliziter aktueller Modellidentitaet und passendem
+video_hash sind uebertragbar. Unversionierte/v1-Bestaende bleiben unveraendert;
+dieses Skript ist keine Migration in den korrigierten v2-Embeddingraum.
+
 Der laufende Fix in ``video_router._store_video_embedding_in_brain_cache``
 sorgt dafuer, dass kuenftige Analysen direkt beide Stores fuellen.
 
@@ -46,6 +50,7 @@ def backfill(db_path: Path, apply: bool) -> int:
     from pb_studio.brain.brain_service import BrainService
     from pb_studio.data.vector_store import VectorStore
     from pb_studio.video import video_embedder
+    from pb_studio.embedding_identity import is_current_video_embedding
 
     store = VectorStore(index_name="video_index")
     index = store.index
@@ -69,6 +74,7 @@ def backfill(db_path: Path, apply: bool) -> int:
     already = 0
     written = 0
     failed = 0
+    skipped_identity = 0
     seen_hashes: set[str] = set()
 
     for faiss_id, file_hash in rows:
@@ -77,6 +83,12 @@ def backfill(db_path: Path, apply: bool) -> int:
 
         if faiss_id in tombstoned:
             skipped_tombstone += 1
+            continue
+        # Never relabel pre-v2 or unversioned vectors as the current space.
+        vector_meta = store.metadata.get(faiss_id) or {}
+        if (not is_current_video_embedding(vector_meta)
+                or vector_meta.get("video_hash") != media_hash):
+            skipped_identity += 1
             continue
         # Ein Hash braucht genau einen Cache-Eintrag; mehrere Projekte teilen
         # sich denselben Dateiinhalt.
@@ -122,6 +134,7 @@ def backfill(db_path: Path, apply: bool) -> int:
     mode = "APPLY" if apply else "DRY-RUN"
     print(f"[{mode}] vector_map-Eintraege mit Hash: {total}")
     print(f"[{mode}] Tombstones uebersprungen:      {skipped_tombstone}")
+    print(f"[{mode}] fremde/unbekannte Identitaet:  {skipped_identity}")
     print(f"[{mode}] bereits im Cache:              {already}")
     print(f"[{mode}] geschrieben / schreibbar:      {written}")
     print(f"[{mode}] fehlgeschlagen:                {failed}")

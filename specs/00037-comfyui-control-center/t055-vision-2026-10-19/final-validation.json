@@ -1,0 +1,63 @@
+{
+  "test_groups": {
+    "pytest-caption-final.txt": 108,
+    "pytest-identity-final.txt": 78
+  },
+  "distinct_passed": 186,
+  "syntax_valid_files": [
+    "src/pb_studio/ai/siglip_wrapper.py",
+    "src/pb_studio/embedding_identity.py",
+    "src/pb_studio/video/video_embedder.py",
+    "src/pb_studio/ai/video_specialist.py",
+    "src/pb_studio/data/vector_store.py",
+    "src/pb_studio/pacing/clip_selector.py",
+    "backend/app_state.py",
+    "backend/routers/video_router.py",
+    "backend/routers/pacing_router.py",
+    "scripts/backfill_brain_embedding_cache.py",
+    "docs/examples/siglip_video_example.py",
+    "Tests/test_t055_siglip_preprocessing.py",
+    "Tests/test_t056_embedding_identity.py",
+    "Tests/test_clip_selector_semantic_fallback.py",
+    "Tests/test_lmstudio_vision_wrapper.py"
+  ],
+  "source_sha256": {
+    "src/pb_studio/ai/siglip_wrapper.py": "174a8b055af6bce57363a952807d481300a7113f687f02590c4a9761f279251d",
+    "src/pb_studio/embedding_identity.py": "bdd989261a548daf682899d6421912f5d7f57c747cb94455fdb0cf773954164c",
+    "src/pb_studio/video/video_embedder.py": "12be60b7409d452bfef33fe6222ab787f5a356a1e428360245834c37c94a5f98",
+    "src/pb_studio/ai/video_specialist.py": "14a8f4e28c26f8e8eba9487f9b5cf9ad331a88c683ac37d7112288d15b3322a4",
+    "src/pb_studio/data/vector_store.py": "30eac048522e7e3a9283d853475077285df79ca87a376e0de8c4b45fce550f3a",
+    "src/pb_studio/pacing/clip_selector.py": "d1a5e2636488d8715f5c317bdd7b5378e83f2c337ee97433f7c5ff846f7af071",
+    "backend/app_state.py": "85d6a46223ac54b24deca2f9fe507e1e3259ccc43083a1b2af34d71fe36be90a",
+    "backend/routers/video_router.py": "984bc031c13235968079bdb77531831325fd20adee436c35492a78fef662d877",
+    "backend/routers/pacing_router.py": "ea5bf2cb92d7ebe3cd17b5434b84109e058b116f38ae7831094fcd56fe5e9a45",
+    "scripts/backfill_brain_embedding_cache.py": "f9443de06f953193490620fa521ffd7dc78444ed41a3521f5c86cefffe869bf7",
+    "docs/examples/siglip_video_example.py": "32ef8ea3735d36529d6eea7fc437d6cc1d1e4f9d6c53e744e543f0a294fcdb05",
+    "Tests/test_t055_siglip_preprocessing.py": "0ca4e2463550a0343eb2b690feea8f69ee2a698978709c6b8eabd2eb05abce83",
+    "Tests/test_t056_embedding_identity.py": "02f7eea2d80f1709bad95a556a1de7588c633e679859eafe4346f495e93cd246",
+    "Tests/test_clip_selector_semantic_fallback.py": "fa00607465accefad3f5392b66718c1684801d2ffba4b3f75c650ceb6e6b84a8",
+    "Tests/test_lmstudio_vision_wrapper.py": "c8d1cce2a1dc0be43466782ba29d2e2cbc675522c34b6e6f42a6526bb700bab6"
+  },
+  "protected_unchanged_after_cpu_tests": true,
+  "protected_sha256": {
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 3\\20250608_0333_Enchanted_Neon_Forest_Rave_gen_01jx6skcz6frkvfmgyznys8n69.mp4": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\images_1750892303155\\gemini_generated_video_03f98367.mp4": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0314_Mystical_Waterfall_Dance_gen_01jxp6w02me7hr4fq6wtadw5yz.mp4": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\generation 4\\20250614_0327_Enchanted_Flame_Dance_gen_01jxp7m8dqfwpr1n4y1c2ajh72.mp4": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0358_Neon_Storm_Dance_gen_01jxp9e13afkzsavkp55w0xj28.mp4": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+    "E:\\03_Video_&_Medien\\Eigene_Videos\\Video\\Clips\\Generation2\\20250614_0402_Neon_Reflections_Dance_gen_01jxp9kxmnfvha4xnn4f439bet.mp4": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "full_suite_or_gui_acceptance": false
+}

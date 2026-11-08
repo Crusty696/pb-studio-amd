@@ -54,6 +54,7 @@ class StreamingAnalysisResult:
     snare_times: list[float] = field(default_factory=list)
     hihat_times: list[float] = field(default_factory=list)
     chroma_mean: list[float] = field(default_factory=list)
+    chroma_features: list[list[float]] = field(default_factory=list)
     spectral_times: list[float] = field(default_factory=list)
     spectral_bands: dict[str, list[float]] = field(default_factory=dict)
     spectral_centroids: list[float] = field(default_factory=list)
@@ -61,6 +62,8 @@ class StreamingAnalysisResult:
     chunk_evidence: list[dict] = field(default_factory=list)
     resume_checkpoint: dict = field(default_factory=dict)
     window_count: int = 0
+    feature_coverage: float = 0.0
+    feature_covered_seconds: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +298,9 @@ class StreamingAudioAnalyzer:
     N_FFT = 2048
     HOP_LENGTH = 512
     MAX_REPRESENTATIVE_POINTS = 7200
-    CHECKPOINT_SCHEMA_VERSION = 2
+    # v4 excludes already-covered overlap frames from the aggregate mix key.
+    # v3 checkpoints contain overlap-inclusive chroma weights and must rerun.
+    CHECKPOINT_SCHEMA_VERSION = 4
 
     def __init__(
         self,
@@ -619,6 +624,7 @@ class StreamingAudioAnalyzer:
         centroids = features.get("centroids")
         bands = features.get("bands")
         chroma_mean = features.get("chroma_mean")
+        chroma_points = features.get("chroma_points")
         chroma_weight = features.get("chroma_weight")
         from .spectral_analyzer import FREQUENCY_BANDS
 
@@ -630,6 +636,10 @@ class StreamingAudioAnalyzer:
                 not lower <= float(value) <= upper
                 for value in feature_times
             )
+            or any(
+                float(right) <= float(left)
+                for left, right in zip(feature_times, feature_times[1:])
+            )
             or not self._is_numeric_list(centroids, length=len(feature_times))
             or not isinstance(bands, dict)
             or set(bands) != expected_band_names
@@ -639,6 +649,9 @@ class StreamingAudioAnalyzer:
                 for name, values in bands.items()
             )
             or not self._is_numeric_list(chroma_mean, length=12)
+            or not isinstance(chroma_points, list)
+            or len(chroma_points) != len(feature_times)
+            or not all(self._is_numeric_list(point, length=12) for point in chroma_points)
             or not isinstance(chroma_weight, int)
             or isinstance(chroma_weight, bool)
             or chroma_weight <= 0
@@ -720,7 +733,9 @@ class StreamingAudioAnalyzer:
         energy_agg = _EnergyAggregator()
         chroma_sum = np.zeros(12, dtype=np.float64)
         chroma_weight = 0
+        feature_covered_seconds = 0.0
         spectral_times: list[float] = []
+        chroma_features: list[list[float]] = []
         spectral_bands: dict[str, list[float]] = {}
         spectral_centroids: list[float] = []
         stage_errors: dict[str, list[str]] = {}
@@ -815,7 +830,11 @@ class StreamingAudioAnalyzer:
                         * feature_weight
                     )
                     chroma_weight += feature_weight
+                    feature_covered_seconds += max(
+                        0.0, float(chunk_dur) - (self.overlap_sec if i else 0.0)
+                    )
                     spectral_times.extend(representative["times"])
+                    chroma_features.extend(representative["chroma_points"])
                     spectral_centroids.extend(representative["centroids"])
                     for band_name, values in representative["bands"].items():
                         spectral_bands.setdefault(band_name, []).extend(values)
@@ -940,7 +959,11 @@ class StreamingAudioAnalyzer:
                     * feature_weight
                 )
                 chroma_weight += feature_weight
+                feature_covered_seconds += max(
+                    0.0, float(chunk_dur) - (self.overlap_sec if i else 0.0)
+                )
                 spectral_times.extend(representative["times"])
+                chroma_features.extend(representative["chroma_points"])
                 spectral_centroids.extend(representative["centroids"])
                 for band_name, values in representative["bands"].items():
                     spectral_bands.setdefault(band_name, []).extend(values)
@@ -1030,10 +1053,12 @@ class StreamingAudioAnalyzer:
             spectral_times,
             spectral_bands,
             spectral_centroids,
+            chroma_features,
         ) = self._cap_representative_points(
             spectral_times,
             spectral_bands,
             spectral_centroids,
+            chroma_features,
         )
         return StreamingAnalysisResult(
             duration_seconds=duration,
@@ -1049,6 +1074,7 @@ class StreamingAudioAnalyzer:
                 if chroma_weight > 0
                 else []
             ),
+            chroma_features=chroma_features,
             spectral_times=spectral_times,
             spectral_bands=spectral_bands,
             spectral_centroids=spectral_centroids,
@@ -1062,6 +1088,10 @@ class StreamingAudioAnalyzer:
                 chunks=checkpoint_records,
             ),
             window_count=n_windows,
+            feature_covered_seconds=min(feature_covered_seconds, duration),
+            feature_coverage=(
+                min(1.0, feature_covered_seconds / duration) if duration > 0 else 0.0
+            ),
         )
 
     def _extract_representative_features(
@@ -1099,16 +1129,25 @@ class StreamingAudioAnalyzer:
         )
         frames_per_second = max(1, int(round(self.SR / self.HOP_LENGTH)))
         start_frame = int(skip_seconds * self.SR / self.HOP_LENGTH)
+        aggregate_chroma = chroma[:, start_frame:]
+        if aggregate_chroma.shape[1] == 0:
+            raise ValueError("chunk overlap leaves no mix-chroma frames to aggregate")
         indices = range(start_frame, stft.shape[1], frames_per_second)
         times: list[float] = []
         centroid_points: list[float] = []
         band_points = {name: [] for name in FREQUENCY_BANDS}
+        chroma_points: list[list[float]] = []
         for start in indices:
             end = min(start + frames_per_second, stft.shape[1])
             if end <= start:
                 continue
             times.append(float(chunk_start + np.mean(local_times[start:end])))
             centroid_points.append(float(np.mean(centroids[start:end])))
+            chroma_point = np.mean(chroma[:, start:end], axis=1).astype(np.float64)
+            chroma_norm = float(np.linalg.norm(chroma_point))
+            if chroma_norm > 1e-8:
+                chroma_point /= chroma_norm
+            chroma_points.append(chroma_point.tolist())
             for band_name, (low, high) in FREQUENCY_BANDS.items():
                 mask = (frequencies >= low) & (frequencies < high)
                 value = float(np.mean(np.sum(stft[mask, start:end], axis=0)))
@@ -1122,8 +1161,9 @@ class StreamingAudioAnalyzer:
             "times": times,
             "bands": add_aggregate_bands(band_points),
             "centroids": centroid_points,
-            "chroma_mean": np.mean(chroma, axis=1).tolist(),
-            "chroma_weight": chroma.shape[1],
+            "chroma_mean": np.mean(aggregate_chroma, axis=1).tolist(),
+            "chroma_points": chroma_points,
+            "chroma_weight": aggregate_chroma.shape[1],
         }
 
     def _cap_representative_points(
@@ -1131,9 +1171,10 @@ class StreamingAudioAnalyzer:
         times: list[float],
         bands: dict[str, list[float]],
         centroids: list[float],
-    ) -> tuple[list[float], dict[str, list[float]], list[float]]:
+        chroma_points: list[list[float]],
+    ) -> tuple[list[float], dict[str, list[float]], list[float], list[list[float]]]:
         if len(times) <= self.MAX_REPRESENTATIVE_POINTS:
-            return times, bands, centroids
+            return times, bands, centroids, chroma_points
         edges = np.linspace(
             0,
             len(times),
@@ -1147,10 +1188,26 @@ class StreamingAudioAnalyzer:
                 for i in range(self.MAX_REPRESENTATIVE_POINTS)
             ]
 
+        reduced_chroma = np.asarray(
+            [
+                np.mean(chroma_points[edges[i] : edges[i + 1]], axis=0)
+                for i in range(self.MAX_REPRESENTATIVE_POINTS)
+            ],
+            dtype=np.float64,
+        )
+        chroma_norms = np.linalg.norm(reduced_chroma, axis=1, keepdims=True)
+        reduced_chroma = np.divide(
+            reduced_chroma,
+            chroma_norms,
+            out=np.zeros_like(reduced_chroma),
+            where=chroma_norms > 1e-8,
+        )
+
         return (
             reduce(times),
             {name: reduce(values) for name, values in bands.items()},
             reduce(centroids),
+            reduced_chroma.tolist(),
         )
 
     def _transcode_to_wav(self, path: Path) -> Optional[str]:
@@ -1394,90 +1451,3 @@ class StreamingAudioAnalyzer:
         except Exception as e:
             logger.warning(f"Energy-Berechnung fehlgeschlagen: {e}")
             return str(e)
-
-    # ------------------------------------------------------------------
-    # STFT-Streaming (fuer erweiterte Spektral-Analyse)
-    # ------------------------------------------------------------------
-    def compute_stft_streaming(
-        self,
-        audio_path: str | Path,
-        on_chunk: Optional[Callable[[np.ndarray, float], None]] = None,
-        on_progress: Optional[Callable[[float], None]] = None,
-    ) -> None:
-        """Chunk-basierte STFT-Berechnung fuer externe Konsumenten.
-
-        Ruft on_chunk(stft_magnitude, chunk_start_sec) pro Chunk auf.
-        Der Konsument verarbeitet die STFT in-place ohne Akkumulation.
-
-        Nuetzlich fuer SpectralAnalyzer-Integration bei langen Files.
-        """
-        import librosa
-
-        path = Path(audio_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Audio not found: {path}")
-
-        duration = librosa.get_duration(path=str(path))
-        step = self.window_sec - self.overlap_sec
-        if step <= 0:
-            step = self.window_sec
-        n_windows = max(1, math.ceil((duration - self.overlap_sec) / step))
-
-        for i in range(n_windows):
-            chunk_start = i * step
-            chunk_dur = min(self.window_sec, duration - chunk_start)
-            if chunk_dur < 2.0:
-                continue
-
-            try:
-                chunk = self._load_chunk(path, chunk_start, chunk_dur)
-
-                # STFT berechnen
-                S = np.abs(librosa.stft(
-                    chunk,
-                    n_fft=self.N_FFT,
-                    hop_length=self.HOP_LENGTH,
-                ))
-
-                if on_chunk:
-                    on_chunk(S, chunk_start)
-
-                del S, chunk
-                gc.collect()
-
-            except Exception as e:
-                logger.warning(f"STFT-Chunk {i} fehlgeschlagen: {e}")
-
-            if on_progress:
-                on_progress((i + 1) * 100.0 / n_windows)
-
-    # ------------------------------------------------------------------
-    # Utility: Memory-Estimation
-    # ------------------------------------------------------------------
-    @staticmethod
-    def estimate_memory_mb(duration_sec: float, sr: int = 22050) -> dict:
-        """Schaetzt RAM-Verbrauch: streaming vs. non-streaming.
-
-        Returns:
-            Dict mit 'non_streaming_mb' und 'streaming_peak_mb'.
-        """
-        # Non-streaming: volle Datei als float32 + STFT + Beat-Buffers
-        full_samples = duration_sec * sr
-        non_streaming = (
-            full_samples * 4  # float32 audio
-            + full_samples * 4  # STFT workspace (grob)
-            + 50 * 1024 * 1024  # librosa overhead
-        ) / (1024 * 1024)
-
-        # Streaming: nur 30s chunk + overhead
-        chunk_samples = 30 * sr
-        streaming = (
-            chunk_samples * 4  # float32 audio chunk
-            + chunk_samples * 4  # STFT workspace
-            + 15 * 1024 * 1024  # overhead + aggregation
-        ) / (1024 * 1024)
-
-        return {
-            'non_streaming_mb': round(non_streaming, 1),
-            'streaming_peak_mb': round(streaming, 1),
-        }

@@ -1,0 +1,14 @@
+# KI-Laufzeitverträge und Quellen
+
+Konsolidiert am 08.11.2026 aus den bereits seit 29.07. als SUPERSEDED markierten Prototyp-/Migrationsanleitungen. Diese Notiz bewahrt deren aktuelle normative Kopfabschnitte; sie behauptet keine neu ausgeführte Hardware-, Produkt- oder Nutzerabnahme. Maßgeblich bleiben die verantwortlichen Quellen und Projektregeln.
+
+- WPF/.NET 9 spricht REST/SSE mit `127.0.0.1:8765`; Architektur und Zustand: [ADR-002](ADR-002-csharp-wpf-fastapi-hybrid.md) und die weiteren ADRs dieses Verzeichnisses.
+- Python 3.11.x, NumPy 1.26.4; ONNX über `DmlExecutionProvider`, gemeinsam `enable_mem_pattern=False` und `enable_cpu_mem_arena=False`, kein CPU-Fallback. Rendering ausschließlich `h264_amf`, `hevc_amf` oder `av1_amf`, bei fehlendem AMF geschlossen fehlschlagen.
+- Registrierte SigLIP-ONNX-Embeddings haben 1152 Dimensionen. CLAP-Semantik setzt ein registriertes CLAP-ONNX-Modell voraus, andernfalls ausdrücklich `unavailable`. Modellherkunft, Transformation, Lizenztexte und exakte Hashes sind in [Modellmanifest](../../config/directml-model-assets.json) und [Asset-Bundle](../../config/directml-asset-bundle.json) autoritativ.
+- Bewahrte CLAP-Provenienz: Audio/Text `ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763`, Prozessor `laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a`, Lizenzkette `BSD-3-Clause AND Apache-2.0`. Keine Installations-/Downloadanweisung aus den alten Prototypbeispielen ableiten.
+- Pacing verwendet autoritative Beat-/Downbeat-Provenienz, exakte Timeline-Grenzen, registrierte Projekt-Clip-IDs und explizite Semantikverfügbarkeit. Verantwortlich: [Pacing-Router](../../backend/routers/pacing_router.py), [Service](../../src/pb_studio/services/pacing_service.py), [Engine](../../src/pb_studio/pacing/advanced_pacing_engine.py). Alte direkte Medienpfad-, VideoGenerator- und VectorStore-Beispiele waren ausdrücklich kein aktiver Integrationsvertrag.
+- Historische Hardwaremessungen bleiben im [Hardware-Guide](../HARDWARE_VERIFY_GUIDE.md) mit ihren ursprünglichen Grenzen und datierten Belegen; aktuelle Anforderungen und offene Arbeiten bleiben in den jeweiligen Specs.
+
+## Historische Pfadzuordnung
+
+Diese Notiz ersetzt `docs/CLAP_INTEGRATION.md`, `docs/CLAP_QUICKSTART.md`, `docs/PACING_ENGINE_IMPLEMENTATION.md`, `docs/pacing_engine_integration.md` und `docs/SYSTEM_DESIGN_AMD_HYBRID.md`. Der abgeschlossene frühe PyQt-Plan `docs/fix_plan.md` und die überholte Februar-Bestandsaufnahme `docs/FEHLERANALYSE_REPORT.md` wurden ebenfalls entfernt; die späteren Systemaudit-Specs bleiben maßgeblich. Historische Audit-Tabellen können die alten Pfade weiterhin als damalige Fundstellen nennen; daraus entsteht kein heutiger Ausführungsauftrag.

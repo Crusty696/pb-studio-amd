@@ -13,6 +13,7 @@ Motion-Analyzer: Nutzt RAFT ONNX wenn verfügbar, sonst Librosa-Fallback.
 from __future__ import annotations
 
 import logging
+import math
 import random
 from collections import OrderedDict, deque
 from typing import Any, Dict, List, Optional, Tuple
@@ -22,6 +23,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from .pacing_models import SelectedClip, SelectionProvenance
+from pb_studio.embedding_identity import is_current_video_embedding, current_video_embedding_identity
 from .constants import (
     EMBEDDING_CACHE_SIZE,
     MOTION_TOLERANCE,
@@ -161,6 +163,8 @@ class ClipMetadata:
     energy_score: float = 0.0
     tags: List[str] = None
     embedding: Optional[np.ndarray] = None
+    embedding_model_name: Optional[str] = None
+    embedding_model_version: Optional[str] = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -206,6 +210,7 @@ class ClipSelector:
         self.strategy = strategy
         self.motion_tolerance = motion_tolerance
         self.use_semantic = use_semantic
+        self.use_motion_matching = True
         self.blacklist_percentage = max(0.0, min(1.0, blacklist_percentage))
 
         # Round-Robin Zustand
@@ -561,13 +566,47 @@ class ClipSelector:
         # L-TI-1: Expliziter Caller-Prompt aktiviert semantic Pfad auch ohne
         # globalen use_semantic-Switch (z.B. pacing_service uebergibt song_mood).
         if self._current_prompt_override or self.use_semantic or self.strategy == "semantic":
-            return self._select_semantic(candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
+            return self._select_semantic(
+                candidates, trigger_strength, trigger_type,
+                current_time=current_time, audio_state=audio_state,
+            )
         elif self.strategy == "random":
             return self._select_random(candidates)
         elif self.strategy == "round_robin":
             return self._select_round_robin(candidates)
         else:
             return self._select_by_motion(candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
+
+    def _semantic_theme_tie_break(
+        self, candidates: List[dict], semantic_scores: Dict[str, float]
+    ) -> Optional[dict]:
+        """Return a themed candidate only when its semantic score is a near tie."""
+        if not self.active_theme or len(candidates) < 2:
+            return None
+        ranked = sorted(
+            (
+                (float(semantic_scores[key]), clip)
+                for clip in candidates
+                if (key := self._normalized_path_key(self._metadata_path(clip)))
+                in semantic_scores
+            ),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+        if len(ranked) < 2:
+            return None
+        top_score = ranked[0][0]
+        theme_rank = next(
+            (index for index, (score, clip) in enumerate(ranked)
+             if belongs_to_theme(clip, self.active_theme)
+             and top_score - score <= 0.05),
+            None,
+        )
+        if theme_rank is None:
+            return None
+        # Re-rank only the near-tie set with the normal music/motion scorer;
+        # theme cannot displace a candidate outside that semantic window.
+        return ranked[theme_rank][1]
 
     def _select_via_brain(
         self,
@@ -600,7 +639,7 @@ class ClipSelector:
                 cut_time_sec=float(current_time or 0.0),
                 cut_duration_sec=cut_duration_sec,
                 audio_embedding=af.get("audio_embedding"),
-                video_embedding=vf.get("video_embedding"),
+                video_embedding=vf.get("video_embedding") if is_current_video_embedding(vf) else None,
             )
             from pb_studio.brain.reranker import RerankInput
             rerank_inputs.append(RerankInput(candidate=clip, features=feats))
@@ -611,10 +650,15 @@ class ClipSelector:
             min_confidence=self.brain_min_confidence,
         )
         if not scored:
+            audio_state = "normal"
+            if current_time is not None:
+                audio_state = self.get_audio_state_at_time(current_time)
             selected = self._fallback_select(
                 candidates,
                 trigger_strength,
                 trigger_type,
+                current_time=current_time,
+                audio_state=audio_state,
             )
             fallback_details = dict(self._selection_details)
             self._record_selection_details(
@@ -784,6 +828,18 @@ class ClipSelector:
         diff = abs(motion_norm - intensity)
         return 1.0 - diff
 
+    @staticmethod
+    def _normalize_motion_score(value: Any) -> float:
+        """Normalize persisted RAFT scalars to the selector's 0..1 domain."""
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            return 0.5
+        if not math.isfinite(score):
+            return 0.5
+        score /= 30.0
+        return max(0.0, min(1.0, score))
+
     def _embedding_from_vector_store(self, target_absolute: str):
         """
         Holt den Vektor eines Clips direkt aus dem VectorStore.
@@ -804,6 +860,8 @@ class ClipSelector:
         tombstoned = set(getattr(store, "tombstoned_ids", set()) or set())
         for faiss_id, meta in list(metadata.items()):
             if not isinstance(meta, dict):
+                continue
+            if not is_current_video_embedding(meta):
                 continue
             raw_path = meta.get("path") or meta.get("file_path")
             if not raw_path:
@@ -840,7 +898,8 @@ class ClipSelector:
         # Finde das Embedding des Target-Clips in unserem cache/index
         target_emb = None
         for metadata in self.clip_cache.values():
-            if str(Path(metadata.file_path).absolute()) == target_absolute:
+            if (str(Path(metadata.file_path).absolute()) == target_absolute
+                    and is_current_video_embedding(vars(metadata))):
                 target_emb = metadata.embedding
                 break
 
@@ -862,9 +921,11 @@ class ClipSelector:
 
 
         try:
-            results = self.vector_store.search(target_emb, k=10)
+            results = self.vector_store.search(target_emb, k=10, query_identity=current_video_embedding_identity())
             neighbors = []
             for meta, score in results:
+                if not is_current_video_embedding(meta):
+                    continue
                 p = meta.get("path", meta.get("file_path", ""))
                 if p:
                     neighbors.append(str(Path(p).absolute()))
@@ -909,16 +970,21 @@ class ClipSelector:
                 _key_score_fn = None
 
         for clip in clips:
-            clip_motion = clip.get("motion_score", 0.5)
+            clip_motion = self._normalize_motion_score(clip.get("motion_score", 0.5))
             motion_diff = abs(target_motion - clip_motion)
-            motion_score = 1.0 - min(motion_diff / (self.motion_tolerance + 0.01), 1.0)
+            motion_score = 1.0
+            if self.use_motion_matching:
+                motion_score = 1.0 - min(
+                    motion_diff / (self.motion_tolerance + 0.01),
+                    1.0,
+                )
             motion_curve_match_score = None
 
             # L-M3: motion_curve-aware boost. trigger_strength dient als Proxy für
             # die aktuelle Audio-Intensität (energy-curve nicht direkt im Selector
             # verfügbar — bewusst keine position-aware-Logic hardcodet).
             mc = clip.get("motion_curve") if isinstance(clip, dict) else None
-            if mc:
+            if self.use_motion_matching and mc:
                 motion_curve_boost = self._motion_curve_score(
                     mc,
                     float(clip.get("duration", 1.0) or 1.0),
@@ -929,7 +995,7 @@ class ClipSelector:
 
             # Roter Faden: Continuity-Bonus für ähnliche Motion zum letzten Clip
             continuity_bonus = 0.0
-            if self._last_clip_path:
+            if self.use_motion_matching and self._last_clip_path:
                 last_motion = self._last_clip_motion_score
                 motion_continuity = 1.0 - abs(last_motion - clip_motion)
                 continuity_bonus = motion_continuity * self._continuity_weight * 0.5
@@ -938,7 +1004,7 @@ class ClipSelector:
             audio_state_adjustment = 0.0
 
             # Stufe 2: Audio-Heuristik Scoring-Verstärker
-            if audio_state == "break":
+            if self.use_motion_matching and audio_state == "break":
                 if clip_motion < 0.3:
                     total_score += 0.25
                     audio_state_adjustment += 0.25
@@ -948,7 +1014,7 @@ class ClipSelector:
                 else:
                     total_score -= 0.50
                     audio_state_adjustment -= 0.50
-            elif audio_state == "drop":
+            elif self.use_motion_matching and audio_state == "drop":
                 if clip_motion >= 0.6:
                     total_score += 0.40
                     audio_state_adjustment += 0.40
@@ -972,8 +1038,9 @@ class ClipSelector:
             # Stufe 3: Style-Persistenz / Narrative Kapitel-Themen
             theme_bonus = 0.0
             if self.active_theme and belongs_to_theme(clip, self.active_theme):
-                total_score += 1000.0
-                theme_bonus = 1000.0
+                # Theme continuity may break near ties, not override music fit.
+                theme_bonus = 0.05
+                total_score += theme_bonus
 
             # Stufe 4: Bridge-Übergänge für manuelle Storyboard-Anker
             anchor_in_bonus = 0.0
@@ -1057,7 +1124,9 @@ class ClipSelector:
             clip_id=str(best_clip.get("id", "unknown")),
             clip_path=best_clip.get("file_path", best_clip.get("path", "")),
             score=best_score,
-            motion_score=best_clip.get("motion_score", 0.5),
+            motion_score=self._normalize_motion_score(
+                best_clip.get("motion_score", 0.5)
+            ),
         )
 
     def _select_semantic(
@@ -1114,18 +1183,21 @@ class ClipSelector:
                 results = self.vector_store.search(
                     query_embedding,
                     k=min(10, len(clips)),
+                    query_identity=current_video_embedding_identity(),
                 )
                 faiss_status = "searched"
                 faiss_scores = {
                     self._normalized_path_key(self._metadata_path(meta)): float(score)
                     for meta, score in results
                     if isinstance(meta, dict)
+                    and is_current_video_embedding(meta)
                     and self._normalized_path_key(self._metadata_path(meta))
                 }
                 faiss_paths = {
                     self._normalized_path_key(self._metadata_path(meta))
                     for meta, _score in results
                     if isinstance(meta, dict)
+                    and is_current_video_embedding(meta)
                 }
                 faiss_paths.discard("")
                 semantic_candidates = [
@@ -1135,8 +1207,19 @@ class ClipSelector:
                     in faiss_paths
                 ]
                 if semantic_candidates:
+                    has_theme_tie = self._semantic_theme_tie_break(
+                        semantic_candidates, faiss_scores
+                    ) is not None
+                    ranking_candidates = semantic_candidates
+                    if has_theme_tie:
+                        top_score = max(faiss_scores.values())
+                        ranking_candidates = [
+                            clip for clip in semantic_candidates
+                            if faiss_scores.get(self._normalized_path_key(self._metadata_path(clip)), -1.0)
+                            >= top_score - 0.05
+                        ]
                     selected = self._select_by_motion(
-                        semantic_candidates,
+                        ranking_candidates,
                         trigger_strength,
                         trigger_type,
                         current_time=current_time,
@@ -1172,6 +1255,8 @@ class ClipSelector:
         # bleibt für bestehende Aufrufer kompatibel. Keine Dummy-Vektoren.
         scored_candidates = []
         for clip in clips:
+            if not is_current_video_embedding(clip):
+                continue
             clip_embedding = clip.get("embedding")
             if clip_embedding is None:
                 clip_embedding = clip.get("video_embedding")
@@ -1201,8 +1286,19 @@ class ClipSelector:
                 self._normalized_path_key(self._metadata_path(clip)): float(score)
                 for clip, score in scored_candidates[:10]
             }
+            has_theme_tie = self._semantic_theme_tie_break(
+                semantic_candidates, direct_scores
+            ) is not None
+            ranking_candidates = semantic_candidates
+            if has_theme_tie:
+                top_score = max(direct_scores.values())
+                ranking_candidates = [
+                    clip for clip in semantic_candidates
+                    if direct_scores.get(self._normalized_path_key(self._metadata_path(clip)), -1.0)
+                    >= top_score - 0.05
+                ]
             selected = self._select_by_motion(
-                semantic_candidates,
+                ranking_candidates,
                 trigger_strength,
                 trigger_type,
                 current_time=current_time,
@@ -1396,8 +1492,11 @@ class ClipSelector:
 
     def add_clip(self, clip: ClipMetadata) -> int:
         """Fügt einen Clip zur Auswahl hinzu (FAISS-Architektur)."""
-        if clip.embedding is not None and self.vector_store is not None:
+        if (clip.embedding is not None and self.vector_store is not None
+                and is_current_video_embedding(vars(clip))):
             meta_info = {
+                "embedding_model_name": clip.embedding_model_name,
+                "embedding_model_version": clip.embedding_model_version,
                 "video_id": clip.video_id,
                 "file_path": clip.file_path,
                 "start_time": clip.start_time,
@@ -1419,17 +1518,23 @@ class ClipSelector:
         query_embedding: np.ndarray,
         k: int = 5,
         exclude_ids: Optional[List[int]] = None,
+        *, query_identity=None,
     ) -> List[Tuple[ClipMetadata, float]]:
         """FAISS-basierte Ähnlichkeitssuche."""
+        if not is_current_video_embedding(query_identity):
+            logger.warning("Similarity unavailable: query identity missing or incompatible")
+            return []
         if self.vector_store is None or self.vector_store.index.ntotal == 0:
             logger.warning("VectorStore nicht verfügbar — Zufallsauswahl")
             return self._random_selection_meta(k)
 
-        results = self.vector_store.search(query_embedding, k=k * 2)
+        results = self.vector_store.search(query_embedding, k=k * 2, query_identity=query_identity)
         selected = []
         exclude_set = set(exclude_ids) if exclude_ids else set()
 
         for meta, score in results:
+            if not is_current_video_embedding(meta):
+                continue
             faiss_id = meta.get("video_id", -1)
             if faiss_id in exclude_set:
                 continue
@@ -1507,6 +1612,7 @@ class ClipSelector:
         required_tags: Optional[List[str]] = None,
         weights: Optional[Dict[str, float]] = None,
         k: int = 5,
+        *, query_identity=None,
     ) -> List[Tuple[ClipMetadata, float]]:
         """Hybrid-Auswahl mit gewichteten Kriterien (FAISS-Architektur)."""
         if weights is None:
@@ -1524,7 +1630,9 @@ class ClipSelector:
         scored = []
         for clip in candidates:
             score = 0.0
-            if query_embedding is not None and clip.embedding is not None:
+            if (query_embedding is not None and is_current_video_embedding(query_identity)
+                    and clip.embedding is not None
+                    and is_current_video_embedding(vars(clip))):
                 score += self._cosine_similarity(query_embedding, clip.embedding) * weights.get("similarity", 0.0)
             if energy_target is not None:
                 score += (1.0 - abs(clip.energy_score - energy_target)) * weights.get("energy", 0.0)

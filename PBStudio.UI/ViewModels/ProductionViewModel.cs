@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -17,6 +18,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     private readonly TimelineStateService _timelineState;
     private readonly ProjectService _projects;
     private readonly IDialogService _dialogService;
+    private readonly Dispatcher _dispatcher;
     private string? _currentTaskId;
     private DateTime _lastGpuLogUtc = DateTime.MinValue;
     private bool _disposed;
@@ -36,6 +38,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _renderProgress;
     [ObservableProperty] private bool _isRendering;
     [ObservableProperty] private string _etaText = "";
+    [ObservableProperty] private string _validationText = "";
     [ObservableProperty] private bool _hasProject;
 
     public ObservableCollection<string> RenderLogEntries { get; } = [];
@@ -50,6 +53,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         _timelineState = timelineState;
         _projects = projects;
         _dialogService = dialogService;
+        _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         HasProject = _projects.HasProject;
         _sse.ProgressReceived += OnRenderProgress;
         _sse.LogReceived += OnLogReceived;
@@ -60,7 +64,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         {
             // Send() kann von Background-Thread kommen (ProjectService.OpenProjectAsync).
             // NotifyCanExecuteChanged + Observable-Property-Sets brauchen UI-Thread.
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 HasProject = true;
                 StatusText = "Bereit für Rendering";
@@ -72,7 +76,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             });
         });
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 _timelineState.Clear();
                 ResetProjectState();
@@ -181,6 +185,11 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!await _timelineState.WaitForPendingSaveAsync())
+        {
+            StatusText = "Render abgebrochen: Timeline konnte nicht gespeichert werden.";
+            return;
+        }
         await SyncAudioPathFromTimelineAsync();
         if (string.IsNullOrWhiteSpace(AudioPath))
         {
@@ -235,6 +244,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                     result.ValidationPath,
                     result.ProgressEnd,
                     result.ValidationStatus);
+                UpdateValidationText(result.ValidationStatus, result.ValidationPhase, result.ValidationProgress);
                 AppendLog("info", $"Render-Task gestartet: {result.TaskId}");
             }
             else
@@ -290,7 +300,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnTimelineChanged(object? sender, TimelineResponse? timeline)
     {
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        _ = _dispatcher.InvokeAsync(() =>
         {
             AudioPath = timeline?.AudioPath ?? string.Empty;
         });
@@ -299,12 +309,16 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     private void OnRenderProgress(object? sender, ProgressEventArgs e)
     {
         if (e.EventType != "render_progress")
+        {
+            if (e.EventType == "replay_gap")
+                _ = ReconcileRenderStatusAsync();
             return;
+        }
 
         if (!string.IsNullOrEmpty(_currentTaskId) && !string.IsNullOrEmpty(e.TaskId) && e.TaskId != _currentTaskId)
             return;
 
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        _ = _dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.TaskId))
                 _currentTaskId = e.TaskId;
@@ -326,7 +340,64 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 e.ValidationPath,
                 e.ProgressEnd,
                 e.ValidationStatus);
+            UpdateValidationText(
+                e.ValidationStatus,
+                e.ValidationPhase,
+                e.ValidationProgress >= 0.0 ? e.ValidationProgress : null);
         });
+    }
+
+    private async Task ReconcileRenderStatusAsync()
+    {
+        var taskId = _currentTaskId;
+        if (string.IsNullOrWhiteSpace(taskId))
+            return;
+        try
+        {
+            var status = await _api.GetRenderStatusAsync(taskId).ConfigureAwait(false);
+            if (status == null || !string.Equals(status.TaskId, _currentTaskId, StringComparison.Ordinal))
+                return;
+            await _dispatcher.InvokeAsync(() =>
+            {
+                ApplyProgressUpdate(
+                    status.TaskId,
+                    status.Status,
+                    status.ProgressPercent > 0.0 ? status.ProgressPercent : status.Percent,
+                    status.Message ?? "Render-Status abgeglichen",
+                    status.CurrentFrame,
+                    status.TotalFrames,
+                    status.ElapsedSeconds,
+                    status.EtaSeconds,
+                    status.OutputPath,
+                    status.Error,
+                    status.QueueJobId,
+                    status.RunId,
+                    status.EvidencePath,
+                    status.ValidationPath,
+                    status.ProgressEnd,
+                    status.ValidationStatus);
+                UpdateValidationText(
+                    status.ValidationStatus,
+                    status.ValidationPhase,
+                    status.ValidationProgress);
+            });
+        }
+        catch (Exception ex)
+        {
+            await _dispatcher.InvokeAsync(() => AppendLog(
+                "warn",
+                $"Render-Statusabgleich für {taskId} fehlgeschlagen: {ex.Message}"));
+        }
+    }
+
+    private void UpdateValidationText(string? status, string? phase, double? percent)
+    {
+        if (string.IsNullOrWhiteSpace(status) && string.IsNullOrWhiteSpace(phase))
+            return;
+        var label = string.IsNullOrWhiteSpace(phase) ? status : phase.Replace('_', ' ');
+        ValidationText = percent is >= 0.0
+            ? $"Validierung: {label} ({percent:0}%)"
+            : $"Validierung: {label}";
     }
 
     private void ApplyProgressUpdate(
@@ -435,12 +506,12 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnLogReceived(object? sender, LogEventArgs e)
     {
-        _ = App.Current.Dispatcher.InvokeAsync(() => AppendLog(e.Level, e.Message));
+        _ = _dispatcher.InvokeAsync(() => AppendLog(e.Level, e.Message));
     }
 
     private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
     {
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        _ = _dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.Error))
             {
@@ -488,6 +559,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     {
         IsRendering = false;
         EtaText = string.Empty;
+        ValidationText = string.Empty;
         StatusText = statusText;
         AppendLog(logLevel, logMessage);
         _currentTaskId = null;

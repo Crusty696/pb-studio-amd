@@ -1,0 +1,7 @@
+{
+  "Tests/test_beatnet_compat.py": "e92928f642c6a68fc3fd576f1f2f0f311b864156a7552cbea14394cafa6ee021",
+  "src/pb_studio/audio/analyzer.py": "284e7b405a355e7019c6390f37469466ebadc323db5740bc2971140a607ccd9c",
+  "src/pb_studio/audio/beatnet_compat.py": "677346605521ad235d989fc57116ed8f58c63e0cb2b52049a0129b87432b01fe",
+  "Tests/test_beatnet_state.py": "73790ed7c32eb8afcd17e2e07ea06b1e706aed1a15c3f63f73f27831be2cdcb9",
+  "src/pb_studio/audio/beat_detector.py": "90af031c10a36c48b1eedb5914ebff16db064e69bb09eac025411709852e26c4"
+}

@@ -1,0 +1,26 @@
+{
+  "status": "PREPARATION_ONLY",
+  "files": {
+    "t002-reference-preparation-2026-10-13\\audio-events.csv": "0932e2bd3c552cc1db5779986195575d014d099988e5660907c1ea04f7c01774",
+    "t002-reference-preparation-2026-10-13\\audio-reference-workbook.json": "88213eac643b0058a4bcfcb165b6387d4c16a792a20ba0137cb80700c4e0b776",
+    "t002-reference-preparation-2026-10-13\\historical-search-patterns.txt": "31b2f3b9f11ea4747ea49b68edcf34243729d66a97a2b8ab4d65556dd5239381",
+    "t002-reference-preparation-2026-10-13\\historical-text-scan.json": "bc593ac137079fe189c5eefa436e16567ff8e4bed38e8bd8cf52b27e29e0591d",
+    "t002-reference-preparation-2026-10-13\\holdout-reservations.json": "a06abbc4d4179481c57001d235d84d63261eeae079076ae4850341b2ce040be6",
+    "t002-reference-preparation-2026-10-13\\prepare_exact_frames.py": "d9f9289a85befb548465e2e081d4693eaad318fca79952d673486a97611a5f3f",
+    "t002-reference-preparation-2026-10-13\\reference-frames.json": "ba035a155c53e0c4f27f95299b57f3f638f9ccf33718a837aaa7083fea79edc5",
+    "t002-reference-preparation-2026-10-13\\reference-preparation-report.md": "c15bbea1133d2eac8fef1992ad21f6637c755eac5f6d0f0ae505a9c954410fad",
+    "t002-reference-preparation-2026-10-13\\reference-sheet.jpg": "3c07fe4441d2968c8aadd0deec560752ee6af970f8d5bca78906516f8e017a2b",
+    "t002-reference-preparation-2026-10-13\\scan_historical_exposure.py": "a37ed717bd491bce7b8231caccb1c7974c94625148de33641b34db02c3363afa",
+    "t002-reference-preparation-2026-10-13\\V01-reference.png": "6b5411062d8228c95d3c2288e55b22a9ab0db24f8b2c322b16a34d16eb5d9c74",
+    "t002-reference-preparation-2026-10-13\\V02-reference.png": "8188e05f71e38feedfb3e0fd3d4f4f79e8b41cab617a3c1e0782055bde77122b",
+    "t002-reference-preparation-2026-10-13\\V03-reference.png": "34f445363e1ba0680cf7d8e5152cdb91a659526953d75fe288fc257a51af785b",
+    "t002-reference-preparation-2026-10-13\\V04-reference.png": "1c1ad3a99d35dcbe4b3fa5bcbcc3e59b219502fd9ec30a8ebaf8913ea63d41b2",
+    "t002-reference-preparation-2026-10-13\\V05-reference.png": "010fd896ab7bbccab7711635ce0e7ddf8f29ade2515763ab3b616a7408bebda4",
+    "t002-reference-preparation-2026-10-13\\V06-reference.png": "6542bbafb087179015c1ddb7ca394dcdb382a310e6d099d370357a0e11fd8f5c",
+    "t002-reference-preparation-2026-10-13\\validation.json": "c3df7968daef9b34fa4d35ee0583a6ec83bc074274e0f71bbec18e4a0ec988d7",
+    "t002-reference-preparation-2026-10-13\\video-reference-drafts.json": "a87af799c39d915611362a7a2dcf8d36a90fa8aabd012e9c15d51705931c9565",
+    "t002-reference-preparation-2026-10-13\\video-review.csv": "99b3166ae1bb12fe466cba942ffac213a50955389d946b50fd348b1943e817b2",
+    "reference-manifest.json": "be7c80f44b0c7bbfadc4fdb36673d7b1b83e3564659f09c5b24b5e487ed076e5",
+    "benchmark-spec.md": "904e5ae588d050fcce3112bea28f26f5240f2e812369e12fb634dbd8b4ebdbf3"
+  }
+}

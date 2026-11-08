@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from pb_studio.core.model_loader import ModelLoader, ModelSpec, ModelType
-from pb_studio.core.vram_arbiter import VRAMArbiter
 from pb_studio.core.vram_budget_manager import ModelPriority, VRAMBudgetManager
 
 
@@ -59,7 +58,7 @@ def test_gpu_deadline_returns_while_worker_keeps_lock() -> None:
     asyncio.run(scenario())
 
 
-def test_gpu_lock_wait_cancellation_releases_uncommitted_reservation(
+def test_gpu_lock_wait_cancellation_never_reserves_before_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend import dependencies
@@ -92,7 +91,8 @@ def test_gpu_lock_wait_cancellation_releases_uncommitted_reservation(
 
         assert not worker_started.is_set()
         assert lock.locked()
-        manager.cancel_reservation.assert_called_once_with("moondream_fp16")
+        manager.reserve.assert_not_called()
+        manager.cancel_reservation.assert_not_called()
         lock.release()
 
     asyncio.run(scenario())
@@ -148,26 +148,6 @@ def test_successful_eviction_callback_is_accounted_after_callback() -> None:
     assert manager.is_model_loaded("resident") is False
     assert manager.total_committed_mb == 0
     assert manager.total_reserved_mb == 1000
-
-
-def test_arbiter_forces_fresh_sensor_read(monkeypatch: pytest.MonkeyPatch) -> None:
-    monitor = MagicMock()
-    monitor.get_stats.return_value = {
-        "gpu_memory_used": 1000.0,
-        "gpu_memory_total": 8192.0,
-    }
-    manager = MagicMock()
-    manager.available_vram_mb = 6000
-    manager.can_fit.return_value = True
-
-    monkeypatch.setattr(
-        "pb_studio.core.vram_budget_manager.get_vram_manager",
-        lambda monitor=None: manager,
-    )
-    arbiter = VRAMArbiter(monitor)
-
-    assert arbiter.can_allocate(1000) is True
-    monitor.get_stats.assert_called_once_with(force_refresh=True)
 
 
 def test_model_loader_rejects_failed_commit(

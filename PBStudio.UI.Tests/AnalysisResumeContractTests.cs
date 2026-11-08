@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -79,6 +80,9 @@ public sealed class AnalysisResumeContractTests
         viewModel.VideoClips.Add(pending);
         viewModel.SelectedClip = completed;
         viewModel.SelectedSortOption = "Name A-Z";
+        viewModel.StepAnalyzeMotion = false;
+        viewModel.StepGenerateEmbeddings = false;
+        viewModel.StepGenerateCaptions = false;
 
         var sorted = viewModel.VideoClipsView.Cast<VideoClipModel>().ToList();
         Assert.AreSame(pending, sorted[0]);
@@ -184,6 +188,57 @@ public sealed class AnalysisResumeContractTests
     }
 
     [TestMethod]
+    public async Task AudioAnalysisCommand_ShowsSuspectSegmentedBeatGridAsUncertain()
+    {
+        var project = new ProjectInfo(
+            "Beat Grid",
+            @"C:\Projects\BeatGrid",
+            1,
+            0,
+            false);
+        var beatGrid = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+            """{"status":"suspect","method":"segmented_beat_grid","dominant_bpm":124.0,"segment_count":2,"dominant_span_s":30.0}""");
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(project))
+            .Handle(
+                nameof(IApiClient.AnalyzeAudioAsync),
+                _ => Task.FromResult<AudioAnalysisResult?>(new AudioAnalysisResult(
+                    7,
+                    60.0,
+                    124.0,
+                    120,
+                    [],
+                    AnalysisStatus: "completed",
+                    BeatGrid: beatGrid)));
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(project.Path));
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        using var viewModel = new AudioLibraryViewModel(
+            api.Client,
+            new AudioLibraryStateService(
+                api.Client,
+                NullLogger<AudioLibraryStateService>.Instance),
+            sse,
+            new DialogServiceStub(),
+            projects);
+        WeakReferenceMessenger.Default.UnregisterAll(viewModel);
+        viewModel.SelectedClip = new AudioClipModel { Id = 7, Name = "mix.wav" };
+
+        await viewModel.AnalyzeSelectedCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("suspect", viewModel.BeatGridStatus);
+        StringAssert.Contains(viewModel.BeatGridText, "Segmentraster:");
+        StringAssert.Contains(viewModel.BeatGridText, "2 Abschnitte");
+        StringAssert.Contains(viewModel.BeatGridText, "unsicher");
+    }
+
+    [TestMethod]
     public void SseInterrupted_IsTerminalAndCannotBeThrottled()
     {
         using var sse = new SSEClient(
@@ -220,6 +275,42 @@ public sealed class AnalysisResumeContractTests
             statuses.Count,
             $"Terminaler Abbruch vom 100-ms-Filter verworfen; empfangen: {string.Join(", ", statuses)}");
         CollectionAssert.AreEqual(new[] { "running", "interrupted" }, statuses);
+    }
+
+    [TestMethod]
+    public void SseCancelled_IsTerminalAndCannotBeThrottled()
+    {
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        var statuses = new List<string>();
+        sse.ProgressReceived += (_, args) => statuses.Add(args.Status);
+
+        var streamKindType = typeof(SSEClient).GetNestedType(
+            "StreamKind",
+            BindingFlags.NonPublic)!;
+        var progressKind = Enum.Parse(streamKindType, "Progress");
+        var processEvent = typeof(SSEClient).GetMethod(
+            "ProcessEvent",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        processEvent.Invoke(
+            sse,
+            [
+                progressKind,
+                "render_progress",
+                """{"task_id":"cancel-22","status":"running","percent":92}""",
+            ]);
+        processEvent.Invoke(
+            sse,
+            [
+                progressKind,
+                "render_progress",
+                """{"task_id":"cancel-22","status":"cancelled","percent":92}""",
+            ]);
+
+        Assert.AreEqual(2, statuses.Count);
+        CollectionAssert.AreEqual(new[] { "running", "cancelled" }, statuses);
     }
 
     [TestMethod]

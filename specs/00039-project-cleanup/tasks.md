@@ -1,0 +1,3 @@
+- [X] T001 {FR-001,TR-001} Inventar und Entfernung belegter Wegwerfartefakte.
+- [X] T002 {FR-002} Dubletten und uebrige Altlasten klassifizieren.
+- [X] T003 {TR-002,OR-001} Erhalt pruefen und Bericht/Vault aktualisieren.

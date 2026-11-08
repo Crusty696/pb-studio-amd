@@ -63,6 +63,12 @@
                                    Foreground="{StaticResource AbletonTextDim}"
                                    AutomationProperties.LiveSetting="Polite"/>
                     </StackPanel>
+                    <TextBlock Text="{Binding HistoryStatus}"
+                               Margin="0,6,0,0"
+                               Foreground="{StaticResource AbletonTextDim}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               AutomationProperties.Name="Hirn-Historienstatus"/>
                 </StackPanel>
 
                 <Button Grid.Column="1"
@@ -286,12 +292,12 @@
                          AutomationProperties.Name="Hirn-Status"
                          AutomationProperties.LiveSetting="Polite"/>
                 <Button Grid.Column="1"
-                        Content="Reset anfordern"
+                        Content="Globale Beta-Gewichte resetten"
                         Command="{Binding ResetRequestCommand}"
                         Margin="0,0,8,0"
                         Padding="12,4"
-                        AutomationProperties.Name="Hirn-Reset anfordern"
-                        AutomationProperties.HelpText="Startet die zweistufige Bestätigung; noch werden keine Lerndaten gelöscht."
+                        AutomationProperties.Name="Globalen Beta-Gewichtsreset anfordern"
+                        AutomationProperties.HelpText="Startet die zweistufige Bestätigung für globale Beta-Gewichte. Projektor und Feedback-Historie bleiben erhalten."
                         IsEnabled="{Binding IsResetPending, Converter={StaticResource InverseBooleanConverter}}"/>
                 <Button Grid.Column="2"
                         Content="Reset bestätigen"
@@ -299,7 +305,7 @@
                         Background="#A03030" Foreground="White"
                         Padding="12,4"
                         AutomationProperties.Name="Hirn-Reset bestätigen"
-                        AutomationProperties.HelpText="Löscht nach vorheriger Anforderung die gelernten Gewichte des aktiven Projekts. Dieser Vorgang kann nicht rückgängig gemacht werden."
+                        AutomationProperties.HelpText="Löscht nach vorheriger Anforderung die globalen Beta-Gewichte aller Projekte. Semantischer Projektor und Feedback-Historie bleiben erhalten. Dieser Vorgang kann nicht rückgängig gemacht werden."
                         IsEnabled="{Binding IsResetPending}"/>
             </Grid>
         </md:Card>

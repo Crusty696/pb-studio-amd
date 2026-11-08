@@ -1,7 +1,7 @@
 # OpenAPI → C# Code Generation
 
 Backend Pydantic schemas are the single source of truth for HTTP DTOs.
-WPF C# DTOs in `PBStudio.UI/Generated/` are auto-generated from
+WPF C# DTOs in `PBStudio.UI/obj/Generated/` are auto-generated from
 `PBStudio.UI/openapi.snapshot.json` at build time via NSwag.MSBuild.
 
 ## Workflow
@@ -25,7 +25,7 @@ When you change a backend Pydantic schema:
 |---|---|---|
 | `PBStudio.UI/openapi.snapshot.json` | Cached spec, source for generation | yes |
 | `PBStudio.UI/nswag.json` | Generator config | yes |
-| `PBStudio.UI/Generated/ApiTypes.g.cs` | Generated DTOs | NO (.gitignore) |
+| `PBStudio.UI/obj/Generated/ApiTypes.g.cs` | Generated DTOs | NO (.gitignore) |
 | `PBStudio.UI/Models/<X>Response.cs` | `global using` shims for backwards compat | yes |
 
 ## Adding a new DTO
@@ -46,4 +46,4 @@ When you change a backend Pydantic schema:
 
 ## Audit reference
 
-Audit V2 finding S-H1b in `AUDIT_FULL_STACK_2026-05-19_v2.md`.
+Current DTO contract: `specs/00028-dto-consolidation/spec.md`.

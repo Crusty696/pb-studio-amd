@@ -48,10 +48,12 @@ DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
 MODEL_CAPABILITY_CHAT = "chat"
 MODEL_CAPABILITY_VISION = "vision"
 MODEL_CAPABILITY_EMBEDDING = "embedding"
+MODEL_CAPABILITY_TOOL_CALLS = "tool_calls"
 VALID_MODEL_CAPABILITIES = frozenset({
     MODEL_CAPABILITY_CHAT,
     MODEL_CAPABILITY_VISION,
     MODEL_CAPABILITY_EMBEDDING,
+    MODEL_CAPABILITY_TOOL_CALLS,
 })
 
 # Audit 2026-08-05 (C-2): LM Studio meldet audio.cpp-basierte GGUFs mit
@@ -85,6 +87,14 @@ def _is_audio_generation_model(name: str, arch: str = "") -> bool:
 
     name_normalized = (name or "").strip().lower()
     return any(token in name_normalized for token in _AUDIO_GENERATION_ID_TOKENS)
+
+
+# Keine PB-Studio-Aufgabe (Clip-Tags, Chat mit Tools, Hirn-Erklaerung) braucht
+# sichtbares Nachdenken. qwen3.5-9b verbrauchte ohne diesen Wert 400-600 Tokens
+# im Denkblock und lieferte leere Tags/Antworten; mit "none" 1-2 s pro Frame
+# (2026-09-30). LM Studio wertet nur reasoning_effort aus, nicht
+# chat_template_kwargs.enable_thinking; Nicht-Reasoning-Modelle ignorieren ihn.
+DEFAULT_REASONING_EFFORT: Optional[str] = "none"
 
 
 class LMStudioError(RuntimeError):
@@ -690,6 +700,8 @@ class LMStudioClient:
                     capabilities.add(MODEL_CAPABILITY_VISION)
                 if "embedding" in native or "embeddings" in native:
                     capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+                if {"tools", "tool_use", "function_calling"} & native:
+                    capabilities.add(MODEL_CAPABILITY_TOOL_CALLS)
             else:
                 model_type = str(raw.get("type") or "").strip().lower()
                 arch = str(raw.get("arch") or "").strip().lower()
@@ -716,6 +728,20 @@ class LMStudioClient:
                     capabilities.add(MODEL_CAPABILITY_CHAT)
                 elif model_type in {"embedding", "embeddings"}:
                     capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+                # LM Studio meldet Tool-Faehigkeit nativ als capabilities=["tool_use"].
+                # Ungelesen bekam kein LM-Studio-Modell je tool_calls, und
+                # chat_tool_use fiel immer auf ein Ollama-Modell zurueck (2026-09-30,
+                # bonsai-27b statt qwen3.5-9b). Live gegengeprueft: qwen3.5-9b traegt
+                # das Flag und ruft Tools korrekt auf, qwen2.5-vl traegt es nicht und
+                # antwortet auf Tool-Anfragen mit Fliesstext.
+                native_lms = {
+                    str(value).strip().lower()
+                    for value in (raw.get("capabilities") or [])
+                }
+                if MODEL_CAPABILITY_CHAT in capabilities and (
+                    {"tool_use", "tools", "function_calling"} & native_lms
+                ):
+                    capabilities.add(MODEL_CAPABILITY_TOOL_CALLS)
             if capabilities:
                 capabilities_by_name[name] = frozenset(capabilities)
         return capabilities_by_name
@@ -767,6 +793,7 @@ class LMStudioClient:
         keep_alive: Optional[str] = None,
         tools: Optional[list[dict[str, Any]]] = None,
         format: Optional[str] = None,
+        reasoning_effort: Optional[str] = DEFAULT_REASONING_EFFORT,
     ) -> dict[str, Any]:
         """``POST /v1/chat/completions`` (non-streaming).
 
@@ -794,6 +821,8 @@ class LMStudioClient:
             "messages": msgs,
             "stream": bool(stream),
         }
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
         body.update(_ollama_options_to_openai(options))
         if tools:
             body["tools"] = tools
@@ -826,6 +855,7 @@ class LMStudioClient:
         keep_alive: Optional[str] = None,
         tools: Optional[list[dict[str, Any]]] = None,
         format: Optional[str] = None,
+        reasoning_effort: Optional[str] = DEFAULT_REASONING_EFFORT,
     ) -> AsyncIterator[dict[str, Any]]:
         """Stream chat deltas with separate content, reasoning and tool fields.
 
@@ -840,6 +870,8 @@ class LMStudioClient:
             "messages": msgs,
             "stream": True,
         }
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
         body.update(_ollama_options_to_openai(options))
         if tools:
             body["tools"] = tools

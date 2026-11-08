@@ -149,6 +149,11 @@ _TEMPOGRAM_CONST = 60.0 * 22050.0 / HOP_LENGTH
 # abgelesen, nicht gegen eine Nullhypothese kalibriert.
 GRID_CONTRAST_MIN = 2.0
 
+# Halbschlag-Aufloesung (siehe `_resolve_phase`): Band des Kick-Koerpers und
+# noetiger Vorsprung der Halbschlag-Position, bevor das Raster verschoben wird.
+SUB_BAND_HZ = (20.0, 90.0)
+HALF_BEAT_MARGIN = 1.1
+
 # Oktavpruefung: eine Alternative muss deutlich besser sein, um das
 # bestbewertete Tempo zu verdraengen. Verhindert Flattern bei knappen Faellen.
 OCTAVE_MARGIN = 0.05
@@ -270,13 +275,41 @@ def _phase_scores(
     overall = float(np.mean(envelope))
     if overall <= 0.0 or interval <= 0.0 or span <= interval:
         return np.zeros(0)
-    scores = np.empty(PHASE_STEPS, dtype=np.float64)
-    for step in range(PHASE_STEPS):
-        positions = np.arange(interval * step / PHASE_STEPS, span, interval)
-        if positions.size < 8:
-            return np.zeros(0)
-        scores[step] = float(np.mean(np.interp(positions, times, envelope)) / overall)
-    return scores
+    # Alle Phasen in einem Schritt (T003-Laufzeit, 2026-10-01). Frueher eine
+    # Python-Schleife mit 64 `np.arange`/`np.interp`-Aufrufen je Tempo; bei
+    # 6 Kandidaten x 81 Feinstufen waren das ~31.000 Aufrufe pro Raster und
+    # der Hauptteil der Mix-Grenzerkennung. Ergebnis gleich (Abweichung
+    # < 1e-12, Test `test_phase_scores_match_reference_loop`): dieselben
+    # Positionen `step*interval/64 + i*interval < span`, gleicher Mittelwert.
+    offsets = interval * np.arange(PHASE_STEPS, dtype=np.float64) / PHASE_STEPS
+    counts = np.ceil((span - offsets) / interval).astype(np.int64)
+    if int(counts.min()) < 8:
+        return np.zeros(0)
+    beats = np.arange(int(counts.max()), dtype=np.float64) * interval
+    positions = offsets[:, None] + beats[None, :]
+    valid = np.arange(beats.size)[None, :] < counts[:, None]
+    values = _interp_on_grid(np.where(valid, positions, 0.0), times, envelope)
+    scores = (values * valid).sum(axis=1) / counts / overall
+    return scores.astype(np.float64)
+
+
+def _interp_on_grid(x: np.ndarray, times: np.ndarray, values: np.ndarray) -> np.ndarray:
+    """`np.interp` fuer das gleichmaessige Frame-Raster von `librosa.times_like`.
+
+    Index direkt aus der Zeit statt Binaersuche je Punkt: gemessen ~5x
+    schneller, Abweichung zu `np.interp` < 1e-12. Nicht gleichmaessige
+    Zeitachsen gehen unveraendert an `np.interp`.
+    """
+    n = times.size
+    if n < 2:
+        return np.interp(x, times, values)
+    step = float(times[1] - times[0])
+    if step <= 0.0 or abs(float(times[-1]) - float(times[0]) - step * (n - 1)) > 1e-9 * n:
+        return np.interp(x, times, values)
+    frac = np.clip((x - float(times[0])) / step, 0.0, n - 1.0)
+    left = np.minimum(frac.astype(np.int64), n - 2)
+    weight = frac - left
+    return values[left] * (1.0 - weight) + values[left + 1] * weight
 
 
 def _contrast(scores: np.ndarray) -> tuple[float, float]:
@@ -374,6 +407,53 @@ def _kick_agreement(
     return _near(kicks, grid_times), _near(grid_times, kicks)
 
 
+def _resolve_phase(
+    mel: np.ndarray, sr: int, bpm: float, anchor: float, span: float
+) -> tuple[float, str]:
+    """Halbschlag-Fehler aufloesen und den Ein-Frame-Versatz der Huellkurve ausgleichen.
+
+    **Halbschlag (T003, 2026-09-30).** Gemessen an 69 Titeln gegen die
+    rekordbox-Raster der Nutzerbibliothek sass das Raster bei rund der Haelfte
+    genau eine halbe Schlagperiode daneben. Ursache: die Onset-Huellkurve ueber
+    das ganze Spektrum ist auf dem Off-Beat am staerksten (Rollbass und
+    Off-Beat-Hi-Hat im Psytrance, offene Hi-Hat im Techno). Der Kick dagegen
+    traegt die Energie unterhalb von 90 Hz. Vergleich der Sub-Bass-Energie an
+    Raster- und Halbschlagposition: 23 von 24 versetzten Rastern waeren
+    korrigiert, 1 von 26 richtigen faelschlich verschoben worden. Die
+    Onset-Staerke im selben Band trennt deutlich schlechter (17/24, 3/26),
+    die Vollband-Huellkurve gar nicht (2/24).
+
+    **Ein Frame Versatz.** Nach der Halbschlag-Korrektur lag der Median des
+    Restfehlers bei +23,2 ms = genau eine Hop-Laenge bei 22,05 kHz - derselbe
+    Versatz, den docs/measurements/2026-08-31-kick-gegenprobe-befund.md an den
+    Kicks gemessen hat: die Spektraldifferenz meldet einen Anstieg erst in dem
+    Frame nach dem Anschlag. Der Anker wird deshalb um eine Hop-Dauer
+    vorgezogen.
+    """
+    interval = 60.0 / bpm if bpm > 0.0 else 0.0
+    if interval <= 0.0 or span <= 2.0 * interval or mel.size == 0:
+        return anchor, ""
+    import librosa
+
+    freqs = librosa.mel_frequencies(n_mels=mel.shape[0], fmax=sr / 2.0)
+    band = (freqs >= SUB_BAND_HZ[0]) & (freqs < SUB_BAND_HZ[1])
+    note = ""
+    if np.any(band):
+        energy = mel[band].sum(axis=0)
+        times = librosa.times_like(energy, sr=sr, hop_length=HOP_LENGTH)
+
+        def _at(phase: float) -> float:
+            positions = np.arange(phase % interval, span, interval)
+            return float(np.mean(np.interp(positions, times, energy))) if positions.size else 0.0
+
+        on_beat, off_beat = _at(anchor), _at(anchor + interval / 2.0)
+        if on_beat > 0.0 and off_beat > on_beat * HALF_BEAT_MARGIN:
+            anchor = (anchor + interval / 2.0) % interval
+            note = "half_beat_corrected"
+    anchor = (anchor - HOP_LENGTH / float(sr)) % interval
+    return anchor, note
+
+
 def estimate_beat_grid(
     y: np.ndarray,
     sr: int,
@@ -404,7 +484,13 @@ def estimate_beat_grid(
     import librosa
 
     _low, _high = tempo_range or TEMPO_RANGE
-    envelope = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP_LENGTH)
+    # Mel-Spektrum einmal berechnen: es speist die Onset-Huellkurve (identisch
+    # zu `onset_strength(y=...)`, das intern genau so rechnet) und die
+    # Halbschlag-Aufloesung weiter unten.
+    mel = librosa.feature.melspectrogram(y=y, sr=sr, hop_length=HOP_LENGTH)
+    envelope = librosa.onset.onset_strength(
+        S=librosa.power_to_db(mel), sr=sr, hop_length=HOP_LENGTH
+    )
     if envelope.size < 16 or float(np.mean(envelope)) <= 0.0:
         return BeatGrid(0.0, 0.0, 0.0, "onset_envelope_empty", "unavailable")
 
@@ -496,6 +582,16 @@ def estimate_beat_grid(
                 "Beatgrid: Oktave korrigiert auf %.2f BPM "
                 "(Trefferquote %.2f, Praezision %.2f)", bpm, recall or 0.0, precision or 0.0
             )
+
+    anchor, phase_note = _resolve_phase(mel, sr, bpm, anchor, span)
+    if phase_note:
+        method = f"{method}_{phase_note}"
+    if recall is not None:
+        if kicks.size >= 4:
+            # Gegenprobe am tatsaechlich ausgelieferten Raster, nicht am
+            # verworfenen - sonst beschreiben die Zahlen ein anderes Raster.
+            grid_times = BeatGrid(bpm, anchor, contrast, "", "").beat_times(0.0, span)
+            recall, precision = _kick_agreement(grid_times, kicks, _kick_tolerance(sr))
 
     # Status: Kontrast ALLEIN reicht nicht.
     #

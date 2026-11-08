@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import threading
 
 import pytest
 import backend.recovery_bootstrap as recovery_bootstrap
@@ -67,6 +69,55 @@ def _generation(
 def test_missing_control_root_is_uninitialized(tmp_path: Path) -> None:
     result = ensure_recovery_ready(tmp_path / "missing")
     assert result.status == "uninitialized"
+
+
+def test_atomic_json_write_uses_independent_temp_files_under_concurrency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    control_root = recovery_bootstrap.fixed_control_root()
+    control_root.mkdir(parents=True, exist_ok=True)
+    target = control_root / "parallel-journal-test.json"
+    barrier = threading.Barrier(2)
+    original_fsync_file = recovery_bootstrap._fsync_file
+
+    def synchronized_fsync(handle: object) -> None:
+        barrier.wait(timeout=5)
+        original_fsync_file(handle)
+
+    monkeypatch.setattr(recovery_bootstrap, "_fsync_file", synchronized_fsync)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(recovery_bootstrap._atomic_write_json, target, {"writer": i})
+            for i in range(2)
+        ]
+        for future in futures:
+            future.result()
+
+    assert json.loads(target.read_text(encoding="utf-8"))["writer"] in {0, 1}
+
+
+def test_atomic_json_write_retries_transient_windows_sharing_violation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "journal.json"
+    real_replace = recovery_bootstrap.os.replace
+    calls = 0
+
+    def transient_windows_lock(source: str | Path, destination: str | Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise PermissionError(5, "Access is denied")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(recovery_bootstrap.os, "replace", transient_windows_lock)
+    monkeypatch.setattr(recovery_bootstrap.time, "sleep", lambda _delay: None)
+
+    recovery_bootstrap._atomic_write_json(target, {"writer": 1})
+
+    assert calls == 3
+    assert json.loads(target.read_text(encoding="utf-8")) == {"writer": 1}
 
 
 def test_backend_runs_bootstrap_before_config_and_logging() -> None:
@@ -171,6 +222,42 @@ def test_clean_committed_restore_preserves_newer_live_work(tmp_path: Path) -> No
     assert result.status == "ready"
     assert result.generation_id == "g1"
     assert target.read_bytes() == b"newer-live-work"
+
+
+def test_committed_recovery_clears_stale_dirty_inventory_marker(tmp_path: Path) -> None:
+    """A marker written by an older manifest schema must not brick startup."""
+    root = tmp_path / "control"
+    target = tmp_path / "live.bin"
+    target.write_bytes(b"current")
+    previous_hash = _generation(root, "g0", target, b"previous")
+    current_hash = _generation(root, "g1", target, b"current")
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g1",
+        "manifest_sha256": current_hash,
+    })
+    _write_json(root / "journal.json", {
+        "schema_version": 1,
+        "operation": "restore",
+        "state": "COMMITTED",
+        "previous_generation": "g0",
+        "previous_manifest_sha256": previous_hash,
+        "next_generation": "g1",
+        "next_manifest_sha256": current_hash,
+        "committed_generation": "g1",
+        "committed_manifest_sha256": current_hash,
+    })
+    _write_json(root / "RUNTIME_DIRTY", {
+        "schema_version": 1,
+        "base_generation": "g0",
+        "base_manifest_sha256": previous_hash,
+        "variable_inventory": [{"owner": "old", "owner_scope": "old", "baseline_targets": []}],
+    })
+
+    result = ensure_recovery_ready(root)
+
+    assert result.status == "ready"
+    assert not (root / "RUNTIME_DIRTY").exists()
 
 
 def test_absence_tombstone_removes_only_its_owned_file(tmp_path: Path) -> None:

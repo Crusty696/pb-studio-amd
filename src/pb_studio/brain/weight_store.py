@@ -144,6 +144,42 @@ class WeightStore:
                 self._variance_cache[cache_key] = value
         return value
 
+    def get_posterior_diagnostics(
+        self,
+        axis: str,
+        context_keys: list[str],
+    ) -> tuple[float, float, Optional[int], Optional[str], bool]:
+        """Return the exact bucket used by posterior lookup.
+
+        The sample total remains a float because sparse credit assignment uses
+        fractional evidence. ``is_cold_start`` is authoritative and must not be
+        inferred from a rounded display count.
+        """
+        fallback_samples = 0.0
+        for level in range(len(context_keys) - 1, -1, -1):
+            key = context_keys[level]
+            row = self.get_alpha_beta(axis, level, key)
+            if row is None:
+                continue
+            alpha, beta = row
+            samples = alpha + beta
+            fallback_samples = max(fallback_samples, samples)
+            if samples >= MIN_CONFIDENT_SAMPLES:
+                return (
+                    (alpha + 1.0) / (alpha + beta + 2.0),
+                    samples,
+                    level,
+                    key,
+                    False,
+                )
+        return (
+            float(self.defaults.get(axis, 0.5)),
+            fallback_samples,
+            None,
+            None,
+            True,
+        )
+
     # ---------- write API (invalidates cache) ----------
 
     def update(
@@ -243,15 +279,16 @@ class WeightStore:
             row = self.get_alpha_beta(axis, level, context_keys[level])
             if row is None:
                 continue
-            alpha, beta = row
-            if alpha + beta < 1e-6:
-                return 0.25
-            denom = (alpha + beta) ** 2 * (alpha + beta + 1) + 1e-9
+            positive_count, negative_count = row
+            alpha = positive_count + 1.0
+            beta = negative_count + 1.0
+            total = alpha + beta
+            denom = total ** 2 * (total + 1.0)
             var = (alpha * beta) / denom
             if var != var:  # NaN-guard
-                return 0.25
+                return 1.0 / 12.0
             return var
-        return 0.25
+        return 1.0 / 12.0
 
     def _invalidate(self) -> None:
         """Drop cache + bump version. Called on update()/reset()."""

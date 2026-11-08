@@ -17,7 +17,6 @@ PBStudio.UI/
 │
 ├── ViewModels/                      # MVVM (CommunityToolkit.Mvvm)
 │   ├── MainViewModel.cs             # Root-ViewModel
-│   ├── MediaIngestViewModel.cs      # Import-Dialog
 │   ├── AudioLibraryViewModel.cs     # Audio-Tab
 │   ├── VideoLibraryViewModel.cs     # Video-Tab
 │   ├── AnchorViewModel.cs           # Ankerpunkte-Tab
@@ -31,8 +30,6 @@ PBStudio.UI/
 │   └── TerminalViewModel.cs         # Terminal-Tab
 │
 ├── Views/                           # XAML User Controls (Material Design)
-│   ├── MediaIngestView.xaml         # Import-Interface
-│   ├── MediaIngestView.xaml.cs
 │   ├── AudioLibraryView.xaml        # Audio-Bibliothek
 │   ├── AudioLibraryView.xaml.cs
 │   ├── VideoLibraryView.xaml        # Video-Bibliothek
@@ -77,7 +74,6 @@ Services (Singleton für Desktop-App):
 
 ViewModels (Transient):
 - MainViewModel
-- MediaIngestViewModel
 - AudioLibraryViewModel
 - VideoLibraryViewModel
 - AnchorViewModel
@@ -106,7 +102,6 @@ MainWindow
       │       └─ Status-Changes
       │
       ├─ TabControl (SelectedTabIndex)
-      │   ├─ MediaIngestView
       │   ├─ AudioLibraryView
       │   ├─ VideoLibraryView
       │   ├─ AnchorView

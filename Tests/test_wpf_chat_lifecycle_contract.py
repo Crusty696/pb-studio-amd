@@ -25,7 +25,7 @@ def test_chat_stream_is_scope_bound_and_generation_guarded():
 
 
 def test_chat_transport_errors_and_cancellation_remain_visible():
-    api = (ROOT / "PBStudio.UI" / "Services" / "ApiClient.cs").read_text(
+    api = (ROOT / "PBStudio.UI" / "Services" / "ApiClient.Chat.cs").read_text(
         encoding="utf-8"
     )
     view_model = (

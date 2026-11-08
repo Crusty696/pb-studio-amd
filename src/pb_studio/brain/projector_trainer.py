@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import numpy as np
+from .cross_modal_projector import prepare_training_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -121,9 +122,23 @@ def collect_training_pairs(
         v_emb = video_load_fn(vh)
         if a_emb is None or v_emb is None:
             continue
+        if not _usable_embedding(a_emb) or not _usable_embedding(v_emb):
+            continue
         pairs.append((a_emb, v_emb, label))
 
     return pairs
+
+
+def _usable_embedding(value, *, expected_dim: Optional[int] = None) -> bool:
+    try:
+        embedding = np.asarray(value, dtype=np.float32).reshape(-1)
+    except (TypeError, ValueError):
+        return False
+    dimension = int(expected_dim) if expected_dim is not None else embedding.size
+    return bool(
+        np.all(np.isfinite(embedding))
+        and prepare_training_embedding(embedding, dimension) is not None
+    )
 
 
 @recovery_write_operation("brain-projector")
@@ -235,6 +250,14 @@ def run_v2_fit_step(
                     reason = "missing_audio_embedding"
                 if reason is None and video_embedding is None:
                     reason = "missing_video_embedding"
+                if reason is None and not _usable_embedding(
+                    audio_embedding, expected_dim=projector.audio_dim
+                ):
+                    reason = "invalid_audio_embedding"
+                if reason is None and not _usable_embedding(
+                    video_embedding, expected_dim=projector.video_dim
+                ):
+                    reason = "invalid_video_embedding"
                 if reason is not None:
                     pending[event_uuid] = {
                         "project_uuid": project_uuid,
@@ -250,12 +273,38 @@ def run_v2_fit_step(
                 ))
 
         ready.sort(key=lambda item: (item[0], item[1]))
+        if not ready:
+            return {
+                "loss_before": 0.0,
+                "loss_after": 0.0,
+                "n_pairs": 0,
+                "n_steps": 0,
+                "applied_events": len(active_applied),
+                "new_events": 0,
+                "pending_events": len(pending),
+                "generation_uuid": projector.generation_uuid,
+                "saved": False,
+            }
         candidate = projector.clone()
         fit_result = candidate.fit_pairs(
             [(item[2], item[3], item[4]) for item in ready],
             lr=lr,
             steps=steps,
         )
+        if int(fit_result.get("n_pairs", 0)) != len(ready):
+            for project_uuid, event_uuid, *_ in ready:
+                pending[event_uuid] = {
+                    "project_uuid": project_uuid,
+                    "reason": "fit_rejected_pair",
+                }
+            return {
+                **fit_result,
+                "applied_events": len(active_applied),
+                "new_events": 0,
+                "pending_events": len(pending),
+                "generation_uuid": projector.generation_uuid,
+                "saved": False,
+            }
         candidate.parent_generation_uuid = projector.generation_uuid
         candidate.generation_uuid = str(uuid.uuid4())
         candidate.applied_event_uuids = tuple(sorted(

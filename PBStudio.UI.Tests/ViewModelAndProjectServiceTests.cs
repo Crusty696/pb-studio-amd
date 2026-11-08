@@ -51,6 +51,48 @@ public sealed class ViewModelAndProjectServiceTests
     }
 
     [TestMethod]
+    public async Task ChatClear_LateResponseCannotEraseHistoryAfterProjectSwitch()
+    {
+        var projectB = new ProjectInfo(
+            "B",
+            @"C:\Projects\B",
+            0,
+            0,
+            false);
+        var clearResponse = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.ClearChatHistoryAsync),
+                _ => clearResponse.Task)
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(projectB))
+            .Handle(
+                nameof(IApiClient.GetAsync),
+                _ => Task.FromResult<ChatHistoryResponse?>(
+                    new ChatHistoryResponse(
+                        [new ChatHistoryEntry("assistant", "Projekt B Verlauf")],
+                        1)));
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        using var viewModel = new ChatViewModel(api.Client, projects);
+
+        var clearTask = viewModel.ClearAsync();
+        Assert.IsFalse(clearTask.IsCompleted);
+
+        Assert.IsTrue(await projects.OpenProjectAsync(projectB.Path));
+        Assert.AreEqual("Projekt B Verlauf", viewModel.Messages.Single().Content);
+
+        clearResponse.SetResult(true);
+        await clearTask;
+
+        Assert.AreEqual("Projekt B Verlauf", viewModel.Messages.Single().Content);
+        Assert.AreEqual(projectB.Path, projects.CurrentProjectPath);
+    }
+
+    [TestMethod]
     public void SettingsLoadFailure_IsImmediatelyVisibleToViewModel()
     {
         var settings = new SettingsServiceStub

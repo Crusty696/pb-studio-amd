@@ -657,13 +657,6 @@ class RenderQueue:
                 return self._row_to_job(row)
         return None
 
-    def _find_by_hash(self, job_hash: str) -> Optional[RenderJob]:
-        conn = self._db.get_connection()
-        row = conn.execute(
-            "SELECT * FROM render_queue WHERE job_hash = ?", (job_hash,),
-        ).fetchone()
-        return self._row_to_job(row)
-
     @staticmethod
     def _row_to_job(row: Any) -> Optional[RenderJob]:
         if row is None:

@@ -224,38 +224,6 @@ class WaveformCache:
                 'total_bytes': total_size
             }
 
-    def print_stats(self):
-        """Print cache statistics to logger."""
-        stats = self.get_stats()
-        logger.info(
-            f"Cache Stats: {stats['hits']} hits, {stats['misses']} misses, "
-            f"{stats['hit_rate']:.1f}% hit rate, {stats['size']}/{stats['max_size']} entries, "
-            f"{stats['evictions']} evictions, {stats['total_bytes'] / (1024*1024):.2f} MB"
-        )
-
-    def get_entry_info(self, audio_path: str) -> Optional[Dict]:
-        """
-        Get metadata about cached entry.
-
-        Args:
-            audio_path: Path to audio file
-
-        Returns:
-            Dict with timestamp, size, hash or None if not cached
-        """
-        abs_path = str(Path(audio_path).resolve())
-
-        with self._lock:
-            if abs_path not in self.cache:
-                return None
-            entry = self.cache[abs_path]
-            return {
-                'timestamp': entry['timestamp'],
-                'size_bytes': entry['size'],
-                'hash': entry['hash'],
-                'age_seconds': time.time() - entry['timestamp']
-            }
-
     def __len__(self) -> int:
         """Return number of cached entries."""
         with self._lock:

@@ -1,0 +1,91 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+collected 7 items
+
+Tests\test_t056_embedding_identity.py FFF.FFF                            [100%]
+
+================================== FAILURES ===================================
+_______________ test_video_identity_changes_with_preprocessing ________________
+Tests\test_t056_embedding_identity.py:14: in test_video_identity_changes_with_preprocessing
+    assert CURRENT_MODEL_VERSION == "onnx-dml-v2"
+E   AssertionError: assert 'onnx-dml-v1' == 'onnx-dml-v2'
+E     
+E     - onnx-dml-v2
+E     ?           ^
+E     + onnx-dml-v1
+E     ?           ^
+______________ test_legacy_analysis_is_not_resumable[identity0] _______________
+Tests\test_t056_embedding_identity.py:20: in test_legacy_analysis_is_not_resumable
+    assert not _video_stage_data_is_valid("embedding", {
+E   AssertionError: assert not True
+E    +  where True = <function _video_stage_data_is_valid at 0x0000026FC90E05E0>('embedding', {'embedding_dim': 1152, 'embedding_samples': 3, 'has_embedding': True})
+______________ test_legacy_analysis_is_not_resumable[identity1] _______________
+Tests\test_t056_embedding_identity.py:20: in test_legacy_analysis_is_not_resumable
+    assert not _video_stage_data_is_valid("embedding", {
+E   AssertionError: assert not True
+E    +  where True = <function _video_stage_data_is_valid at 0x0000026FC90E05E0>('embedding', {'embedding_dim': 1152, 'embedding_model_name': 'siglip_vision', 'embedding_model_version': 'onnx-dml-v1', 'embedding_samples': 3, ...})
+_______ test_video_search_excludes_legacy_without_starving_current_hits _______
+Tests\test_t056_embedding_identity.py:43: in test_video_search_excludes_legacy_without_starving_current_hits
+    assert [meta["path"] for meta, _ in hits] == ["new"]
+E   AssertionError: assert ['old'] == ['new']
+E     
+E     At index 0 diff: 'old' != 'new'
+E     Use -v to get more diff
+___________ test_neighbor_reconstruction_rejects_unversioned_vector ___________
+Tests\test_t056_embedding_identity.py:54: in test_neighbor_reconstruction_rejects_unversioned_vector
+    assert selector._embedding_from_vector_store(path) is None
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\pb_studio\pacing\clip_selector.py:876: in _embedding_from_vector_store
+    return index.reconstruct(numeric_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Tests\test_t056_embedding_identity.py:51: in <lambda>
+    index = SimpleNamespace(reconstruct=lambda _: pytest.fail("legacy vector read"))
+                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: legacy vector read
+_____________ test_old_projector_is_rejected_without_overwriting ______________
+Tests\test_t056_embedding_identity.py:61: in test_old_projector_is_rejected_without_overwriting
+    old.save_weights()
+    ^^^^^^^^^^^^^^^^
+E   AttributeError: 'CrossModalProjector' object has no attribute 'save_weights'
+============================== warnings summary ===============================
+src\pb_studio\audio\beat_detector.py:65
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\beat_detector.py:65: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources  # noqa: F401
+
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(scipy_version) < LooseVersion("0.14"):
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `maximum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `minimum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+Tests/test_t056_embedding_identity.py::test_video_identity_changes_with_preprocessing
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+Tests/test_t056_embedding_identity.py::test_video_search_excludes_legacy_without_starving_current_hits
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\faiss\loader.py:28: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(numpy.__version__) >= "1.19":
+
+Tests/test_t056_embedding_identity.py::test_video_search_excludes_legacy_without_starving_current_hits
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\setuptools\_distutils\version.py:336: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    other = LooseVersion(other)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED Tests/test_t056_embedding_identity.py::test_video_identity_changes_with_preprocessing
+FAILED Tests/test_t056_embedding_identity.py::test_legacy_analysis_is_not_resumable[identity0]
+FAILED Tests/test_t056_embedding_identity.py::test_legacy_analysis_is_not_resumable[identity1]
+FAILED Tests/test_t056_embedding_identity.py::test_video_search_excludes_legacy_without_starving_current_hits
+FAILED Tests/test_t056_embedding_identity.py::test_neighbor_reconstruction_rejects_unversioned_vector
+FAILED Tests/test_t056_embedding_identity.py::test_old_projector_is_rejected_without_overwriting
+=================== 6 failed, 1 passed, 8 warnings in 6.55s ===================

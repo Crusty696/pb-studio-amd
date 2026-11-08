@@ -1,0 +1,93 @@
+{
+  "source_files_changed_since_capture": [],
+  "finding_count": 40,
+  "unique_findings": 40,
+  "severity_counts": {
+    "🔴 Critical": 4,
+    "🟠 High": 22,
+    "🟡 Medium": 12,
+    "🟢 Low": 2
+  },
+  "counterproposals": 40,
+  "finding_test_criteria": 40,
+  "A_O_chapters": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O"
+  ],
+  "work_packages": [
+    "T001",
+    "T002",
+    "T003",
+    "T004",
+    "T005",
+    "T006",
+    "T007",
+    "T008",
+    "T009",
+    "T010",
+    "T011",
+    "T012",
+    "T013",
+    "T014",
+    "T015",
+    "T016",
+    "T017",
+    "T018"
+  ],
+  "files": [
+    {
+      "name": "architecture-and-delivery.md",
+      "bytes": 59646,
+      "sha256": "4f5ac034446a4a14ebd46479e47fdc5a8d5a3e23d52777244110be4f37c0b999"
+    },
+    {
+      "name": "decisions.md",
+      "bytes": 2562,
+      "sha256": "41fd111ee50eff9c5c94f4046566049d9a83749a8f6c6cbed01f3598d0d3632b"
+    },
+    {
+      "name": "evidence.json",
+      "bytes": 46891,
+      "sha256": "a0138c255b6da3b425f0285baf9fe16e4d5c5269a3fb77efbad8e1b19c8ddfae"
+    },
+    {
+      "name": "plan-coverage.md",
+      "bytes": 8831,
+      "sha256": "639dd94294c1d75c05c04922430ef2135561e8b61131ed2b85f9f27d6fcc57a2"
+    },
+    {
+      "name": "review.md",
+      "bytes": 47154,
+      "sha256": "f1be20e3427659a15466994e218082adbee85c9097484da6bc098310c7fd9cb9"
+    },
+    {
+      "name": "source-inventory.json",
+      "bytes": 160850,
+      "sha256": "a016829176d926f1f1d5e27ad72a4da4f1af758d1c66b59eafa75971ce3bb11d"
+    }
+  ],
+  "python_in_memory_compile_errors": [],
+  "python_in_memory_compiled": 148,
+  "verified_utc": "2026-10-12T19:07:07.950568+00:00",
+  "plan_sections": 82,
+  "f01_severity_note": "Critical only for hard exclusivity promised with uncooperative clients; otherwise High design duty",
+  "document_links_and_code_fences": "pass",
+  "decisions_confirmed": [
+    "D01 external ComfyUI AMD/ROCm exception, PB internal ONNX DirectML",
+    "D02 local first, cloud separately explicitly approved"
+  ],
+  "updated_utc": "2026-10-12T19:38:12.120038+00:00"
+}

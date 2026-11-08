@@ -1,0 +1,62 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\david\Documents\Pb_studio_AMD_version
+configfile: pytest.ini
+plugins: anyio-4.13.0, timeout-2.4.0
+collected 76 items
+
+Tests\test_t054_caption_contract.py .....................FF.F            [ 32%]
+Tests\test_lmstudio_vision_wrapper.py .................................. [ 77%]
+.                                                                        [ 78%]
+Tests\test_video_caption_tag_merge.py ................                   [100%]
+
+================================== FAILURES ===================================
+______ test_numeric_person_count_above_three_is_generalized[5 menschen] _______
+Tests\test_t054_caption_contract.py:99: in test_numeric_person_count_above_three_is_generalized
+    assert _parse_tags(raw) == ["gruppe von menschen"]
+E   AssertionError: assert ['menschen'] == ['gruppe von menschen']
+E     
+E     At index 0 diff: 'menschen' != 'gruppe von menschen'
+E     Use -v to get more diff
+_____ test_numeric_person_count_above_three_is_generalized[Menschen (5)] ______
+Tests\test_t054_caption_contract.py:99: in test_numeric_person_count_above_three_is_generalized
+    assert _parse_tags(raw) == ["gruppe von menschen"]
+E   AssertionError: assert ['menschen (5'] == ['gruppe von menschen']
+E     
+E     At index 0 diff: 'menschen (5' != 'gruppe von menschen'
+E     Use -v to get more diff
+_______ test_skin_tone_phrases_with_sentence_punctuation_stay_filtered ________
+Tests\test_t054_caption_contract.py:107: in test_skin_tone_phrases_with_sentence_punctuation_stay_filtered
+    assert _parse_tags("Dunkle Haut, helle Haut.") == []
+E   AssertionError: assert ['dunkle', 'haut', 'helle'] == []
+E     
+E     Left contains 3 more items, first extra item: 'dunkle'
+E     Use -v to get more diff
+============================== warnings summary ===============================
+src\pb_studio\audio\beat_detector.py:65
+  C:\Users\david\Documents\Pb_studio_AMD_version\src\pb_studio\audio\beat_detector.py:65: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources  # noqa: F401
+
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+.venv\Lib\site-packages\madmom\ml\nn\activations.py:69
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\ml\nn\activations.py:69: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+    if LooseVersion(scipy_version) < LooseVersion("0.14"):
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `maximum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+.venv\Lib\site-packages\madmom\features\onsets.py:14
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\madmom\features\onsets.py:14: DeprecationWarning: Please import `minimum_filter` from the `scipy.ndimage` namespace; the `scipy.ndimage.filters` namespace is deprecated and will be removed in SciPy 2.0.0.
+    from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+Tests/test_t054_caption_contract.py::test_t053_v05_observed_eleventh_tag_is_not_silently_lost
+  C:\Users\david\Documents\Pb_studio_AMD_version\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED Tests/test_t054_caption_contract.py::test_numeric_person_count_above_three_is_generalized[5 menschen]
+FAILED Tests/test_t054_caption_contract.py::test_numeric_person_count_above_three_is_generalized[Menschen (5)]
+FAILED Tests/test_t054_caption_contract.py::test_skin_tone_phrases_with_sentence_punctuation_stay_filtered
+================== 3 failed, 73 passed, 6 warnings in 19.55s ==================

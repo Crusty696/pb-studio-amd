@@ -69,6 +69,8 @@ public class SSEClient : IDisposable
     /// vollstaendig unsichtbar (Audit 2026-08-05, C-A).
     /// </summary>
     public event EventHandler<PersistErrorEventArgs>? PersistErrorReceived;
+    /// <summary>Backend opened/closed a project outside the WPF (API, chat tool).</summary>
+    public event EventHandler<ProjectChangedEventArgs>? ProjectChangedByBackend;
     public event EventHandler<bool>? ConnectionStateChanged;
     /// <summary>
     /// Spec 00010 T003: Feuert true sobald Backend wieder erreichbar ist; feuert false
@@ -383,6 +385,10 @@ public class SSEClient : IDisposable
 
     private bool TryProcessEvent(StreamKind streamKind, string eventType, string jsonData)
     {
+        // Persist received task/state events before UI throttling. Never log raw
+        // payloads: the shared redactor removes credentials and local paths.
+        _logger.LogDebug("SSE-Ereignis: Stream={Stream}; Event={Event}; Data={Data}",
+            streamKind, TerminalLogRedactor.Redact(eventType), TerminalLogRedactor.Redact(jsonData));
         try
         {
             using var json = JsonDocument.Parse(jsonData);
@@ -400,6 +406,14 @@ public class SSEClient : IDisposable
                             Percent = TryGetDouble(root, "percent"),
                         });
                     }
+                    break;
+
+                case StreamKind.Progress when eventType == "project_changed":
+                    ProjectChangedByBackend?.Invoke(this, new ProjectChangedEventArgs
+                    {
+                        Action = TryGetString(root, "action"),
+                        Path = TryGetString(root, "path"),
+                    });
                     break;
 
                 case StreamKind.Progress when eventType == "persist_error":
@@ -434,10 +448,13 @@ public class SSEClient : IDisposable
                             TryGetString(root, "error"),
                             TryGetString(root, "detail"));
 
-                        bool isFinal = status == "completed" || status == "failed" || status == "interrupted" || status == "timed_out" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
+                        bool isFinal = status == "completed" || status == "failed" || status == "interrupted" || status == "cancelled" || status == "canceled" || status == "timed_out" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
+                        bool isValidationUpdate =
+                            !string.IsNullOrWhiteSpace(TryGetString(root, "validation_status"))
+                            || !string.IsNullOrWhiteSpace(TryGetString(root, "validation_phase"));
                         bool shouldEmit = true;
 
-                        if (!isFinal && !string.IsNullOrEmpty(taskId))
+                        if (!isFinal && !isValidationUpdate && !string.IsNullOrEmpty(taskId))
                         {
                             var now = DateTime.UtcNow;
                             lock (_progressLock)
@@ -481,6 +498,8 @@ public class SSEClient : IDisposable
                                 EvidencePath = TryGetString(root, "evidence_path"),
                                 ValidationPath = TryGetString(root, "validation_path"),
                                 ValidationStatus = TryGetString(root, "validation_status"),
+                                ValidationPhase = TryGetString(root, "validation_phase"),
+                                ValidationProgress = TryGetDouble(root, "validation_progress"),
                                 ProgressEnd = TryGetBool(root, "progress_end"),
                                 Step = TryGetString(root, "step"),
                                 StepIndex = TryGetInt(root, "step_index"),
@@ -638,6 +657,8 @@ public class ProgressEventArgs : EventArgs
     public string EvidencePath { get; init; } = "";
     public string ValidationPath { get; init; } = "";
     public string ValidationStatus { get; init; } = "";
+    public string ValidationPhase { get; init; } = "";
+    public double ValidationProgress { get; init; } = -1.0;
     public bool ProgressEnd { get; init; }
     public string Step { get; init; } = "";       // Feature-3: phase-Identifier
     public int StepIndex { get; init; }            // 1-based current step
@@ -671,6 +692,16 @@ public class LlmStatusEventArgs : EventArgs
     /// </summary>
     public string Status { get; init; } = "";
     public double Percent { get; init; } = 0.0;
+}
+
+/// <summary>
+/// Projektwechsel durch das Backend (SSE <c>project_changed</c>): Action
+/// "opened"/"closed", Path des Projekts (leer bei "closed").
+/// </summary>
+public class ProjectChangedEventArgs : EventArgs
+{
+    public string Action { get; init; } = "";
+    public string Path { get; init; } = "";
 }
 
 /// <summary>

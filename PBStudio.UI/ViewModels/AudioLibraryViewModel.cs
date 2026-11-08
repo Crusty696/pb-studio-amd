@@ -50,6 +50,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private int _totalImportFiles;
     private int? _activeAnalysisClipId;
     private int? _activeStemClipId;
+    private ProjectOperationContext? _activeImportContext;
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
     public ObservableCollection<AudioClipModel> SelectedClips { get; } = [];
@@ -97,7 +98,11 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                     CurrentStep = e.Step;
             });
         }
-        else if (e.EventType == "import_progress" && IsImporting)
+        else if (
+            e.EventType == "import_progress"
+            && IsImporting
+            && _activeImportContext is { } importContext
+            && _projectService.IsCurrent(importContext))
         {
             // Backend liefert 0..100 fuer aktuelles File. VM mappt auf overall:
             // overall = ((file_idx-1) + per_file/100) / total * 100
@@ -242,12 +247,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     partial void OnSelectedClipChanged(AudioClipModel? value)
     {
         ApplyBeatGrid(null);
+        AnalyzeSelectedCommand.NotifyCanExecuteChanged();
+        SeparateStemsCommand.NotifyCanExecuteChanged();
         if (value == null) return;
         Bpm = value.Bpm;
         BeatCount = value.BeatCount;
         Key = value.Key;
         DurationSeconds = value.DurationSeconds;
-        AnalyzeSelectedCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsAnalyzingChanged(bool value)
@@ -256,7 +262,18 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         AnalyzeAllCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
+    partial void OnIsSeparatingChanged(bool value)
+        => SeparateStemsCommand.NotifyCanExecuteChanged();
+
+    partial void OnIsImportingChanged(bool value)
+    {
+        ImportAudioCommand.NotifyCanExecuteChanged();
+        ImportFolderCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanImport() => !IsImporting;
+
+    [RelayCommand(CanExecute = nameof(CanImport))]
     private async Task ImportAudioAsync()
     {
         var files = _dialogService.OpenFiles(
@@ -269,7 +286,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         await ProcessAudioImportAsync(files);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanImport))]
     private async Task ImportFolderAsync()
     {
         var folder = _dialogService.OpenFolder("Audio-Ordner importieren");
@@ -303,6 +320,36 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private async Task ProcessAudioImportAsync(List<string> files)
     {
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Import nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
+        var normalizedFiles = new List<string>();
+        foreach (var file in files)
+        {
+            try
+            {
+                normalizedFiles.Add(Path.GetFullPath(file));
+            }
+            catch (Exception)
+            {
+                // Ungültige Einzelpfade werden als fehlgeschlagen bilanziert.
+            }
+        }
+        files = normalizedFiles
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (files.Count == 0)
+            return;
+
+        _activeImportContext = projectContext;
         IsImporting = true;
         // Wichtig: NICHT IsAnalyzing setzen waehrend Import - sonst beide Bars sichtbar.
         ImportProgress = 0.01;  // sichtbarer Start
@@ -311,84 +358,105 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         await Task.Delay(120).ConfigureAwait(true);  // UI render bevor Schleife
 
         var imported = 0;
+        var failed = 0;
         var total = files.Count;
         _totalImportFiles = total;
         try
         {
             for (int i = 0; i < total; i++)
             {
+                if (!_projectService.IsCurrent(projectContext))
+                    return;
                 var file = files[i];
                 _currentImportFileIdx = i + 1;
                 StatusText = $"Importiere {i + 1}/{total}: {System.IO.Path.GetFileName(file)}";
                 // Backend emittiert per-byte hash-progress 0..100 fuer dieses File.
                 // OnSseProgressReceived mappt auf overall ((idx-1)+pct/100)/total*100.
                 ImportProgress = i * 100.0 / total;  // base position
-                var result = await _api.ImportAudioAsync(file);
-                if (result != null) imported++;
+                try
+                {
+                    var result = await _api.ImportAudioAsync(file);
+                    if (!_projectService.IsCurrent(projectContext))
+                        return;
+                    if (result != null)
+                        imported++;
+                    else
+                        failed++;
+                }
+                catch (Exception ex)
+                {
+                    if (!_projectService.IsCurrent(projectContext))
+                        return;
+                    failed++;
+                    StatusText = $"Importfehler bei {Path.GetFileName(file)}: {ex.Message}";
+                }
                 ImportProgress = (i + 1) * 100.0 / total;
             }
+            if (!_projectService.IsCurrent(projectContext))
+                return;
             ImportProgress = 100.0;
             await Task.Delay(450).ConfigureAwait(true);
+            if (!_projectService.IsCurrent(projectContext))
+                return;
 
             if (imported > 0)
             {
-                StatusText = $"{imported} Audio-Dateien erfolgreich importiert";
+                StatusText = failed > 0
+                    ? $"{imported} Audio-Dateien importiert, {failed} fehlgeschlagen"
+                    : $"{imported} Audio-Dateien erfolgreich importiert";
                 await LoadAudioClipsAsync();
-                // Cross-VM refresh: Director, MediaIngest, ProjectOverview hoeren auf diese Records
+                // Cross-VM refresh: Director, ProjectOverview hoeren auf diese Records
                 WeakReferenceMessenger.Default.Send(new AudioImportedMessage());
                 WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
                 WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
             else
             {
-                StatusText = "Keine Dateien importiert.";
+                StatusText = failed > 0
+                    ? $"Keine Dateien importiert, {failed} fehlgeschlagen."
+                    : "Keine Dateien importiert.";
             }
         }
         catch (Exception ex)
         {
-            StatusText = $"Fehler beim Import: {ex.Message}";
+            if (_projectService.IsCurrent(projectContext))
+                StatusText = $"Fehler beim Import: {ex.Message}";
         }
         finally
         {
-            IsImporting = false;
+            if (_activeImportContext == projectContext)
+                _activeImportContext = null;
+            if (_projectService.IsCurrent(projectContext))
+                IsImporting = false;
         }
     }
 
     [RelayCommand]
     private async Task LoadAudioClipsAsync()
     {
-        var previousId = SelectedClip?.Id;
+        var dispatcher = Application.Current?.Dispatcher
+            ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
         var clips = await _audioLibraryState.RefreshAsync();
+        if (!_projectService.IsCurrent(projectContext))
+            return;
         if (clips != null)
         {
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+            await dispatcher.InvokeAsync(() =>
             {
-                AudioClips.Clear();
-                foreach (var clipInfo in clips)
-                {
-                    AudioClips.Add(new AudioClipModel
-                    {
-                        Id = clipInfo.Id,
-                        Name = clipInfo.Name,
-                        Path = clipInfo.Path,
-                        DurationSeconds = clipInfo.DurationSeconds,
-                        SampleRate = clipInfo.SampleRate,
-                        Channels = clipInfo.Channels,
-                        Format = clipInfo.Format,
-                        Bpm = clipInfo.Bpm,
-                        Key = clipInfo.Key ?? "",
-                        BeatCount = clipInfo.BeatCount,
-                        IsAnalyzed = clipInfo.IsAnalyzed,
-                        AnalysisStatus = clipInfo.AnalysisStatus,
-                        StageErrors = clipInfo.StageErrors,
-                        // L-N2: Content-Hash fuer CACHED-Badge auf der Card.
-                        AudioHash = clipInfo.AudioHash,
-                        // L-N4: Stem-Paths fuer STEMS-Badge + Open-Folder-Button.
-                        StemsPaths = clipInfo.StemsPaths,
-                    });
-                }
-                if (previousId.HasValue)
-                    SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
+                // A project transition can occur after the request completes but
+                // before this queued UI publication runs.
+                if (!_projectService.IsCurrent(projectContext))
+                    return;
+                ReconcileAudioClips(clips);
                 StatusText = $"{clips.Count} Audio-Clips geladen";
                 AnalyzeAllCommand.NotifyCanExecuteChanged();
             });
@@ -397,6 +465,76 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         {
             StatusText = "Audio-Clips laden fehlgeschlagen";
         }
+    }
+
+    private void ReconcileAudioClips(IReadOnlyList<AudioClipInfo> clips)
+    {
+        // Keep bound instances so an ordinary refresh does not reset WPF's
+        // extended selection or rebuild every item container. Project transitions
+        // still clear the collection through ResetProjectState before IDs recur.
+        var existing = AudioClips.ToDictionary(clip => clip.Id);
+        var incomingIds = clips.Select(clip => clip.Id).ToHashSet();
+        for (var index = AudioClips.Count - 1; index >= 0; index--)
+        {
+            if (!incomingIds.Contains(AudioClips[index].Id))
+                AudioClips.RemoveAt(index);
+        }
+
+        for (var index = 0; index < clips.Count; index++)
+        {
+            var info = clips[index];
+            if (!existing.TryGetValue(info.Id, out var clip))
+            {
+                clip = new AudioClipModel { Id = info.Id };
+                ApplyClipInfo(clip, info);
+                AudioClips.Insert(index, clip);
+            }
+            else
+            {
+                ApplyClipInfo(clip, info);
+                if (!ReferenceEquals(AudioClips[index], clip))
+                    AudioClips.Move(AudioClips.IndexOf(clip), index);
+            }
+        }
+
+        for (var index = SelectedClips.Count - 1; index >= 0; index--)
+        {
+            if (!incomingIds.Contains(SelectedClips[index].Id))
+                SelectedClips.RemoveAt(index);
+        }
+        if (SelectedClip is { } selected)
+        {
+            if (!incomingIds.Contains(selected.Id))
+                SelectedClip = null;
+            else
+            {
+                // Instance identity no longer changes on refresh, so refresh the
+                // detail fields explicitly without discarding the selected beatgrid.
+                Bpm = selected.Bpm;
+                BeatCount = selected.BeatCount;
+                Key = selected.Key;
+                DurationSeconds = selected.DurationSeconds;
+            }
+        }
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    private static void ApplyClipInfo(AudioClipModel clip, AudioClipInfo info)
+    {
+        clip.Name = info.Name;
+        clip.Path = info.Path;
+        clip.DurationSeconds = info.DurationSeconds;
+        clip.SampleRate = info.SampleRate;
+        clip.Channels = info.Channels;
+        clip.Format = info.Format;
+        clip.Bpm = info.Bpm;
+        clip.Key = info.Key ?? "";
+        clip.BeatCount = info.BeatCount;
+        clip.IsAnalyzed = info.IsAnalyzed;
+        clip.AnalysisStatus = info.AnalysisStatus;
+        clip.StageErrors = info.StageErrors;
+        clip.AudioHash = info.AudioHash;
+        clip.StemsPaths = info.StemsPaths;
     }
 
     [RelayCommand]
@@ -598,7 +736,9 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
+    private bool CanSeparateStems() => SelectedClip != null && !IsSeparating;
+
+    [RelayCommand(CanExecute = nameof(CanSeparateStems))]
     private async Task SeparateStemsAsync()
     {
         if (SelectedClip == null)
@@ -706,13 +846,21 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     {
         _audioLibraryState.Clear();
         AudioClips.Clear();
+        SelectedClips.Clear();
         SelectedClip = null;
         StatusText = "Kein Projekt geöffnet";
         IsAnalyzing = false;
         IsSeparating = false;
+        IsDeleting = false;
+        IsImporting = false;
+        _activeImportContext = null;
+        ImportProgress = 0;
+        _currentImportFileIdx = 0;
+        _totalImportFiles = 0;
         _activeAnalysisClipId = null;
         _activeStemClipId = null;
         AnalysisProgress = 0;
+        CurrentStep = string.Empty;
         Bpm = 0;
         BeatCount = 0;
         Key = string.Empty;
@@ -728,14 +876,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     }
 
     private void OnProjectTransitionStarted(object? sender, EventArgs e)
-    {
-        IsAnalyzing = false;
-        IsSeparating = false;
-        _activeAnalysisClipId = null;
-        _activeStemClipId = null;
-        AnalysisProgress = 0;
-        CurrentStep = string.Empty;
-    }
+        => ResetProjectState();
 
     public void Dispose()
     {

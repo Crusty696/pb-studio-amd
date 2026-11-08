@@ -1,0 +1,88 @@
+{
+  "scope": "CPU key module, source seconds 60-90; no GUI or musical truth",
+  "run_directory": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\scratch\\t002-key-20261020-021430",
+  "code_sha256": "3074d017189090686bc8122070af5668c6a2c3bd02bbb84a003ea07a382e82e8",
+  "versions": {
+    "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+    "numpy": "1.26.4",
+    "librosa": "0.11.0"
+  },
+  "protection_before": {
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Progressive Psy Summer Dream mix  by Crusty Free download.wav": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Crusty -Klangkraft-21nai2022.wav": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Podcast-04.m4a": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f"
+  },
+  "sources": [
+    {
+      "id": "A01",
+      "source_sha256": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+      "source_window": [
+        60,
+        90
+      ],
+      "samples": 661500,
+      "first": "F# minor",
+      "second": "F# minor",
+      "from_same_chroma": "F# minor",
+      "analysis_seconds": 14.493067800001882
+    },
+    {
+      "id": "A02",
+      "source_sha256": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+      "source_window": [
+        60,
+        90
+      ],
+      "samples": 661500,
+      "first": "F# minor",
+      "second": "F# minor",
+      "from_same_chroma": "F# minor",
+      "analysis_seconds": 0.3319882999967376
+    },
+    {
+      "id": "A03",
+      "source_sha256": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f",
+      "source_window": [
+        60,
+        90
+      ],
+      "samples": 661500,
+      "first": "F# minor",
+      "second": "F# minor",
+      "from_same_chroma": "F# minor",
+      "analysis_seconds": 0.32346789999792236
+    }
+  ],
+  "technical_status": "PASS",
+  "warnings": [],
+  "protection_after": {
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\embedding_cache.db": "77e011abb04b9b96c9148a3e68885c564bdb34da43393e55d91730852c26ef53",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db": "9fa12bd7e0e49a0169907d610b27edfe947fdb951ebedaef1e631b129cda2124",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\patterns.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db": "616a63d6498d1cd5dacb6528c680b4e57cf290e21964f10e02ff21c186d5d926",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "C:\\Users\\david\\AppData\\Roaming\\PB_Studio\\brain\\weights.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Progressive Psy Summer Dream mix  by Crusty Free download.wav": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Crusty -Klangkraft-21nai2022.wav": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+    "E:\\02_Musik_&_Audio\\Audio_Clips\\Psy-Set\\Podcast-04.m4a": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f"
+  },
+  "protected_files_unchanged": true
+}

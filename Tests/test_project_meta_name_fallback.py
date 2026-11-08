@@ -125,3 +125,32 @@ class TestNullNameInProjectMeta:
 
         assert response.status_code == 200, response.text
         assert response.json()["name"] == "Alpha"
+
+    def test_open_create_close_announce_project_change_to_the_wpf(
+        self, client, fresh_state, tmp_path, monkeypatch
+    ):
+        """2026-10-01: API/chat project open left the WPF AUDIO tab empty."""
+        from backend.config import config
+        events_router = importlib.import_module("backend.routers.events_router")
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        seen: list[tuple[str, dict]] = []
+
+        async def capture(event_type, data):
+            seen.append((event_type, data))
+
+        monkeypatch.setattr(project_router, "publish_event", capture)
+        for name in ("Alpha", "Beta"):
+            assert client.post(
+                "/project/create", json={"name": name, "path": str(tmp_path)}
+            ).status_code == 200
+        assert client.post(
+            "/project/open", json={"path": str(tmp_path / "Alpha")}
+        ).status_code == 200
+        assert client.post("/project/close").status_code == 200
+
+        changes = [d for t, d in seen if t == "project_changed"]
+        assert [c["action"] for c in changes] == ["opened", "opened", "opened", "closed"]
+        assert Path(changes[2]["path"]).name == "Alpha"
+        source = Path(events_router.__file__).read_text(encoding="utf-8")
+        assert '"project_changed",' in source.split("progress_events = {", 1)[1].split("}", 1)[0]

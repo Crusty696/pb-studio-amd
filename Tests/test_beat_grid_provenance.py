@@ -84,6 +84,10 @@ class _StubStreamResult:
         self.window_count = 2
         self.chunk_evidence = []
         self.resume_checkpoint = {}
+        # Current streaming contract reports real feature coverage. This stub
+        # represents a complete synthetic 20-minute mix for BPM provenance.
+        self.feature_coverage = 1.0
+        self.feature_covered_seconds = duration
 
 
 def _beats_only_request(clip_id: int = 1) -> AudioAnalyzeRequest:

@@ -273,6 +273,51 @@ def _snapshot(paths: dict[str, object], control_root: Path):
     )
 
 
+def test_catalog_inventory_skips_manually_deleted_project_root(tmp_path):
+    api = _api()
+    paths = _create_complete_workspace(tmp_path)
+    project_root = Path(paths["project_root"])
+    for child in sorted(project_root.rglob("*"), reverse=True):
+        if child.is_file():
+            child.unlink()
+        elif child.is_dir():
+            child.rmdir()
+    project_root.rmdir()
+
+    snapshot = api.RecoveryOwnerSnapshot(
+        config_path=paths["config"],
+        catalog_db_path=paths["catalog"],
+        brain_dir=paths["brain_dir"],
+    )
+    projects, _media, _vector_ids, _stems, _renders = api._catalog_inventory(snapshot)
+
+    assert projects == ()
+
+
+def test_catalog_inventory_does_not_misclassify_inaccessible_root_as_deleted(
+    tmp_path, monkeypatch
+):
+    api = _api()
+    paths = _create_complete_workspace(tmp_path)
+    project_root = Path(paths["project_root"]).resolve()
+    snapshot = api.RecoveryOwnerSnapshot(
+        config_path=paths["config"],
+        catalog_db_path=paths["catalog"],
+        brain_dir=paths["brain_dir"],
+    )
+    original_stat = Path.stat
+
+    def deny_project_root(self, *args, **kwargs):
+        if str(self).casefold() == str(project_root).casefold():
+            raise PermissionError("access temporarily denied")
+        return original_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", deny_project_root)
+
+    with pytest.raises(api.RecoveryOwnerAdapterError, match="(?i)inaccessible"):
+        api._catalog_inventory(snapshot)
+
+
 def test_complete_owner_inventory_commits_one_shared_generation(tmp_path):
     api = _api()
     paths = _create_complete_workspace(tmp_path)

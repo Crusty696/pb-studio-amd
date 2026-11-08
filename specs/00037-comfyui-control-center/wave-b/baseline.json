@@ -1,0 +1,19 @@
+{
+  "utc": "2026-10-13T14:44:20.103415+00:00",
+  "files": {
+    "backend\\dependencies.py": "4fcd0ac8383d4d062f657683690a3de6a5f5156853a4c93f332ee26cc995cf3e",
+    "config.json": "799c551d5acd11ea49fa157e2fff26183e3af7e548b2364e4d2e2c888b5cde1a",
+    "data\\pb_studio.db": "ff125d82959a9af4b852a68e6e9a9835c1b081809b90b4f2f4cbf3179bf78b8a",
+    "PBStudio.UI\\Services\\SSEClient.cs": "dbb04d9f45d0a6cc3a7c2adc38cdc892d4c46b09149114569290c65732a01389",
+    "PBStudio.UI\\Services\\TerminalLoggerProvider.cs": "9f6aee3784ffaf0e57967ae8bf472965126824dd16651673814b50598934c38b",
+    ".claude\\settings.local.json": "7be5b030f294efc2136631eae801b1c0c794bc9ca83b1a43ad6136bf11324d7e",
+    "src\\pb_studio\\comfyui\\capabilities.py": "39c098cdb916ab4e73586afc55d7fea176a3292d675466836e23049d7a511644",
+    "src\\pb_studio\\comfyui\\client.py": "3478a03f1a4d654ec41a2677b18ab0eada47c951d07a1777f1cf411de5b0c774",
+    "src\\pb_studio\\comfyui\\schemas.py": "a4d5046aa0b2bced9924523e1797e0cdc0341671f87e601accc149a2579da5c9",
+    "src\\pb_studio\\comfyui\\workflow_schemas.py": "a3e7227483b7f6f4701f406015ad2c143d980226caeef8dc03c017770f60817c",
+    "src\\pb_studio\\comfyui\\__init__.py": "04bcdc822873b1839e4043e5cdcca5f8ea31cb9be69f8958edd00b4d484680dc",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\CURRENT": "e7a937bdbd116b337963c3d87f4f603da2710b79c809be9994830afc975f3963",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\journal.json": "0508b7ea2737c39f39cde52fd79835c8d7695f9804fb4175c2bd389c1e381bc2",
+    "C:\\Users\\david\\AppData\\Local\\PB_Studio\\recovery-control\\v1\\RUNTIME_DIRTY": "b7c659ab5c7ca0e72cab15ac09775b569d651ad711bd3db2e182e078c65794e9"
+  }
+}

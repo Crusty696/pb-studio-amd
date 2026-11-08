@@ -19,8 +19,13 @@ class AudioAnalyzer:
 
         try:
             # Lazy import to avoid loading heavyweight models on app start if not needed
-            from BeatNet.BeatNet import BeatNet
-            self.estimator = BeatNet(1, mode='offline', inference_model='DBN', plot=[], thread=False)
+            # Use the shared optional-dependency compatibility import first.
+            from .beat_detector import BEATNET_AVAILABLE, BeatNet
+            from .beatnet_compat import adapt_beatnet_dbn, prepare_beatnet_file_state
+            if not BEATNET_AVAILABLE:
+                raise ImportError("BeatNet unavailable")
+            estimator = BeatNet(1, mode='offline', inference_model='DBN', plot=[], thread=False, device='cpu')
+            self.estimator = prepare_beatnet_file_state(adapt_beatnet_dbn(estimator))
             self.model_loaded = True
         except ImportError as e:
             logger.error(f"BeatNet import failed: {e}")
@@ -97,7 +102,40 @@ class AudioAnalyzer:
             logger.info(f"Running BeatNet on: {analyze_path}")
 
             # BeatNet processing
-            output = self.estimator.process(analyze_path)
+            try:
+                from .beatnet_compat import process_beatnet_file
+                output = process_beatnet_file(self.estimator, analyze_path)
+            except Exception as beatnet_error:
+                # BeatNet/madmom can fail on very short or irregular clips
+                # before producing a rectangular result. Keep analysis usable
+                # through librosa instead of returning a hard error.
+                logger.warning(
+                    "BeatNet failed; using librosa beat fallback: %s",
+                    beatnet_error,
+                )
+                try:
+                    import librosa
+
+                    fallback_audio, fallback_sr = librosa.load(
+                        analyze_path, sr=22050, mono=True
+                    )
+                    _, fallback_frames = librosa.beat.beat_track(
+                        y=fallback_audio,
+                        sr=fallback_sr,
+                    )
+                    fallback_times = librosa.frames_to_time(
+                        fallback_frames,
+                        sr=fallback_sr,
+                    )
+                    output = np.column_stack(
+                        (
+                            fallback_times,
+                            np.ones(len(fallback_times), dtype=float),
+                        )
+                    )
+                except Exception as fallback_error:
+                    logger.warning("Librosa beat fallback failed: %s", fallback_error)
+                    output = np.empty((0, 2), dtype=float)
 
             # RMS-Energie extrahieren (vor Temp-Cleanup!)
             energy_curve = []

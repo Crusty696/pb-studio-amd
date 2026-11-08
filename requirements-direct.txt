@@ -11,9 +11,9 @@ onnxruntime-directml==1.19.2
 torch==2.11.0+cpu
 torchvision==0.26.0+cpu
 torchaudio==2.11.0+cpu
-transformers==5.5.4
+transformers==5.10.4
 huggingface-hub==1.5.0
-pillow==12.3.0
+pillow==13.0.0
 sqlite-vec==0.1.9
 sentencepiece==0.2.1
 BeatNet==1.1.1

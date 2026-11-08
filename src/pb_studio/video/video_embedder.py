@@ -26,9 +26,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-CURRENT_MODEL_NAME = "siglip_vision"
-CURRENT_MODEL_VERSION = "onnx-dml-v1"
-EMBED_DIM = 1152
+from pb_studio.embedding_identity import CURRENT_MODEL_NAME, CURRENT_MODEL_VERSION, EMBED_DIM
 
 
 @dataclass

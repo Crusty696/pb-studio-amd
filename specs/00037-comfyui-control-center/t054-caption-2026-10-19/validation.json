@@ -1,0 +1,23 @@
+{
+  "real_calls": 84,
+  "final_calls": 12,
+  "all_runs_protected_unchanged": true,
+  "final_code_hash_matches": true,
+  "owned_model_unloaded": true,
+  "pytest_passed": 101,
+  "syntax_files": [
+    "src\\pb_studio\\video\\lmstudio_vision_wrapper.py",
+    "src/pb_studio/caption_contract.py",
+    "backend/routers/video_router.py",
+    "Tests/test_t054_caption_contract.py",
+    "Tests/test_video_caption_tag_merge.py"
+  ],
+  "code_sha256": {
+    "src\\pb_studio\\video\\lmstudio_vision_wrapper.py": "13bf733b606b9caba9d55ef906a4752a5fac7cf46819a351d76880f5ff482682",
+    "src/pb_studio/caption_contract.py": "25050909ee795ef06192277d0d29ce5903ff8cfde3612b475dbabd0225b7e2c1",
+    "backend/routers/video_router.py": "3e4e99f4bdbd9ced1d568489932f1215e1d853c38b37be8972512ba79181189a",
+    "Tests/test_t054_caption_contract.py": "a62b7a5421fae194e37b85674bba526770194fb04afc5dcd537b9f7613928dc7",
+    "Tests/test_video_caption_tag_merge.py": "1993589b91223c2b9b1a4328bedab9cdceed6dd39b46f523a826c21a22608726"
+  },
+  "comparison_scope": "Development references, not independent holdout; multiple candidate exploration; no inferential accuracy claim"
+}

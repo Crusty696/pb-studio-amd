@@ -123,13 +123,6 @@ class CutPlan:
         aligned = sum(1 for c in self.cuts if c.beat_aligned)
         return aligned / len(self.cuts)
 
-    def get_cut_at_time(self, time: float) -> Optional[CutPoint]:
-        """Find the cut point that contains a specific time."""
-        for cut in self.cuts:
-            if cut.time <= time < cut.end_time:
-                return cut
-        return None
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {

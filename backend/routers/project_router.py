@@ -37,6 +37,7 @@ from ..app_state import (
 )
 from pb_studio.data.repositories.project_repository import ProjectRepository
 from ..config import config
+from ..project_anchors import _anchors_path, load_project_anchors
 from ..media_path_policy import (
     MediaPathPolicyError,
     validate_media_catalog,
@@ -45,8 +46,24 @@ from ..media_path_policy import (
 )
 from ..schemas.common import StatusResponse, validate_timeline
 from ..schemas.project_schemas import ProjectCreate, ProjectOpen, ProjectInfo
+from ..dependencies import publish_event
 
 logger = logging.getLogger(__name__)
+
+async def _announce_project_change(action: str, path: str) -> None:
+    """Tell the WPF that the backend's open project changed.
+
+    Opening or closing through the API or the chat tool project.open left the
+    WPF on its old state: the AUDIO tab stayed empty although the backend had
+    the project with its mix loaded (2026-10-01). Only the WPF's own open
+    emitted ProjectOpenedMessage. Best effort: a lost event must not fail the
+    open/close that already succeeded.
+    """
+    try:
+        await publish_event("project_changed", {"action": action, "path": path})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project_changed-Event nicht gesendet: %s", exc)
+
 router = APIRouter(prefix="/project", tags=["Project"])
 
 _PROJECT_META_FILE = "project.json"
@@ -649,6 +666,7 @@ async def create_project(
             exc,
         )
     logger.info(f"Projekt erstellt: {project_path}")
+    await _announce_project_change("opened", str(project_data.get("path") or project_path))
     return ProjectInfo(**project_data)
 
 
@@ -758,13 +776,11 @@ async def open_project(
     meta = _read_project_meta(project_path)
     has_timeline = _load_timeline_into_state(project_path, candidate_state)
 
-    # Fallback: lokale Projektordner zählen, falls keine Metadaten vorhanden.
-    audio_count = int(meta.get("audio_count") or 0)
-    video_count = int(meta.get("video_count") or 0)
-    if audio_count == 0 and (project_path / "audio").exists():
-        audio_count = sum(1 for f in (project_path / "audio").glob("*") if f.is_file())
-    if video_count == 0 and (project_path / "video").exists():
-        video_count = sum(1 for f in (project_path / "video").glob("*") if f.is_file())
+    # ProjectInfo counters follow the catalog that was validated and installed
+    # into AppState. Metadata may be stale; folders may contain exports,
+    # sidecars, or unrelated files rather than imported media records.
+    audio_count = len(candidate_state.audio_clips)
+    video_count = len(candidate_state.video_clips)
 
     db_project_id = (
         existing_project_id
@@ -815,6 +831,7 @@ async def open_project(
                 )
         raise
     logger.info(f"Projekt geöffnet: {project_path}")
+    await _announce_project_change("opened", str(project_data.get("path") or project_path))
     return ProjectInfo(**project_data)
 
 
@@ -996,6 +1013,7 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
                 pending,
             )
     logger.info(f"Projekt geschlossen: {name}")
+    await _announce_project_change("closed", "")
     return StatusResponse(success=True, message=f"Projekt '{name}' geschlossen")
 
 
@@ -1012,7 +1030,6 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
 # {id, file_path, mix_start, mix_end}. Es fehlte nur der Weg von der UI dorthin.
 # Persistenz als anchors.json neben timeline.json, gleiches Muster wie dort.
 # ---------------------------------------------------------------------------
-_ANCHORS_FILE = "anchors.json"
 
 
 class AnchorEntry(BaseModel):
@@ -1026,41 +1043,6 @@ class AnchorEntry(BaseModel):
 class AnchorListResponse(BaseModel):
     anchors: list[AnchorEntry] = Field(default_factory=list)
     count: int = 0
-
-
-def _anchors_path(project_root: str | Path) -> Path:
-    return Path(project_root) / _ANCHORS_FILE
-
-
-def load_project_anchors(project_root: str | Path) -> list[dict]:
-    """Liest die manuellen Anker eines Projekts. Fehler ergeben eine leere Liste."""
-    path = _anchors_path(project_root)
-    if not path.is_file():
-        return []
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        logger.warning("anchors.json nicht lesbar: %s", path)
-        return []
-    if not isinstance(raw, list):
-        return []
-    result: list[dict] = []
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        try:
-            seconds = float(item.get("time", -1.0))
-        except (TypeError, ValueError):
-            continue
-        if seconds < 0.0:
-            continue
-        result.append({
-            "time": seconds,
-            "label": str(item.get("label") or ""),
-            "video_clip_id": item.get("video_clip_id"),
-        })
-    result.sort(key=lambda entry: entry["time"])
-    return result
 
 
 @router.get("/anchors", response_model=AnchorListResponse)

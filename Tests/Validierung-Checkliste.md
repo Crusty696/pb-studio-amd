@@ -225,7 +225,7 @@ pytest Tests/test_config_manager.py -v      # Config Manager
 pytest Tests/test_audio_analyzer.py -v       # BeatNet Audio Analyse
 pytest Tests/test_separator.py -v            # Stem Separation
 pytest Tests/test_waveform_analyzer.py -v    # Waveform
-pytest Tests/test_vram_arbiter.py -v         # VRAM Management
+pytest Tests/test_vram_sensor_wiring.py -v        # VRAM Management
 pytest Tests/test_pacing_engine.py -v        # Pacing Engine
 pytest Tests/test_clap_wrapper.py -v         # CLAP Audio AI
 pytest Tests/test_siglip_video.py -v         # SigLIP Video AI

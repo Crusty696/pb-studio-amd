@@ -312,7 +312,11 @@ def example_7_vector_store_integration():
             query_embedding = specialist.embed_video(video_path, interval=3.0, max_frames=5)
 
             if query_embedding is not None:
-                results = specialist.find_similar_clips(query_embedding, k=3)
+                from pb_studio.embedding_identity import current_video_embedding_identity
+                results = specialist.find_similar_clips(
+                    query_embedding, k=3,
+                    query_identity=current_video_embedding_identity(),
+                )
 
                 logger.info("Similar clips from vector store:")
                 for clip, score in results:

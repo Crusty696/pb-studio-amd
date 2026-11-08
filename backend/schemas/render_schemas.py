@@ -79,6 +79,8 @@ class RenderProgress(BaseModel):
     validation_path: Optional[str] = None
     progress_end: bool = False
     validation_status: Optional[str] = None
+    validation_phase: Optional[str] = None
+    validation_progress: Optional[float] = None
 
     @model_validator(mode="after")
     def sync_progress_percents(self) -> "RenderProgress":

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PBStudio.UI.Helpers;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 using PBStudio.UI.ViewModels;
@@ -28,6 +29,41 @@ public sealed class TimelineViewModelTests
         Assert.IsTrue(fixture.ViewModel.ScrubTimelineBy(10));
         Assert.AreEqual(6.0, fixture.ViewModel.SelectedTimelinePosition);
         Assert.IsFalse(fixture.ViewModel.ScrubTimelineBy(1));
+    }
+
+    [TestMethod]
+    public void TimelineScrub_MapsTimelineOffsetOntoSourceAndRenderedPreview()
+    {
+        Assert.AreEqual(
+            32.0,
+            TimelineSeekCalculator.ToSourcePosition(
+                selectedTimelinePosition: 12.0,
+                clipTimelineStart: 10.0,
+                clipSourceStart: 30.0,
+                clipSourceDuration: 5.0));
+        Assert.AreEqual(
+            35.0,
+            TimelineSeekCalculator.ToSourcePosition(
+                selectedTimelinePosition: 20.0,
+                clipTimelineStart: 10.0,
+                clipSourceStart: 30.0,
+                clipSourceDuration: 5.0));
+        Assert.AreEqual(
+            2.0,
+            TimelineSeekCalculator.ToRenderedPreviewPosition(
+                selectedTimelinePosition: 12.0,
+                previewTimelineStart: 10.0,
+                previewDuration: 4.0));
+        Assert.IsNull(
+            TimelineSeekCalculator.ToRenderedPreviewPosition(
+                selectedTimelinePosition: 15.0,
+                previewTimelineStart: 10.0,
+                previewDuration: 4.0));
+        Assert.IsNotNull(
+            TimelineSeekCalculator.ToRenderedPreviewPosition(
+                selectedTimelinePosition: 14.0,
+                previewTimelineStart: 10.0,
+                previewDuration: 4.0));
     }
 
     [TestMethod]
@@ -71,7 +107,7 @@ public sealed class TimelineViewModelTests
         Assert.AreEqual(0.0, selected.ClipStart);
         Assert.IsFalse(fixture.ViewModel.TrimSelectedCutStartBy(-0.1));
         Assert.IsTrue(fixture.ViewModel.TrimSelectedCutEndBy(5));
-        Assert.AreEqual(5.0, selected.EndTime);
+        Assert.AreEqual(6.9, selected.EndTime);
         Assert.IsFalse(fixture.ViewModel.TrimSelectedCutEndBy(0.1));
     }
 
@@ -108,6 +144,47 @@ public sealed class TimelineViewModelTests
         Assert.AreEqual("Cut 2 / 2", fixture.ViewModel.SelectionIndexText);
     }
 
+    [TestMethod]
+    public void SelectedGeneratedClip_LoadsMotionCurveUsingNumericVideoId()
+    {
+        int? requestedClipId = null;
+        var pending = new TaskCompletionSource<MotionData?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var harness = ApiClientHarness.Create().Handle(
+            nameof(IApiClient.GetMotionAsync),
+            arguments =>
+            {
+                requestedClipId = (int)arguments![0]!;
+                return pending.Task;
+            });
+        using var fixture = TimelineFixture.Create(harness.Client);
+
+        fixture.ViewModel.SelectedEntry = Entry("clip_42", 0, 1);
+
+        Assert.AreEqual(42, requestedClipId);
+    }
+
+    [TestMethod]
+    public async Task TimelineState_WaitsForPendingSaveBeforeRenderConsumersContinue()
+    {
+        var api = ApiClientHarness.Create().Client;
+        using var projects = new ProjectService(
+            api,
+            NullLogger<ProjectService>.Instance);
+        var state = new TimelineStateService(
+            api,
+            NullLogger<TimelineStateService>.Instance,
+            projects);
+        var pending = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        state.TrackPendingSave(pending.Task);
+
+        var wait = state.WaitForPendingSaveAsync();
+        Assert.IsFalse(wait.IsCompleted);
+        pending.SetResult(true);
+        await wait.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+
     private static TimelineEntryModel Entry(
         string name,
         double start,
@@ -137,9 +214,9 @@ public sealed class TimelineViewModelTests
         public TimelineViewModel ViewModel { get; }
         private ProjectService Projects { get; }
 
-        public static TimelineFixture Create()
+        public static TimelineFixture Create(IApiClient? apiClient = null)
         {
-            var api = ApiClientHarness.Create().Client;
+            var api = apiClient ?? ApiClientHarness.Create().Client;
             var projects = new ProjectService(
                 api,
                 NullLogger<ProjectService>.Instance);

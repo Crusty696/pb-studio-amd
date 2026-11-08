@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from contextlib import asynccontextmanager
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -25,11 +27,12 @@ def test_sse_event_is_journaled_without_connected_clients():
         deps._event_queues.clear()
         deps._event_queue_filters.clear()
         deps.reset_event_journal()
+        cursor = deps._event_sequence
 
         await deps.publish_event("render_progress", {"job_id": "job-73"})
         await deps.publish_event("render_completed", {"job_id": "job-73"})
 
-        replay = deps.get_journaled_events_since(1)
+        replay = deps.get_journaled_events_since(cursor + 1)
         assert len(replay) == 1
         assert replay[0][1]["event"] == "render_completed"
         assert replay[0][1]["data"] == {"job_id": "job-73"}
@@ -126,7 +129,14 @@ def test_raft_session_failure_cancels_prior_reservation(tmp_path, monkeypatch):
 
 
 class _PreviewState:
-    current_timeline = [{"clip_id": "clip_1"}]
+    current_timeline = [{"clip_id": "clip_1", "start_time": 0.0, "end_time": 10.0}]
+
+    @asynccontextmanager
+    async def project_operation(self):
+        yield object()
+
+    def require_project_context_current(self, _context):
+        return None
 
     def get_timeline_snapshot(self):
         return list(self.current_timeline)
@@ -167,7 +177,8 @@ def test_preview_generation_runs_under_shared_gpu_lock(monkeypatch):
         pacing_router.generate_preview(PreviewRequest(), _PreviewState())
     )
 
-    assert response.preview_path == "preview.mp4"
+    assert Path(response.preview_path).is_absolute()
+    assert Path(response.preview_path).name == "preview.mp4"
     assert lock.active is False
 
 

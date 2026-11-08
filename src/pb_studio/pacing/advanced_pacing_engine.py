@@ -1555,10 +1555,8 @@ class AdvancedPacingEngine:
         modified = 0
         bass_boosted = 0
         # Audit E2: bass_curve injiziert? Nur dann ueberhaupt boost-fuehlen.
-        has_bass_curve = (
-            getattr(self, "_pre_cached_bass_curve", None) is not None
-            and len(getattr(self, "_pre_cached_bass_curve", []) or []) > 0
-        )
+        bass_curve = getattr(self, "_pre_cached_bass_curve", None)
+        has_bass_curve = bass_curve is not None and len(bass_curve) > 0
 
         for cut in triggers:
             # Passende Sektion suchen (Zeitpunkt liegt im Intervall [start, end))
@@ -1917,6 +1915,7 @@ class AdvancedPacingEngine:
     def enable_motion_matching(self, enabled: bool = True) -> None:
         """NV-Kompatibilität: Aktiviert/Deaktiviert Motion-Matching."""
         self._use_motion_matching = enabled
+        self.clip_selector.use_motion_matching = enabled
         logger.info(f"Motion-Matching: {'aktiviert' if enabled else 'deaktiviert'}")
 
     # =========================================================================
@@ -1976,9 +1975,17 @@ class AdvancedPacingEngine:
         interval = 60.0 / float(expected_bpm)
         anchor = float(downbeats[0] if downbeats else (beats[0] if beats else 0.0))
         measured = sorted(float(value) for value in beats if 0.0 <= float(value) <= duration)
+        original_strengths = getattr(self, "_pre_cached_beat_strengths", None)
+        measured_pairs = sorted(
+            (float(value), float(original_strengths[index]))
+            for index, value in enumerate(beats)
+            if original_strengths is not None and index < len(original_strengths)
+            and 0.0 <= float(value) <= duration
+        )
         measured_downbeats = set(float(value) for value in downbeats)
         snap_window = interval * EXPECTED_BPM_SNAP_FRACTION
         corrected: List[float] = []
+        corrected_strengths: List[float] = []
         corrected_downbeats: List[float] = []
 
         def _nearest_measured(value: float) -> Optional[float]:
@@ -2001,6 +2008,13 @@ class AdvancedPacingEngine:
             chosen = max(0.0, min(duration, float(chosen)))
             if not corrected or chosen - corrected[-1] > 1e-6:
                 corrected.append(chosen)
+                if measured_pairs:
+                    strength_time, strength = min(
+                        measured_pairs, key=lambda pair: abs(pair[0] - chosen)
+                    )
+                    corrected_strengths.append(
+                        strength if abs(strength_time - chosen) <= snap_window else 1.0
+                    )
                 if chosen in measured_downbeats:
                     corrected_downbeats.append(chosen)
                 nearest_to_chosen = _nearest_measured(chosen)
@@ -2014,6 +2028,8 @@ class AdvancedPacingEngine:
             expected_bpm,
             len(corrected),
         )
+        if measured_pairs:
+            self._pre_cached_beat_strengths = corrected_strengths
         return corrected, corrected_downbeats
 
     def _extract_drum_triggers_from_stem(self, stem_path: str) -> List["PacingCut"]:
@@ -2558,32 +2574,40 @@ class AdvancedPacingEngine:
             next_time = filtered[i + 1].time if i < len(filtered) - 1 else audio_duration
             clip_duration = next_time - cut.time
 
-            current_max = max_length
-            if variation > 0:
-                var_factor = random.uniform(-variation * 0.5, variation * 0.5)
-                current_max = max_length * (1.0 + var_factor)
+            if clip_duration > max_length:
+                next_boundary = min(next_time, audio_duration)
+                segment_count = max(2, int(np.ceil(clip_duration / max_length)))
 
-            if clip_duration > current_max:
-                num_splits = max(1, int(clip_duration / current_max))
-                split_duration = clip_duration / (num_splits + 1)
+                # Variation verschiebt nur innere Grenzen. Min/Max bleiben harte
+                # Produktgrenzen; jeder Schritt reserviert fuer alle restlichen
+                # Segmente weiterhin einen realisierbaren Bereich.
+                for segment_index in range(1, segment_count):
+                    remaining_segments = segment_count - segment_index
+                    previous_time = result[-1].time
+                    ideal_time = cut.time + clip_duration * (
+                        segment_index / segment_count
+                    )
+                    if variation > 0:
+                        base_length = clip_duration / segment_count
+                        ideal_time += base_length * random.uniform(
+                            -variation * 0.2,
+                            variation * 0.2,
+                        )
 
-                for j in range(num_splits):
-                    jitter = split_duration * random.uniform(-variation * 0.2, variation * 0.2) if variation > 0 else 0.0
-                    split_time = cut.time + (split_duration * (j + 1)) + jitter
-
-                    # L-TI-6: Strict bounds check gegen prev UND next.
-                    # prev = letzter platzierter Cut/Split (result[-1])
-                    # next = entweder der naechste echte Cut (next_time) ODER end-of-audio,
-                    #        je nachdem was naeher liegt.
-                    prev_time = result[-1].time
-                    next_boundary = min(next_time, audio_duration)
-                    dist_prev = split_time - prev_time
-                    dist_next = next_boundary - split_time
-
-                    if dist_prev < min_length or dist_next < min_length:
-                        # Split wuerde min_length verletzen -> skip
+                    lower_bound = max(
+                        previous_time + min_length,
+                        next_boundary - remaining_segments * max_length,
+                    )
+                    upper_bound = min(
+                        previous_time + max_length,
+                        next_boundary - remaining_segments * min_length,
+                    )
+                    if lower_bound > upper_bound + 1e-9:
+                        # Ein kurzer terminaler Rest kann mathematisch nicht
+                        # zugleich beide Grenzen erfuellen; keinen illegalen
+                        # Split erzeugen.
                         continue
-
+                    split_time = min(upper_bound, max(lower_bound, ideal_time))
                     result.append(PacingCut(
                         time=split_time,
                         trigger_type="auto_split",
@@ -2599,30 +2623,3 @@ class AdvancedPacingEngine:
                     pass  # callback errors duerfen Generation nicht brechen
 
         return sorted(result, key=lambda c: c.time)
-
-    def get_trigger_statistics(self, cuts: List["PacingCut"]) -> Dict[str, Any]:
-        """Gibt Statistiken über die generierten Cuts zurück."""
-        if not cuts:
-            return {
-                "total_cuts": 0,
-                "trigger_types": {},
-                "avg_interval": 0.0,
-                "min_interval": 0.0,
-                "max_interval": 0.0,
-                "avg_strength": 0.0,
-            }
-
-        trigger_counts: Dict[str, int] = {}
-        for cut in cuts:
-            trigger_counts[cut.trigger_type] = trigger_counts.get(cut.trigger_type, 0) + 1
-
-        intervals = [cuts[i + 1].time - cuts[i].time for i in range(len(cuts) - 1)]
-
-        return {
-            "total_cuts": len(cuts),
-            "trigger_types": trigger_counts,
-            "avg_interval": float(np.mean(intervals)) if intervals else 0.0,
-            "min_interval": float(np.min(intervals)) if intervals else 0.0,
-            "max_interval": float(np.max(intervals)) if intervals else 0.0,
-            "avg_strength": float(np.mean([c.strength for c in cuts])),
-        }

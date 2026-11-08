@@ -36,8 +36,11 @@ from pb_studio.core.directml_adapter import (
 
 # SigLIP preprocessing constants
 SIGLIP_IMAGE_SIZE = 384
-SIGLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
-SIGLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
+# Registered google/siglip-so400m-patch14-384 processor contract, not CLIP.
+# The ONNX input feeds the patch convolution directly; no normalization is
+# embedded in the graph. See models/siglip_tokenizer/preprocessor_config.json.
+SIGLIP_MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32)
+SIGLIP_STD = np.array([0.5, 0.5, 0.5], dtype=np.float32)
 EMBEDDING_DIM = 1152
 
 _TEXT_CAPABILITY_WARN_LOCK = threading.Lock()
@@ -205,7 +208,7 @@ class SigLIPWrapper:
             return False
 
     def preprocess_image(self, image: Image.Image) -> np.ndarray:
-        """Preprocess image for SigLIP (Required by tests)."""
+        """Apply the registered SigLIP RGB/384 bicubic/[-1, 1] contract."""
         img = image.convert('RGB').resize((SIGLIP_IMAGE_SIZE, SIGLIP_IMAGE_SIZE), Image.Resampling.BICUBIC)
         arr = (np.array(img, dtype=np.float32) / 255.0 - SIGLIP_MEAN) / SIGLIP_STD
         return np.transpose(arr, (2, 0, 1))[np.newaxis, :]
@@ -232,9 +235,7 @@ class SigLIPWrapper:
             # Preprocess all images and stack into a single batch (B, 3, 384, 384)
             tensors = []
             for img in images:
-                img_pre = img.convert('RGB').resize((SIGLIP_IMAGE_SIZE, SIGLIP_IMAGE_SIZE), Image.Resampling.BICUBIC)
-                arr = (np.array(img_pre, dtype=np.float32) / 255.0 - SIGLIP_MEAN) / SIGLIP_STD
-                tensors.append(np.transpose(arr, (2, 0, 1)))
+                tensors.append(self.preprocess_image(img)[0])
             
             batch_tensor = np.stack(tensors).astype(np.float32)
             

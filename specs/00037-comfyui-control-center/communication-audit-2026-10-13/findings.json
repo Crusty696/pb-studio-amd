@@ -1,0 +1,170 @@
+[
+  {
+    "id": "CM01",
+    "severity": "HIGH",
+    "title": "Verlorene PB-Annahme und dauerhafter WPF-Intent",
+    "evidence": "ApiClient.cs:919–931,1002–1034; plan.md baseline:492,563",
+    "tasks": [
+      "T011",
+      "T022",
+      "T024",
+      "T025"
+    ],
+    "correction": "Requestbezogenes typisiertes Ergebnis und dauerhaft gespeicherte client_request_id vor Send; identischen Intent nach WPF-Neustart mit identischer ID/Payload abgleichen."
+  },
+  {
+    "id": "CM02",
+    "severity": "HIGH",
+    "title": "Lücke zwischen Snapshot, Pagination und SSE",
+    "evidence": "backend/dependencies.py:386–392; SSEClient.cs:37–49; plan.md baseline:219,339",
+    "tasks": [
+      "T011",
+      "T022",
+      "T025"
+    ],
+    "correction": "Konsistenter paginierter Snapshot plus dauerhafter Jobänderungscursor; transport id getrennt, Changefeed repariert verlorene Deltas."
+  },
+  {
+    "id": "CM03",
+    "severity": "HIGH",
+    "title": "Legacyparser verliert Provideridentität und Statussemantik",
+    "evidence": "events_router.py:173–183; SSEClient.cs:341–342,440–451,533–534,576–585,641–667",
+    "tasks": [
+      "T022",
+      "T025"
+    ],
+    "correction": "Eigener provider_job_changed Parser; nullable Fortschritt, expliziter Jobstatus, keine Legacy100%-Fertiglogik."
+  },
+  {
+    "id": "CM04",
+    "severity": "HIGH",
+    "title": "Offener Stream ohne aktuelle Daten",
+    "evidence": "SSEClient.cs:102–103,194,302; events_router.py:31,132–134",
+    "tasks": [
+      "T003",
+      "T013",
+      "T025"
+    ],
+    "correction": "Getrennte Streamgesundheit, monotone Idlefristen, begrenzter HTTP-Abgleich und stale/degraded Anzeige."
+  },
+  {
+    "id": "CM05",
+    "severity": "HIGH",
+    "title": "PB-Schließen vor dauerhaftem Übergabereceipt",
+    "evidence": "App.xaml.cs:221–249; PythonBridgeService.cs:321–333; backend/main.py:369–374",
+    "tasks": [
+      "T021",
+      "T022",
+      "T025"
+    ],
+    "correction": "Kontrollierter Closehandshake vor Backendstop; Crash durch Write-ahead/Reconciliation abfangen, Comfy außerhalb PB-Prozessbaum."
+  },
+  {
+    "id": "CM06",
+    "severity": "MEDIUM",
+    "title": "JSON- und Fehlervertrag zwischen Python/C#",
+    "evidence": "ApiClient.cs:26–35; plan.md baseline:483–518",
+    "tasks": [
+      "T010",
+      "T022",
+      "T024",
+      "T025"
+    ],
+    "correction": "Gemeinsame Wirefixtures, explizite Enumstrings/UUID/UTC/null/Revisionen, requestbezogener ErrorEnvelope."
+  },
+  {
+    "id": "CM07",
+    "severity": "HIGH",
+    "title": "Cancelbool beweist kein Remoteende",
+    "evidence": "Comfy server.py:952–995; execution.py:1396–1407; comfy_execution/jobs.py:539–548",
+    "tasks": [
+      "T010",
+      "T013",
+      "T014"
+    ],
+    "correction": "200 cancelled:true ist nur angenommenes Lösch-/Interruptbegehren; ohne Terminalbeleg bounded needs_decision statt falschem Erfolg oder Pollschleife."
+  },
+  {
+    "id": "CM08",
+    "severity": "HIGH",
+    "title": "WS-SID-Rennen und unkorrelierte Nachrichten",
+    "evidence": "Comfy server.py:276–293,327–329,1125–1126,1390–1398",
+    "tasks": [
+      "T003",
+      "T012",
+      "T013"
+    ],
+    "correction": "Ein WS-Owner, kein überlappender gleichnamiger Socket; clientId/client_id exakt abbilden, unkorrelierte Events nur Anzeige."
+  },
+  {
+    "id": "CM09",
+    "severity": "HIGH",
+    "title": "Normalisiertes completed kann Rohstatus verdecken",
+    "evidence": "Comfy comfy_execution/jobs.py:25–31,214–245,261–263; server.py:943–950",
+    "tasks": [
+      "T004",
+      "T005",
+      "T013"
+    ],
+    "correction": "Explizite Remotestatusabbildung; completed ohne belegten success kein autoritativer Erfolg."
+  },
+  {
+    "id": "CM10",
+    "severity": "HIGH",
+    "title": "Erfolgsmeldung vor Historypublikation",
+    "evidence": "Comfy execution.py:824,831–834,1345–1350; main.py:368–373",
+    "tasks": [
+      "T013",
+      "T019"
+    ],
+    "correction": "Ausführungserfolg und verfügbare Ergebnisbelege getrennt; bounded Nachabfragen, kein erneuter Submit bei leerer History."
+  },
+  {
+    "id": "CM11",
+    "severity": "HIGH",
+    "title": "Prompt-ID vor Send fehlt als expliziter Wirevertrag",
+    "evidence": "Comfy server.py:1098–1112; comfy_execution/jobs.py:34–48; execution.py:1307–1311,1345",
+    "tasks": [
+      "T003",
+      "T011",
+      "T012",
+      "T013"
+    ],
+    "correction": "Kanonische Prompt-UUID vor Send persistieren und mitsenden; keine Comfy-Deduplizierung voraussetzen, keine automatischen POST-Retries."
+  },
+  {
+    "id": "CM12",
+    "severity": "MEDIUM",
+    "title": "Uploadresponse und Downloadparameter nicht deckungsgleich",
+    "evidence": "Comfy server.py:400–465,521–563,567ff",
+    "tasks": [
+      "T005",
+      "T017"
+    ],
+    "correction": "Tatsächliches UploadReceipt verwenden; name zu filename übersetzen; Originaldownload ohne Previewtransformation."
+  },
+  {
+    "id": "CM13",
+    "severity": "MEDIUM",
+    "title": "Discovery und WS-SID sind keine Bootidentität",
+    "evidence": "Comfy server.py:276–281,727–745; execution.py:1304,1335–1336,1436–1442",
+    "tasks": [
+      "T003",
+      "T004",
+      "T013"
+    ],
+    "correction": "Endpoint-/Discovery-/Connection-/belegte Bootidentität getrennt; unknown ausdrücklich erhalten."
+  },
+  {
+    "id": "CM14",
+    "severity": "HIGH",
+    "title": "Remoteereignis vor HTTP-Annahme",
+    "evidence": "plan.md baseline:567,596–610; Comfy server.py:1139–1140",
+    "tasks": [
+      "T010",
+      "T012",
+      "T013"
+    ],
+    "correction": "Beobachtungen puffern und nach Bindungsprüfung monoton reduzieren; keine illegalen Dispatching-Transitions oder Regression durch spätes ACK."
+  }
+]

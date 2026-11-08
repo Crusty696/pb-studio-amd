@@ -1,0 +1,81 @@
+---
+title: PB Studio – Projektindex
+updated: 2026-10-30
+branch: codex/full-audit-remediation
+status: Spec 00038 T001-T004 implementiert, Gesamtpruefung offen; Spec 00035/00037 Abnahmegrenzen unveraendert
+---
+
+# PB Studio – Projektindex
+
+## Aktueller Stand (2026-10-30)
+
+- Werkzeugverweise korrigiert: nicht vorhandene Vault-Regel-/Decisions-Pfade durch vorhandenen Index, Log und projektspezifische Quellen ersetzt; run-pb-studio unter `.claude/skills/` praezisiert, Modellnamen den vorhandenen C#-Dateien zugeordnet. Reine Anleitungsreparatur; keine neue Produktabnahme.
+
+- Spec 00038: API-Partials/DTOs getrennt; Audio-Refresh erhaelt Auswahl und Modellidentitaet; Timelineabschluss/Dauerprobe und Anchor-Lesen entkoppelt. 91 native Tests und Release-Build bestanden, 139 gezielte Python-Pruefungen bestanden/2 uebersprungen. Breite Pruefung in zwei Abschnitten: 2267 ausgewaehlte Faelle, sechs gegen Baseline bestaetigte veraltete Embedding-Fixtures korrigiert; 56/20 gezielte Nachpruefungen und 16 Finalizer-/Pfadtests bestanden. Kein einzelner finaler Vollsuite-PASS, keine Gesamt-/Releasefreigabe.
+- Isoliertes Backend /health=ok; sichtbare WPF-Pruefung offen (Launcher erkennt Listen-Socket ohne State nicht; separater Start automatisch blockiert). Produktionskonfiguration, WPF-Einstellungen und Recovery-Steuerdateien hashgleich. Produktions-Recovery verweist weiterhin auf 25.09.; keine Wiederherstellung ausgefuehrt.
+- Neue Pfade ASCII, 753 getrackte Code-/Skriptpfade ohne Sonderzeichen. Nutzer betont korrektes PowerShell/CMD-Pfadhandling. Vorhandene lokale Vorarbeiten erhalten; kein Commit/Push dieser Welle. Belege: specs/00038-project-refactoring/verification.md und architecture-review.md.
+
+## Aktueller Stand (2026-10-20)
+
+- 20.10.2026: T002-Manifest-Offlinepruefer fuer Split-/Familien-/Hashkonsistenz und unbelegte QUALIFIED-Behauptungen erstellt. 9 gezielte, 50 Vertragstests insgesamt bestanden. Neun Quellen strukturell konsistent, `qualification_ready=false`: Holdout, unabhaengige Labels, Profile und Messungen fehlen; selbst vollstaendige v1-Strings bleiben ohne externe Belegauthentifizierung gesperrt. Keine App-/ComfyUI-/Medienausfuehrung. T002/T007/G1 offen. Beleg: specs/00037-comfyui-control-center/t002-manifest-2026-10-20/report.md.
+
+- 20.10.2026: T010 Attempt-Belege und Q1-Terminalevents als Identity-Fixtures gebunden; Q3-`same_event`-Freitext abgewiesen, Cancelintent und Analyse-Wartegrund bewahrt. 34 gezielte, 155 Comfy-Vertragstests/47 Subtests. WPF Release gebaut (0 Warnungen/Fehler), 86 WPF-Tests bestanden; keine sichtbare Produktabnahme. T002 CPU-Tonartprobe A01-A03 reproduzierbar `F# minor`, Schutzdateien hashgleich; unabhaengige Tonartqualitaet offen. ComfyUI-Laeufe vom Nutzer weiter verschoben; T007/G1, T010 und Gesamtumbau offen. Belege: specs/00037-comfyui-control-center/t010-contracts-2026-10-20/report.md und t002-key-2026-10-19/report.md.
+
+- 20.10.2026: T010 Offline-Vertrag erweitert: strikte Snapshot-Identitäten/Zustände/int64, JobReceipt- und provider_job_changed-Wire-Fixtures, Rückkehr aus repair_pending nur in belegte Phase. 30 gezielte und 151 Comfy-Vertragstests/47 Subtests bestanden. Echte Receipts, API/WPF, Persistenz/Recovery und T007/G1 weiter offen. Beleg: specs/00037-comfyui-control-center/t010-contracts-2026-10-20/report.md.
+
+- 20.10.2026: T008 isolierter Result-/Zeit-/Embeddingvertrag abgeschlossen; 86 Tests und 27 Subtests bestanden. Plan-E-Artefakt-/Zeitbasisidentitaet, Pflicht-/Optionalstage-Status, sichere Invalidierung und Modellpflicht geprueft. T002/T007/G1, QualityProfile-Grenzwerte und FP07-Consumer-/Produktabnahme offen. Beleg: specs/00037-comfyui-control-center/t008-contracts-2026-10-19/report.md.
+
+- 20.10.2026: T010 als reiner Q1/Q2/Q3-Vertragsentwurf gestartet; 10 eigene Tests, 96 Tests/27 Subtests mit T008/Wellenvertraegen bestanden. Gebundene Receipts und Persistenz fehlen, daher T010 offen. Beleg: specs/00037-comfyui-control-center/t010-contracts-2026-10-20/report.md.
+
+- 19.10.2026: Nutzer ueberspringt den ComfyUI-Pilotlauf T007. T007/G1 bleiben offen. T008 erhielt einen isolierten additiven Result-/Zeit-/Embeddingvalidator; 81 gezielte Tests plus 27 Subtests bestanden, kein Backend-/ComfyUI-Lauf. Vollstaendiges Qualitaetsprofil und Consumerabnahme offen. Beleg: specs/00037-comfyui-control-center/t008-contracts-2026-10-19/report.md.
+
+
+- 19.10.2026: BeatNet-DBN-Kompatibilitaet und Wiederverwendung derselben Dateianalyse-Instanz umgesetzt. 63 gezielte Tests bestanden; A01/A02/A03 auf einer geteilten CPU-DBN-Instanz entsprechen frischen Referenzen, AudioAnalyzer und alle BeatDetector-Dateipfade wiederholen stabil. Dateimodi online/offline/realtime setzen am Dateianfang zurueck, Mikrofon-stream behaelt Verlauf. T046–T049 erledigt; T002-Musikqualitaet/Holdout/WPF-Abnahme offen. Beleg: specs/00037-comfyui-control-center/t002-beatnet-state-fix-2026-10-19/qc-report.md. Eine fruehe Pytest-Ausfuehrung ohne APPDATA-Isolation oeffnete Brain-Store-SHM/WAL; embedding_cache.db meldete read-only malformed, kein Vorherbeleg, unangetastet gelassen (siehe QC-Bericht). Folgepruefungen isoliert; kein Produktneustart, Build, GPU-Lauf oder Generierung. Commit 71e086493f122fb5a24e5a3e83039d9d7dac9621 auf origin/codex/full-audit-remediation verifiziert; Vorschauen/.claude lokal.
+
+- 19.10.2026: T002 Ursachenanalyse mit drei Spezialagenten. BeatNet offline/DBN-Abbruch in madmom ragged np.asarray reproduziert; isolierte Score-Auswahl-Gegenprobe erfolgreich (A03 68 Beats/34 Downbeats, Zweiermetrum). Beat-This-Rohlogits liefern bereits viele Downbeat-Spitzen; 90-s-Kontext beseitigt A01/A03-Auffälligkeit nicht. Frontend/80 Postprocess-Fälle/18 Chunklängen referenzkonform; Verbraucher prüfen keine musikalische Taktgüte. Produktcode/Pakete unverändert, Original-/Recovery-/DB-Hashes gleich. Beleg: specs/00037-comfyui-control-center/t002-audio-investigation-2026-10-19/investigation.md. T002/Qualitätsabnahme offen; lokal, nicht committed.
+
+- 19.10.2026: T002 GPU-Teilprüfung freigegeben und ausgeführt: A01–A03 je 30 s zweimal über native Beat-This-Audioroute; V01–V06 je ein Bildpaar zweimal mit RAFT/DirectML. 18 Läufe, identische Wiederholungen; Original-SHA-256, Recovery-Marker, Konfiguration und DB/WAL/SHM unverändert. BeatNet-Fehler und auffällige Downbeat-Anzahlen A01/A03 offen. Keine Generierung, kein Produktstart, keine Migration. T002/Qualitätsbaseline/GUI-Abnahme offen. Beleg: specs/00037-comfyui-control-center/t002-gpu-check-2026-10-19/gpu-check-report.md. Lokal dokumentiert, nicht committed.
+
+- 19.10.2026: A03 gespeichert und zurückgelesen: 01:00–01:30 klarer regelmäßiger Beat, kein deutlicher Wechsel, keine gehörten Störungen. Sechs Einzelbildbeschreibungen und drei erste Hörbewertungen nun erfasst; A01/A02 unverändert. Präzise Beat-/Downbeat-/Tonartreferenzen und Nativebaseline bleiben offen; T002 nicht abgeschlossen. Belege: Spec00037 t002-human-review-2026-10-19/musikbewertungen.json und musik.csv. Lokal gespeichert, noch nicht committed. Keine GPU/Generierung/Originalmedienänderung.
+
+- 19.10.2026: A02-Hörbewertung gespeichert: im Originalfenster 01:00–01:30 klarer regelmäßiger Beat, keine gehörten Störungen. Unsicherer Wechselbereich ungefähr 01:10–01:20 (70–80 s): Stimmen, weniger Bass, leisere Stellen; keine exakte Strukturgrenze oder Wechselart bestätigt. A01 unverändert; A03 offen. Belege: Spec00037 t002-human-review-2026-10-19/musikbewertungen.json und musik.csv; lokal gespeichert, nicht committed. Keine GPU/Generierung oder Originalmedienänderung.
+
+- 19.10.2026: A01-Hörbewertung für Originalsekunden 60–90 gespeichert: klarer regelmäßiger Beat, kein deutlicher Wechsel, keine gehörten Störungen. Subjektive Bereichsbeobachtung, keine präzise Beat-/BPM-/Tonartreferenz. Originalantworten und Quellhash in specs/00037-comfyui-control-center/t002-human-review-2026-10-19/musikbewertungen.json; musik.csv aktualisiert. A02/A03 offen. Lokal gespeichert, nicht committed; keine Medienänderung, GPU oder Generierung.
+
+- 19.10.2026: Sechs direkte menschliche Bildbewertungen V01–V06 gespeichert (Raw-Beschreibungen plus normalisierte CSV, Quell-/Bildhashbindung). Geführter Dialog mit vorherigem KI-Kontext, keine blinde Referenz; Bewegungsdeutungen und unsichere Figurenzahl erhalten. Musikbewertungen noch offen, Einstieg A01 01:00–01:30. Keine GPU/Generierung oder Originaländerung. Dokumentänderungen lokal gespeichert, noch nicht committed. Beleg: specs/00037-comfyui-control-center/t002-human-review-2026-10-19/bildbewertungen.json.
+
+- **Bewertung vorbereitet 19.10.2026 (2a1d9a3):** T002-Anleitung mit 15 geprüften lokalen Dateilinks, sechs leeren Bildbewertungen und drei leeren Musikbewertungen für 01:00–01:30. Eigene Beobachtung vor KI-Ausgaben; grobe Zeitnotizen noch keine präzisen Beatlabels. Alle Bewertungen UNBEWERTET. Anleitung: `specs/00037-comfyui-control-center/t002-human-review-2026-10-19/BEWERTUNG.md`. Keine GPU-/Generierungs-/App-Läufe.
+
+- Repo-Branch `codex/full-audit-remediation`, geprüfter Remote-HEAD `2a1d9a3` (vollständige SHA im Git-Log). Seit dem vorigen Indexstand: `d062b56` manuelle Sessionlogs/Spec 00036; `8d4daf1` ComfyUI-Bibliotheksverträge; `bef209e` Masterplan und T002-Auswahl-/CPU-Belege; `b9acd90` und `7c39f73` gemeinsame Agent-Regeln/Archivierung; `53c61fe` erneute technische T002-Gegenprüfung. Die älteren Einträge unten dokumentieren ihren jeweiligen damaligen Stand.
+- Spec 00037: Welle A/B im dokumentierten Bibliotheks-/Vertragsscope geprüft; T002 am 19.10.2026 erneut für 9/9 ausgewählte Quellen mit begrenzten PB-CPU-Funktionen bestanden. V02-Dublette und sechs lokale Referenzbild-Hashes bestätigt. A03 M4A benötigt weiterhin Librosa/audioread-Fallback mit Deprecation-Warnung. Vollständige App-/Native-Qualitätsbaseline, menschliche Labels, unabhängiger Holdout und T007 offen. Bericht im Repo: `specs/00037-comfyui-control-center/t002-regression-preparation-2026-10-13/technical-countercheck-2026-10-19.md`.
+- Spec 00035: `.completed` vorhanden, `.qc-passed` fehlt. Manuelle WPF-/Gesamtproduktabnahme ist daraus nicht ableitbar. Keine Generierung, GPU-Läufe oder Originalmedienänderung im T002-Gegenprüflauf.
+- Lokaler Git-Arbeitsbaum enthält weiterhin eine fremde Änderung an `.claude/settings.local.json` und einen ungetrackten `.claude/hooks/`-Ordner. Beides wurde weder für diese T002-Gegenprüfung verändert noch gepusht.
+
+- **Neu2026-10-13:** Spec00037 WelleA T001/T003/T004 + anteiligeT045 bestanden;53Tests+20Subtests, minimaler realer GET. Keine GUI/GPU/Workflowintegration. Übriger Masterplan offen. Siehe Repo wave-a/qc-report.md.
+
+Repo: `C:\Users\david\Documents\Pb_studio_AMD_version` · Verlauf: [[log]] · Learnings: `_wiki/learnings/pb-studio-*`.
+Aktuelle Regeln/Statusquellen: `AGENTS.md`, `CHANGELOG.md` und `specs/` im Repo. Historischer Offen-Stand:
+`specs/00035-full-audit-remediation/evidence/offene-punkte-20261001.md`.
+
+## Status (2026-10-01 abends)
+
+- **Neu 2026-10-03:** Manuelle Checkliste `docs/MANUELLE_ABNAHME.md` + Live-Recorder `LOG-AUFZEICHNUNG.bat` (Spec00036). Python Fokus 16/16, native 86/86, Release aktualisiert 0/0. Neue manuell bediente WPF-Aufnahme ausstehend; keine neuen Release-Marker.
+- **Vor Neustart pruefen:** echtes `RUNTIME_DIRTY` blieb nach App-Ende bestehen; Ursache unverified, keine Recovery-Manipulation. Befuelltes freigegebenes Projekt liegt im gleichnamigen Unterordner; alte E:-Medienpfade teilweise fehlen, keine Relinks vorgenommen.
+
+- **Spec 00035 Implementierung abgeschlossen** (`.completed`, T001–T017, Branch-HEAD `e51e798`). Kein `.qc-passed`, kein Release.
+- T003 per Blendenfenster-Regel abgenommen (Davids Entscheid; F1 7 Mixe Mittel 0,901 / Min 0,737).
+- T014 abgenommen (Davids „Ja“ zu 6/12 Kontaktbögen); Tag-Merge verbessert (Widersprüche, Englisch, Synonyme); Hautfarbe wird nie getaggt, ab vier Personen „gruppe“.
+- Quality-Gate entsperrt, toter Code entfernt, Altberichte archiviert.
+
+## Wartet auf David
+
+1. Sichtbarer GUI-Test der WPF-Änderungen und der GUI-Abnahmen aus der Traceability.
+2. Architekturfragen: NSwag-Layer, Beat This! verdrahten, `_tempo_at_time`.
+3. Optional: Sicherungen der zwei Alt-Projekte von Hand löschen.
+
+- **2026-10-13 Wave B:** T005/T006 offline contracts,109 tests+47subtests; evidence wave-b/qc-report.md. T002/T007 real references, audit and pilot remain open. No product startup/GPU/Comfy runs.
+
+
+## 2026-10-13 — Feste Testmedienpfade
+
+PB Studio: Nutzer hat am 2026-10-13 dauerhaft die folgenden lokalen Testmedienquellen benannt und ausdrücklich darum gebeten, sie zu erinnern, damit künftig nicht erneut nach Pfaden gefragt oder gesucht wird. Videos/Clips: E:\03_Video_&_Medien\Eigene_Videos\Video\Clips . Audio: E:\02_Musik_&_Audio\Audio_Clips\Psy-Set . Diese Pfade bei PB-Studio/T002-Referenzauswahl direkt als Ausgangspunkt nutzen; Verfügbarkeit bei Nutzung prüfen. Benennung erlaubt Auswahlvorbereitung, ist keine pauschale Generierungs-, GPU-, Migrations-, Installations- oder Veränderungsfreigabe. Originale unverändert lassen. Einzeldateien, Familien/Splits, unabhängige Labels und Messwerte noch offen. Aktueller Auftrag: T002 vorbereiten, keine Generierung oder GPU-Läufe.

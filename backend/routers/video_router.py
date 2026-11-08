@@ -14,8 +14,10 @@ import asyncio
 from copy import deepcopy
 import json
 import logging
+import math
 import os
 from pathlib import Path
+import threading
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -41,6 +43,8 @@ from ..schemas.video_schemas import (
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
 from pb_studio.storage.recovery_barrier import recovery_write_operation
+from pb_studio.caption_contract import CAPTION_TAG_LIMIT
+from pb_studio.embedding_identity import current_video_embedding_identity, is_current_video_embedding
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/video", tags=["Video"])
@@ -56,11 +60,14 @@ CAPTION_PRIMARY_PROGRESS_END_PERCENT = 75.0
 CAPTION_PROGRESS_END_PERCENT = 85.0
 CAPTION_PROGRESS_TERMINAL_MARGIN = 0.1
 SIGLIP_EMBEDDING_DIM = 1152
+_VIDEO_MODEL_CACHE_LOCK = threading.RLock()
+_CACHED_MOTION_ANALYZER: Any = None
+_CACHED_SIGLIP_WRAPPER: Any = None
 VIDEO_ANALYSIS_STATES = {"completed", "partial", "failed"}
 VIDEO_ANALYSIS_STAGE_FIELDS = {
     "scenes": ("scene_count", "scenes"),
     "motion": ("avg_motion", "motion"),
-    "embedding": ("embedding_dim", "embedding_samples", "has_embedding"),
+    "embedding": ("embedding_dim", "embedding_samples", "has_embedding", "embedding_model_name", "embedding_model_version"),
     "colors": (
         "dominant_colors",
         "mood_tags",
@@ -71,6 +78,55 @@ VIDEO_ANALYSIS_STAGE_FIELDS = {
     "captions": ("tags", "tag_source"),
     "audio_key": ("audio_key",),
 }
+
+
+def _capability_is_unavailable(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return (
+        "stage unavailable" in message
+        or "model initialization failed" in message
+        or "directml model initialization failed" in message
+    )
+
+
+def _get_cached_motion_analyzer() -> Any:
+    """Keep RAFT resident across the complete model-centric clip pass."""
+    global _CACHED_MOTION_ANALYZER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        if _CACHED_MOTION_ANALYZER is None:
+            from pb_studio.video.raft import MotionAnalyzer
+
+            _CACHED_MOTION_ANALYZER = MotionAnalyzer()
+        return _CACHED_MOTION_ANALYZER
+
+
+def _discard_cached_motion_analyzer() -> None:
+    global _CACHED_MOTION_ANALYZER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        analyzer = _CACHED_MOTION_ANALYZER
+        _CACHED_MOTION_ANALYZER = None
+    if analyzer is not None:
+        analyzer.unload()
+
+
+def _get_cached_siglip_wrapper() -> Any:
+    """Keep SigLIP resident until the VRAM manager evicts its owned session."""
+    global _CACHED_SIGLIP_WRAPPER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        if _CACHED_SIGLIP_WRAPPER is None:
+            from pb_studio.ai.siglip_wrapper import SigLIPWrapper
+
+            _CACHED_SIGLIP_WRAPPER = SigLIPWrapper(lazy_load=False)
+        return _CACHED_SIGLIP_WRAPPER
+
+
+def _discard_cached_siglip_wrapper() -> None:
+    global _CACHED_SIGLIP_WRAPPER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        wrapper = _CACHED_SIGLIP_WRAPPER
+        _CACHED_SIGLIP_WRAPPER = None
+    if wrapper is not None:
+        wrapper.unload()
 
 
 def _empty_video_analysis_result(clip_id: int) -> dict[str, Any]:
@@ -118,6 +174,7 @@ def _video_stage_data_is_valid(stage: str, result: dict[str, Any]) -> bool:
     if stage == "embedding":
         return (
             result.get("has_embedding") is True
+            and is_current_video_embedding(result)
             and result.get("embedding_dim") == SIGLIP_EMBEDDING_DIM
             and int(result.get("embedding_samples", 0) or 0) > 0
         )
@@ -194,9 +251,9 @@ def _video_stage_should_run(
     status = (result.get("stage_status") or {}).get(stage)
     if status == "completed":
         return not _video_stage_data_is_valid(stage, result)
-    # "unavailable" is a truthful terminal capability result. Explicit force
-    # remains available when the environment changes later.
-    return status != "unavailable"
+    # Unavailable is truthful for this attempt, but environment availability
+    # can change between ordinary retries.
+    return True
 
 
 def _video_analysis_resume_base(
@@ -261,10 +318,150 @@ def _merge_video_stage_outcome(
             result[field] = deepcopy(stage_result[field])
 
 
+def _set_video_audio_key_outcome(
+    result: dict[str, Any],
+    audio_key: Optional[str],
+    *,
+    error: Optional[Exception] = None,
+) -> None:
+    """Keep absent audio capability distinct from a failed stream probe."""
+    if error is not None:
+        result["audio_key"] = None
+        result["stage_status"]["audio_key"] = "failed"
+        result["stage_errors"]["audio_key"] = str(error)
+    elif audio_key:
+        result["audio_key"] = audio_key
+        result["stage_status"]["audio_key"] = "completed"
+        result["stage_errors"].pop("audio_key", None)
+    else:
+        result["audio_key"] = None
+        result["stage_status"]["audio_key"] = "unavailable"
+        result["stage_errors"].pop("audio_key", None)
+
+
+def _merge_frame_tags(frame_tags: list[list[str]], limit: int = CAPTION_TAG_LIMIT) -> list[str]:
+    """Combine per-frame caption tags so every sampled frame can contribute.
+
+    Plain first-come order let frame 1 fill all slots and dropped frames 2 and
+    3 entirely. Tags seen in more frames rank first (most reliable), the rest
+    are taken round-robin by position so each frame keeps its leading tags.
+    """
+    counts: dict[str, int] = {}
+    first_pos: dict[str, tuple[int, int]] = {}
+    for f, tags in enumerate(frame_tags):
+        for pos, tag in enumerate(dict.fromkeys(tags)):
+            counts[tag] = counts.get(tag, 0) + 1
+            first_pos.setdefault(tag, (pos, f))
+    # T014 (2026-10-01): 'keine personen' from one frame stood next to 'person'
+    # from the others. A negation describes the clip only if every frame says it.
+    n_frames = sum(1 for tags in frame_tags if tags)
+    order = [
+        t for t in sorted(counts, key=lambda t: (-counts[t], first_pos[t]))
+        if not (t.split()[:1] and t.split()[0] in _NEGATION_WORDS and counts[t] < n_frames)
+    ]
+    kept: list[str] = []
+    for tag in order:
+        stems = _tag_stems(tag)
+        bare = _without_articles(tag)
+        duplicate_of = next(
+            (
+                i for i, k in enumerate(kept)
+                # 'eine frau'/'frau': equal once articles are dropped. Compared
+                # on whole words - 5-letter stems would also merge
+                # 'wasser'/'wasserfall'.
+                if bare == _without_articles(k)
+                or _same_tag_meaning(stems, _tag_stems(k))
+            ),
+            None,
+        )
+        if duplicate_of is None:
+            kept.append(tag)
+        elif len(stems) > len(_tag_stems(kept[duplicate_of])):
+            kept[duplicate_of] = tag  # keep the more specific wording
+    # 'person' next to 'frau'/'person mit ...' adds nothing.
+    kept = [
+        t for t in kept
+        if not (t in _GENERIC_PERSON_TAGS and any(
+            k != t and set(_tag_stems(k)) & _PERSON_STEMS for k in kept
+        ))
+    ]
+    # Whole frames sometimes come back in English (clip 949). Keep English tags
+    # only when no German tag is left, so a clip is never emptied by this.
+    german = [t for t in kept if not _looks_english(t)]
+    if german:
+        kept = german
+    return kept[:limit]
+
+
+_NEGATION_WORDS = frozenset({"kein", "keine", "keinen", "keiner", "ohne"})
+_ARTICLES = frozenset({"ein", "eine", "einer", "einen", "einem", "der", "die", "das", "den", "dem"})
+_NUMBER_STEMS = frozenset({
+    "zwei", "drei", "vier", "fünf", "fuenf", "sechs", "siebe", "acht", "neun",
+    "zehn", "mehre", "viele", "grupp",
+})
+_GENERIC_PERSON_TAGS = frozenset({"person", "personen", "mensch", "menschen", "figur"})
+_PERSON_STEMS = frozenset({
+    "frau", "fraue", "mann", "männe", "mädch", "junge", "kind", "kinde",
+    "tänze", "götti", "perso", "paar",
+})
+_ENGLISH_WORDS = frozenset({
+    "the", "and", "with", "of", "glowing", "glow", "green", "purple", "blue",
+    "pink", "red", "yellow", "white", "black", "dark", "light", "lights",
+    "night", "sky", "city", "distant", "large", "small", "big", "plant",
+    "plants", "leaf", "leaves", "garden", "landscape", "woman", "women",
+    "girl", "figure", "figures", "dress", "dresses", "floating", "fairy-like",
+    "forest", "tree", "trees", "water", "foliage", "ethereal", "bioluminescent",
+    "illumination", "artificial", "atmospheric", "lotus-like", "scene",
+    "surface", "hued", "futuristic", "nature",
+})
+
+
+def _without_articles(tag: str) -> str:
+    return " ".join(w for w in tag.lower().split() if w not in _ARTICLES)
+
+
+def _looks_english(tag: str) -> bool:
+    return any(word in _ENGLISH_WORDS for word in tag.lower().split())
+
+
+def _tag_stems(tag: str) -> list[str]:
+    return [
+        word[:5] for word in tag.lower().split()
+        if len(word) > 2 and word not in _ARTICLES
+    ]
+
+
+def _same_tag_meaning(a: list[str], b: list[str]) -> bool:
+    """'frau in weißem kleid'/'frau in weißem gewand', 'steinerner kreis mit
+    runen'/'steinerne kreise mit runen', 'dunkle kleidung'/'dunkle kleidung mit
+    hoernern' are one tag each (qwen3.5-9b, 3 frames, 2026-09-30)."""
+    if not a or not b:
+        return False
+    # 'arme ausgestreckt'/'ausgestreckte arme': same words, other order.
+    if len(a) >= 2 and sorted(a) == sorted(b):
+        return True
+    # 'vier frauen mit hörnern'/'drei horntragende frauen': per-frame head
+    # counts of the same subject (T014 clip 924). Keep one.
+    a_num, b_num = set(a) & _NUMBER_STEMS, set(b) & _NUMBER_STEMS
+    if a_num and b_num:
+        shared = (set(a) - _NUMBER_STEMS) & (set(b) - _NUMBER_STEMS)
+        if any(len(s) >= 4 for s in shared):
+            return True
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    if len(short) >= 2 and long_[: len(short)] == short:
+        return True
+    return len(short) >= 3 and sum(x == y for x, y in zip(short, long_)) >= len(short) - 1 and short[0] == long_[0]
+
+
 def _derive_video_analysis_status(stage_status: dict[str, str]) -> str:
+    # audio_key "unavailable" means the file has no audio track (a detector
+    # fault is recorded as "failed", see _set_video_audio_key_outcome). That is
+    # a property of the media, not a missing analysis — same rule as
+    # pacing_router._CAPABILITY_OPTIONAL_STAGES.
     failed = any(
-        status in {"partial", "failed", "interrupted"}
-        for status in stage_status.values()
+        status in {"partial", "failed", "interrupted", "unavailable"}
+        for stage, status in stage_status.items()
+        if not (stage == "audio_key" and status == "unavailable")
     )
     if not failed:
         return "completed"
@@ -279,6 +476,9 @@ def _video_analysis_status(data: Optional[dict], legacy_is_analyzed: bool = Fals
         or payload.get("_analysis_status")
         or payload.get("status")
     )
+    if status == "partial" and payload.get("stage_status"):
+        # Rows persisted before the audio_key rule above stay "partial" on disk.
+        return _derive_video_analysis_status(dict(payload["stage_status"]))
     if status in VIDEO_ANALYSIS_STATES:
         return str(status)
     return "completed" if legacy_is_analyzed else "unavailable"
@@ -353,6 +553,8 @@ def _persist_video_analysis_outcome(
         "has_embedding",
         "embedding_dim",
         "embedding_samples",
+        "embedding_model_name",
+        "embedding_model_version",
         "dominant_colors",
         "tags",
         "tag_source",
@@ -393,12 +595,19 @@ def _persist_video_analysis_outcome(
         "is_analyzed": is_analyzed,
     })
     state.set_video_analysis(int(result["clip_id"]), cache_result)
+    # Tags too: the clip dict keeps the import-time "tags": [], and
+    # GET /video/clips showed 0 tags for freshly analysed clips until the
+    # project was reopened (T013, 2026-09-30).
+    clip_updates: dict[str, Any] = {}
+    if "tags" in result:
+        clip_updates["tags"] = list(result.get("tags") or [])
     state.update_video_clip(
         int(result["clip_id"]),
         is_analyzed=is_analyzed,
         analysis_status=status,
         stage_status=stage_status,
         stage_errors=stage_errors,
+        **clip_updates,
     )
 
 
@@ -458,6 +667,8 @@ def _commit_pending_video_embedding(result: dict[str, Any]) -> None:
     pending = result.pop("_pending_embedding", None)
     if pending is None:
         return
+    if not is_current_video_embedding(pending.get("meta_info")):
+        raise ValueError("Video embedding identity missing or incompatible")
 
     from pb_studio.data.vector_store import VectorStore
 
@@ -500,6 +711,9 @@ def _store_video_embedding_in_brain_cache(pending: dict[str, Any]) -> None:
     FAISS-Write ist zu diesem Zeitpunkt bereits durch.
     """
     meta_info = pending.get("meta_info") or {}
+    if not is_current_video_embedding(meta_info):
+        logger.warning("Brain-Cache-Write verweigert: inkompatible Video-Embedding-Identitaet")
+        return
     video_hash = meta_info.get("video_hash")
     if not video_hash:
         logger.debug(
@@ -588,6 +802,7 @@ async def _import_videos_in_project(
     imported = []
     supported = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".wmv", ".flv"}
     input_total = len(request.paths)
+    seen_paths: set[str] = set()
 
     async def _publish_input_progress(
         input_index: int,
@@ -615,6 +830,15 @@ async def _import_videos_in_project(
                 f"Uebersprungen {input_index}/{input_total}: unsicherer Pfad",
             )
             continue
+        canonical_key = os.path.normcase(str(video_path))
+        if canonical_key in seen_paths:
+            logger.info("Doppelter Video-Importeintrag uebersprungen: %s", video_path)
+            await _publish_input_progress(
+                input_index,
+                f"Uebersprungen {input_index}/{input_total}: Duplikat",
+            )
+            continue
+        seen_paths.add(canonical_key)
         if video_path.suffix.lower() not in supported:
             logger.warning(f"Format nicht unterstützt: {video_path.suffix}")
             await _publish_input_progress(
@@ -795,8 +1019,11 @@ async def list_clips(
                     embedding_samples = int(_emb_samples)
                 except (TypeError, ValueError):
                     embedding_samples = None
-            has_embedding = bool(va.get("has_embedding", False))
+            has_embedding = bool(va.get("has_embedding", False)) and is_current_video_embedding(va)
             tag_source = va.get("tag_source")
+        tags = c.get("tags") or []
+        if va and isinstance(va.get("tags"), list):
+            tags = list(va["tags"])
 
         # L-N3: Felder die hier explizit als kwarg uebergeben werden, aus c_payload entfernen
         # damit kein TypeError "multiple values for keyword" auftritt (passiert nach analyze_video,
@@ -805,12 +1032,13 @@ async def list_clips(
         _explicit_kwargs = {
             "video_hash", "is_analyzed", "avg_motion", "peak_motion", "motion_category",
             "embedding_dim", "embedding_samples", "has_embedding", "tag_source",
-            "analysis_status", "stage_status", "stage_errors",
+            "analysis_status", "stage_status", "stage_errors", "tags",
         }
         c_payload = {k: v for k, v in c.items() if k not in _explicit_kwargs}
         result.append(
             VideoClipInfo(
                 **c_payload,
+                tags=tags,
                 is_analyzed=is_analyzed,
                 video_hash=video_hash_value,
                 avg_motion=avg_motion,
@@ -902,12 +1130,24 @@ async def get_thumbstrip(
     n: int = 8,
     state: AppState = Depends(get_app_state),
 ) -> ThumbstripResponse:
-    clip = state.get_video_clip(clip_id)
-    if clip is None:
-        raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
-    n = max(1, min(32, n))
     try:
-        frames = await asyncio.to_thread(_extract_thumbstrip, clip["path"], n, (160, 90))
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            n = max(1, min(32, n))
+            frames = await asyncio.to_thread(
+                _extract_thumbstrip,
+                clip["path"],
+                n,
+                (160, 90),
+                clip.get("duration_seconds"),
+            )
+            state.require_project_context_current(context)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Thumbstrip-Erzeugung fehlgeschlagen: {e}")
 
@@ -922,10 +1162,20 @@ async def get_thumbstrip(
     return ThumbstripResponse(clip_id=clip_id, count=len(data_urls), frames=data_urls)
 
 
-def _extract_thumbstrip(video_path: str, n: int, size: tuple) -> list:
+def _extract_thumbstrip(
+    video_path: str,
+    n: int,
+    size: tuple,
+    duration_seconds: Optional[float] = None,
+) -> list:
     """Indirection so tests can monkeypatch the heavy work."""
     from pb_studio.video.frame_extractor import FrameGrabber
-    return FrameGrabber().extract_thumbnail_strip(video_path, n=n, size=size)
+    return FrameGrabber().extract_thumbnail_strip(
+        video_path,
+        n=n,
+        size=size,
+        duration_seconds=duration_seconds,
+    )
 
 
 @router.get(
@@ -942,12 +1192,18 @@ async def get_clipwave(
     n: int = 256,
     state: AppState = Depends(get_app_state),
 ) -> ClipwaveResponse:
-    clip = state.get_video_clip(clip_id)
-    if clip is None:
-        raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
-    n = max(1, min(2048, n))
     try:
-        peaks = await asyncio.to_thread(_extract_clip_peaks, clip["path"], n)
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            n = max(1, min(2048, n))
+            peaks = await asyncio.to_thread(_extract_clip_peaks, clip["path"], n)
+            state.require_project_context_current(context)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Peaks-Erzeugung fehlgeschlagen: {e}")
     return ClipwaveResponse(clip_id=clip_id, count=len(peaks), peaks=peaks)
@@ -970,10 +1226,16 @@ async def delete_clip(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Loescht einen einzelnen Video-Clip aus In-Memory + SQLite + FAISS-Cache."""
-    if state.delete_video_clip(clip_id):
-        await publish_log(f"Video-Clip {clip_id} geloescht", level="info", source="video.delete")
-        return DeleteResponse(deleted_count=1, not_found_ids=[])
-    return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    try:
+        async with state.project_operation() as context:
+            with state.project_commit(context):
+                deleted = state.delete_video_clip(clip_id)
+            if deleted:
+                await publish_log(f"Video-Clip {clip_id} geloescht", level="info", source="video.delete")
+                return DeleteResponse(deleted_count=1, not_found_ids=[])
+            return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -987,13 +1249,18 @@ async def delete_clips_batch(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Batch-Delete: loescht alle in clip_ids aufgefuehrten Video-Clips."""
-    deleted = 0
-    not_found = []
-    for cid in request.clip_ids:
-        if state.delete_video_clip(cid):
-            deleted += 1
-        else:
-            not_found.append(cid)
+    try:
+        async with state.project_operation() as context:
+            deleted = 0
+            not_found = []
+            with state.project_commit(context):
+                for cid in request.clip_ids:
+                    if state.delete_video_clip(cid):
+                        deleted += 1
+                    else:
+                        not_found.append(cid)
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if deleted:
         await publish_log(
             f"{deleted} Video-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
@@ -1240,18 +1507,14 @@ async def _analyze_video_in_project(
             try:
                 from pb_studio.video.audio_key_detector import detect_video_audio_key
                 audio_key_val = await asyncio.to_thread(detect_video_audio_key, clip["path"])
-                result["audio_key"] = audio_key_val
+                _set_video_audio_key_outcome(result, audio_key_val)
                 if audio_key_val:
-                    result["stage_status"]["audio_key"] = "completed"
-                    result["stage_errors"].pop("audio_key", None)
                     logger.info(f"L-K4: Video-Audio-Key fuer clip {request.clip_id}: {audio_key_val}")
                 else:
                     # Truthful capability result: the file carries no usable audio
                     # track, so no key exists to detect. Distinct from the except
                     # branch below, and logged — an unlogged terminal state left
                     # 498 clips silently unscored until Pacing surfaced it.
-                    result["stage_status"]["audio_key"] = "unavailable"
-                    result["stage_errors"].pop("audio_key", None)
                     logger.info(
                         "L-K4: clip %s hat keine auswertbare Tonspur — audio_key "
                         "bleibt unavailable (kein Fehler)",
@@ -1261,8 +1524,7 @@ async def _analyze_video_in_project(
                 # A detector/ffmpeg fault is a defect, not a missing capability.
                 # "failed" keeps it retryable and keeps the Pacing gate blocking.
                 logger.warning(f"L-K4 audio_key extract failed (post-gpu-task): {e}")
-                result["stage_status"]["audio_key"] = "failed"
-                result["stage_errors"]["audio_key"] = str(e)
+                _set_video_audio_key_outcome(result, None, error=e)
             active_stages = ()
 
         stage_status = dict(result["stage_status"])
@@ -1324,6 +1586,12 @@ async def _analyze_video_in_project(
             })
         except Exception as publish_exc:
             logger.warning("Videoanalyse-Complete-Event fehlgeschlagen: %s", publish_exc)
+        motion = result.get("motion")
+        if isinstance(motion, dict):
+            if motion:
+                motion.setdefault("clip_id", request.clip_id)
+            else:
+                result["motion"] = None
         return VideoAnalysisResult(**result)
     except asyncio.CancelledError:
         if not outcome_persisted:
@@ -1458,22 +1726,29 @@ async def get_scenes(
     state: AppState = Depends(get_app_state),
 ) -> list[SceneInfo]:
     """Gibt Scene-Cuts für einen Clip zurück."""
-    analysis = state.get_video_analysis(clip_id)
-    if analysis is None:
-        clip = state.get_video_clip(clip_id)
-        if clip is not None:
-            try:
+    try:
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            analysis = state.get_video_analysis(clip_id)
+            if analysis is None:
                 analysis = _load_persisted_video_analysis(
                     state,
                     clip,
-                    state.require_current_project_db_id(),
+                    context.project_id,
                 )
-            except (ProjectContextUnavailableError, RuntimeError):
-                analysis = None
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    scenes = analysis.get("scenes", [])
-    return [SceneInfo(**s) if isinstance(s, dict) else s for s in scenes]
+            if not analysis:
+                raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
+            if analysis.get("stage_status", {}).get("scenes") != "completed":
+                raise HTTPException(status_code=409, detail=f"Szenenanalyse für Clip {clip_id} ist nicht verfügbar")
+            scenes = analysis.get("scenes", [])
+            state.require_project_context_current(context)
+            return [SceneInfo(**s) if isinstance(s, dict) else s for s in scenes]
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1490,26 +1765,33 @@ async def get_motion(
     state: AppState = Depends(get_app_state),
 ) -> MotionData:
     """Gibt Motion-Analyse Daten zurück."""
-    analysis = state.get_video_analysis(clip_id)
-    if analysis is None:
-        clip = state.get_video_clip(clip_id)
-        if clip is not None:
-            try:
+    try:
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            analysis = state.get_video_analysis(clip_id)
+            if analysis is None:
                 analysis = _load_persisted_video_analysis(
                     state,
                     clip,
-                    state.require_current_project_db_id(),
+                    context.project_id,
                 )
-            except (ProjectContextUnavailableError, RuntimeError):
-                analysis = None
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    motion = analysis.get("motion", {})
-    if not motion:
-        return MotionData(clip_id=clip_id)
-    if "clip_id" not in motion:
-        motion = {**motion, "clip_id": clip_id}
-    return MotionData(**motion)
+            if not analysis:
+                raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
+            if analysis.get("stage_status", {}).get("motion") != "completed":
+                raise HTTPException(status_code=409, detail=f"Motion-Analyse für Clip {clip_id} ist nicht verfügbar")
+            motion = analysis.get("motion") or {}
+            if not motion:
+                raise HTTPException(status_code=409, detail=f"Motion-Daten für Clip {clip_id} fehlen")
+            if "clip_id" not in motion:
+                motion = {**motion, "clip_id": clip_id}
+            state.require_project_context_current(context)
+            return MotionData(**motion)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 # --- Private Hilfsfunktionen ---
@@ -1790,7 +2072,7 @@ def _get_reusable_embedding_metadata(
     video_hash: Optional[str],
     state: AppState,
     context: ProjectOperationContext,
-) -> Optional[dict[str, int]]:
+) -> Optional[dict[str, Any]]:
     """Return persisted embedding metadata only for a verified content/link hit."""
     if not video_hash:
         return None
@@ -1810,6 +2092,7 @@ def _get_reusable_embedding_metadata(
         embedding_samples = int(cached.get("embedding_samples", 0) or 0)
         if (
             not cached.get("has_embedding")
+            or not is_current_video_embedding(cached)
             or embedding_dim != SIGLIP_EMBEDDING_DIM
             or embedding_samples <= 0
         ):
@@ -1841,18 +2124,22 @@ def _get_reusable_embedding_metadata(
             tombstones = getattr(vector_store, "_tombstoned_ids", set())
             for faiss_id in faiss_ids:
                 if (
-                    faiss_id in tombstones
+                    faiss_id < 0
+                    or faiss_id in tombstones
                     or vector_store.index is None
                     or faiss_id >= vector_store.index.ntotal
                 ):
                     continue
                 metadata = vector_store.metadata.get(faiss_id) or {}
+                if not is_current_video_embedding(metadata):
+                    continue
                 metadata_path = metadata.get("path")
                 metadata_hash = metadata.get("video_hash")
-                if metadata_hash not in (None, video_hash):
+                if metadata_hash != video_hash:
                     continue
                 if metadata_path and Path(metadata_path).resolve() == expected_path:
                     return {
+                        **current_video_embedding_identity(),
                         "embedding_dim": embedding_dim,
                         "embedding_samples": embedding_samples,
                     }
@@ -1890,8 +2177,6 @@ def _run_video_gpu_analysis(
     if request.analyze_motion:
         try:
             import cv2
-            from pb_studio.video.raft import MotionAnalyzer
-
             cap = cv2.VideoCapture(video_path)
             try:
                 reported_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -1949,7 +2234,7 @@ def _run_video_gpu_analysis(
                     f"RAFT sampling produced {len(frames)} readable frames"
                 )
 
-            motion_analyzer = MotionAnalyzer()
+            motion_analyzer = _get_cached_motion_analyzer()
             try:
                 def _motion_progress(pct: float) -> None:
                     if _loop is None:
@@ -1977,11 +2262,13 @@ def _run_video_gpu_analysis(
                     float(value)
                     for value in motion_result.get("frame_motions", [])
                 ]
-                if not motion_curve_vals:
-                    raise RuntimeError("RAFT returned no motion samples")
+                if not motion_curve_vals or not all(math.isfinite(value) for value in motion_curve_vals):
+                    raise RuntimeError("RAFT returned no finite motion samples")
 
                 peak_motion_value = float(max(motion_curve_vals))
                 average_motion = float(motion_result.get("avg_motion", 0.0))
+                if not math.isfinite(average_motion):
+                    raise RuntimeError("RAFT returned a non-finite average motion")
                 result["motion"] = {
                     "clip_id": clip_id,
                     "avg_motion": average_motion,
@@ -1996,15 +2283,16 @@ def _run_video_gpu_analysis(
                 }
                 result["avg_motion"] = average_motion
                 result["stage_status"]["motion"] = "completed"
-            finally:
-                motion_analyzer.unload()
-                import gc; gc.collect()
-                del motion_analyzer
+            except Exception:
+                _discard_cached_motion_analyzer()
+                raise
         except ProjectContextChangedError:
             raise
         except Exception as e:
             logger.error(f"Motion-Analyse fehlgeschlagen: {e}")
-            result["stage_status"]["motion"] = "failed"
+            result["stage_status"]["motion"] = (
+                "unavailable" if _capability_is_unavailable(e) else "failed"
+            )
             result["stage_errors"]["motion"] = str(e)
     else:
         result["stage_status"]["motion"] = "skipped"
@@ -2027,6 +2315,7 @@ def _run_video_gpu_analysis(
             result["embedding_dim"] = reusable["embedding_dim"]
             result["embedding_samples"] = reusable["embedding_samples"]
             result["embedding_reused"] = True
+            result.update(current_video_embedding_identity())
             result["stage_status"]["embedding"] = "completed"
             logger.info(
                 "SigLIP Embedding fuer Clip %s per Video-Hash wiederverwendet",
@@ -2036,9 +2325,7 @@ def _run_video_gpu_analysis(
 
         try:
             import cv2
-            from pb_studio.ai.siglip_wrapper import SigLIPWrapper
-
-            wrapper = SigLIPWrapper(lazy_load=False)
+            wrapper = _get_cached_siglip_wrapper()
             try:
                 if not wrapper.is_ready:
                     raise RuntimeError(
@@ -2108,8 +2395,10 @@ def _run_video_gpu_analysis(
                                 f"SigLIP embedding dimension {embedding.shape} != "
                                 f"({SIGLIP_EMBEDDING_DIM},)"
                             )
+                        if not _np.isfinite(embedding).all():
+                            raise RuntimeError("SigLIP returned non-finite values")
                         norm = float(_np.linalg.norm(embedding))
-                        if norm > 1e-3:
+                        if math.isfinite(norm) and norm > 1e-3:
                             embedding = embedding / norm
                             if state is None or context is None:
                                 raise RuntimeError(
@@ -2130,6 +2419,7 @@ def _run_video_gpu_analysis(
                             result["_pending_embedding"] = {
                                 "vector": embedding.astype(_np.float32),
                                 "meta_info": {
+                                    **current_video_embedding_identity(),
                                     "clip_id": clip_id,
                                     "path": video_path,
                                     "video_hash": video_hash,
@@ -2142,6 +2432,7 @@ def _run_video_gpu_analysis(
                                 "description": f"clip_{clip_id}_full",
                             }
                             result["has_embedding"] = True
+                            result.update(current_video_embedding_identity())
                             result["embedding_dim"] = len(embedding)
                             result["embedding_samples"] = len(embeddings_collected)
                             result["stage_status"]["embedding"] = "completed"
@@ -2156,20 +2447,17 @@ def _run_video_gpu_analysis(
                 else:
                     logger.info("SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen.")
                     result["has_embedding"] = False
-            finally:
-                if 'wrapper' in locals() and wrapper is not None:
-                    try:
-                        wrapper.unload()
-                    except Exception as unload_err:
-                        logger.warning(f"Failed to unload SigLIPWrapper: {unload_err}")
-                del wrapper
-                import gc; gc.collect()
+            except Exception:
+                _discard_cached_siglip_wrapper()
+                raise
         except ProjectContextChangedError:
             raise
         except Exception as e:
             logger.error(f"Embedding-Generierung fehlgeschlagen: {e}")
             result["has_embedding"] = False
-            result["stage_status"]["embedding"] = "failed"
+            result["stage_status"]["embedding"] = (
+                "unavailable" if _capability_is_unavailable(e) else "failed"
+            )
             result["stage_errors"]["embedding"] = str(e)
     else:
         result["stage_status"]["embedding"] = "skipped"
@@ -2282,7 +2570,7 @@ async def _run_color_and_caption_analysis(
     generate_captions: bool,
     analyze_colors: bool = True,
 ) -> dict[str, Any]:
-    """Extrahiert Farben und Tags (KMeans auf CPU, LM-Studio über HTTP, Moondream als GPU-Fallback)."""
+    """Extrahiert Farben und Tags (KMeans auf CPU, Vision-Provider, Moondream-Fallback)."""
     result = {
         "dominant_colors": [],
         "tags": [],
@@ -2309,16 +2597,23 @@ async def _run_color_and_caption_analysis(
         # Frames sammeln (CPU)
         cap = cv2.VideoCapture(video_path)
         frames_rgb = []
+        sampled_frame_indices: list[int] = []
+        unread_frame_indices: list[int] = []
         try:
             total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             if total > 0:
                 indices = [max(0, total // 4), max(0, total // 2), max(0, total * 3 // 4)]
                 indices = sorted(list(set(indices)))
+                sampled_frame_indices = indices
                 for idx in indices:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                    if not cap.set(cv2.CAP_PROP_POS_FRAMES, idx):
+                        unread_frame_indices.append(idx)
+                        continue
                     ret, frame = cap.read()
                     if ret and frame is not None:
                         frames_rgb.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    else:
+                        unread_frame_indices.append(idx)
         finally:
             cap.release()
 
@@ -2345,7 +2640,11 @@ async def _run_color_and_caption_analysis(
             # 2. Tags extrahieren
             all_tags = []
             seen_tags = set()
+            frame_tag_lists: list[list[str]] = []
             tag_sources = []
+            caption_frames_with_tags = 0
+            caption_provider_unavailable: Optional[str] = None
+            moondream_available = False
 
             from pb_studio.config_manager import ConfigManager
             current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
@@ -2361,7 +2660,7 @@ async def _run_color_and_caption_analysis(
             caption_deadline = caption_started_at + CAPTION_STAGE_TIMEOUT_SECONDS
             caption_progress: dict[str, Any] = {
                 "started_at": caption_started_at,
-                "phase": "LM Studio",
+                "phase": "Vision-Provider",
                 "phase_started_at": caption_started_at,
                 "phase_budget_seconds": CAPTION_STAGE_TIMEOUT_SECONDS,
                 "phase_total_frames": len(frames_rgb),
@@ -2377,6 +2676,7 @@ async def _run_color_and_caption_analysis(
                 return max(0.0, caption_deadline - caption_loop.time())
 
             async def run_lm_studio_frames() -> None:
+                nonlocal caption_frames_with_tags, caption_provider_unavailable
                 for frame_number, f_rgb in enumerate(frames_rgb, start=1):
                     caption_progress["phase_active_frame"] = frame_number
                     tags, used_model = (
@@ -2387,6 +2687,8 @@ async def _run_color_and_caption_analysis(
                     )
                     caption_progress["phase_completed_frames"] = frame_number
                     if tags:
+                        caption_frames_with_tags += 1
+                        frame_tag_lists.append(list(tags))
                         for tag in tags:
                             if tag not in seen_tags:
                                 all_tags.append(tag)
@@ -2395,6 +2697,16 @@ async def _run_color_and_caption_analysis(
                             tag_sources.append(used_model)
                     else:
                         moondream_frames_to_run.append(f_rgb)
+                        if used_model == "none":
+                            caption_provider_unavailable = (
+                                "Kein Vision-Provider verfuegbar; LM-Studio-Failover "
+                                "erschoepft oder Cooldown aktiv"
+                            )
+                            # The wrapper's "none" receipt means provider failover
+                            # is exhausted/cooling down. Do not repeat the same
+                            # provider probe for the remaining frames in this clip.
+                            moondream_frames_to_run.extend(frames_rgb[frame_number:])
+                            break
 
             await _publish_caption_progress(
                 clip_id,
@@ -2420,7 +2732,7 @@ async def _run_color_and_caption_analysis(
             except asyncio.TimeoutError:
                 caption_timeout_error = (
                     "Captioning-Gesamtdeadline von "
-                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s waehrend LM Studio erreicht"
+                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s waehrend Vision-Provider erreicht"
                 )
                 completed = int(caption_progress["phase_completed_frames"])
                 moondream_frames_to_run.extend(frames_rgb[completed:])
@@ -2437,7 +2749,7 @@ async def _run_color_and_caption_analysis(
                     message=caption_timeout_error,
                 )
 
-            # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
+            # Moondream-Fallback, falls primaerer Vision-Provider keine Tags liefert.
             if moondream_frames_to_run and caption_remaining_seconds() <= 0.0:
                 caption_timeout_error = (
                     caption_timeout_error
@@ -2453,6 +2765,7 @@ async def _run_color_and_caption_analysis(
                     "clip_id": clip_id,
                 })
             elif moondream_frames_to_run and not moondream_onnx_models_available():
+                moondream_available = False
                 # Audit-Fix (2026-07-10): ONNX-Modelldateien fehlen (nur .pt-Checkpoint
                 # vorhanden, kein CPU-Fallback erlaubt - IRON RULE). Vorher wurde hier
                 # trotzdem with_gpu_task gestartet, das lautlos 0 Tags lieferte, aber
@@ -2469,6 +2782,7 @@ async def _run_color_and_caption_analysis(
                     "clip_id": clip_id,
                 })
             elif moondream_frames_to_run:
+                moondream_available = True
                 moondream_worker_detached = False
                 moondream_worker_started = asyncio.Event()
                 moondream_worker_finished = False
@@ -2526,6 +2840,8 @@ async def _run_color_and_caption_analysis(
 
                     for tags in moondream_tags_list:
                         if tags:
+                            caption_frames_with_tags += 1
+                            frame_tag_lists.append(list(tags))
                             for tag in tags:
                                 if tag not in seen_tags:
                                     all_tags.append(tag)
@@ -2586,19 +2902,68 @@ async def _run_color_and_caption_analysis(
             except asyncio.CancelledError:
                 pass
 
-            result["tags"] = all_tags[:10]
+            result["tags"] = _merge_frame_tags(frame_tag_lists) if frame_tag_lists else all_tags[:CAPTION_TAG_LIMIT]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
-            if result["tags"] and caption_timeout_error is None:
+            expected_caption_frames = len(sampled_frame_indices)
+            if expected_caption_frames == 0:
+                expected_caption_frames = len(frames_rgb)
+            caption_coverage_error = None
+            if (
+                caption_frames_with_tags != expected_caption_frames
+                or unread_frame_indices
+            ):
+                caption_coverage_error = (
+                    "Caption-Abdeckung unvollstaendig: "
+                    f"{caption_frames_with_tags}/{expected_caption_frames} "
+                    "geplante Stichproben mit Tags"
+                )
+                if unread_frame_indices:
+                    caption_coverage_error += (
+                        "; nicht lesbare Frame-Indizes: "
+                        + ", ".join(str(index) for index in unread_frame_indices)
+                    )
+            if (
+                result["tags"]
+                and caption_timeout_error is None
+                and caption_frames_with_tags == expected_caption_frames
+                and not unread_frame_indices
+            ):
                 result["stage_status"]["captions"] = "completed"
                 result["stage_errors"].pop("captions", None)
             elif result["tags"]:
                 result["stage_status"]["captions"] = "partial"
-                result["stage_errors"]["captions"] = caption_timeout_error
+                partial_details = [
+                    detail
+                    for detail in (caption_timeout_error, caption_coverage_error)
+                    if detail
+                ]
+                result["stage_errors"]["captions"] = "; ".join(partial_details)
             else:
-                result["stage_errors"]["captions"] = (
-                    caption_timeout_error
-                    or "Keine Tags von verfuegbarem Vision-Provider erzeugt"
-                )
+                if (
+                    caption_provider_unavailable
+                    and not moondream_available
+                    and caption_timeout_error is None
+                ):
+                    result["stage_status"]["captions"] = "unavailable"
+                    failed_details = [
+                        detail
+                        for detail in (
+                            caption_provider_unavailable,
+                            caption_coverage_error,
+                        )
+                        if detail
+                    ]
+                else:
+                    failed_details = [
+                        detail
+                        for detail in (
+                            caption_timeout_error,
+                            caption_coverage_error,
+                            "Keine Tags von verfuegbarem Vision-Provider erzeugt",
+                        )
+                        if detail
+                    ]
+                result["stage_errors"]["captions"] = "; ".join(failed_details)
 
             caption_status = result["stage_status"]["captions"]
             if caption_status == "completed":
@@ -2620,13 +2985,13 @@ async def _run_color_and_caption_analysis(
                 ),
             )
 
-            # Review-Fix MEDIUM (2026-07-09): Terminal-State auch fuer den
-            # reinen LM-Studio-Pfad (Wrapper endet mit "active").
+            # Terminal-State auch fuer den primaeren Vision-Provider-Pfad
+            # (Wrapper endet nach erfolgreichem Aufruf mit "active").
             if not moondream_frames_to_run:
                 try:
                     await publish_event("llm_status", {
                         "model": "none",
-                        "provider": "LM Studio",
+                        "provider": "Vision Provider",
                         "status": "idle",
                         "percent": 0.0,
                         "clip_id": clip_id,
@@ -2635,7 +3000,7 @@ async def _run_color_and_caption_analysis(
                     pass
 
             logger.info(
-                f"KMeans+LMStudio/Moondream-Split: {len(result['dominant_colors'])} colors, "
+                f"KMeans+Vision-Provider/Moondream-Split: {len(result['dominant_colors'])} colors, "
                 f"{len(result['tags'])} tags ({result['tag_source']}) fuer clip {clip_id}"
             )
         else:
@@ -2647,9 +3012,12 @@ async def _run_color_and_caption_analysis(
                     "Keine lesbaren Frames fuer Farbanalyse"
                 )
             if generate_captions:
-                result["stage_errors"]["captions"] = (
-                    "Keine lesbaren Frames fuer Captioning"
-                )
+                result["stage_errors"]["captions"] = "Keine lesbaren Frames fuer Captioning"
+                if unread_frame_indices:
+                    result["stage_errors"]["captions"] += (
+                        "; nicht lesbare Frame-Indizes: "
+                        + ", ".join(str(index) for index in unread_frame_indices)
+                    )
                 await _publish_caption_progress(
                     clip_id,
                     step="captions_error",

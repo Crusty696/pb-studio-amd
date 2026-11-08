@@ -1,0 +1,1439 @@
+[
+  {
+    "id": "T001",
+    "title": "Policy, Source-Drift und offene Gates festhalten",
+    "phase": "P0",
+    "deps": [],
+    "req": [
+      "TR-001",
+      "RR-005",
+      "RR-006"
+    ],
+    "story": "OBJ-1",
+    "modify": [],
+    "create": [
+      "specs/00037-comfyui-control-center/clarifications.md",
+      "specs/00037-comfyui-control-center/phase-manifests.md"
+    ],
+    "test": "document_contract",
+    "assert": "D01/D02 bestätigt; O01–O04 mit Owner/Gate/Entscheidungsstatus; keine aktuelle Runtimefreigabe aus historischer Evidence; vorhandene Dirtydateien klassifiziert.",
+    "produce": "freigegebene Phase-Manifeste, Source-/API-Revisionsbindung und Gateantworten",
+    "consume": "spec.md, bestätigte Entscheidungen und bestehender Review",
+    "risk": "Regelkonflikt oder falscher Source-Stand",
+    "rollback": "Dokumentrevision korrigieren; keine Produktmutation",
+    "size": "mittel",
+    "gates": "Masterplan-/Phasenscopefreigabe; D01/D02 nicht erneut fragen"
+  },
+  {
+    "id": "T002",
+    "title": "Golden Set, Native-Baseline und Qualityprofile",
+    "phase": "P0",
+    "deps": [
+      "T001"
+    ],
+    "req": [
+      "FR-005",
+      "RR-003",
+      "RR-004"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "specs/00037-comfyui-control-center/benchmark-spec.md",
+      "specs/00037-comfyui-control-center/reference-manifest.json"
+    ],
+    "test": "Tests/test_comfyui_benchmark_manifest.py",
+    "assert": "Autorisierte Sourcehashes; unabhängige Labels; verwandte Medien nicht über Holdoutgrenzen; fresh/warm/cache getrennt; Qualitätsgrenzen vor Tuning festgelegt.",
+    "produce": "QualityProfile und Referenz-/Messprotokoll je Kohorte",
+    "consume": "Sourceinventar und Scope T001",
+    "risk": "falsche Groundtruth oder Cachekontamination",
+    "rollback": "betroffene Messung zurückziehen, Native bleibt aktiv",
+    "size": "groß",
+    "gates": "O03 Referenzautorisierung und tatsächliche Qualitäts-/Ressourcenwerte",
+    "parallel": true
+  },
+  {
+    "id": "T003",
+    "title": "Lesende Endpointbindung und Offlinefähigkeit",
+    "phase": "P1",
+    "deps": [
+      "T001"
+    ],
+    "req": [
+      "FR-001",
+      "FR-002",
+      "TR-002"
+    ],
+    "story": "US1",
+    "modify": [
+      "src/pb_studio/config_manager.py"
+    ],
+    "create": [
+      "src/pb_studio/comfyui/client.py",
+      "src/pb_studio/comfyui/schemas.py",
+      "Tests/test_comfyui_connection.py"
+    ],
+    "test": "Tests/test_comfyui_connection.py",
+    "assert": "Zwei Server mit verschiedenen Versionen bleiben gebunden; falscher Dienst/Offline/Timeout blockiert PBstart nicht; keine mutierende Discoveryprobe.",
+    "produce": "ComfyClient.inspect(EndpointIdentity) → DiscoverySnapshot",
+    "consume": "Endpoint-/Local-only-Scope T001",
+    "risk": "falsche Instanz oder Startuphang",
+    "rollback": "Bridge enabled=false, bestehende App bleibt nutzbar",
+    "size": "mittel",
+    "gates": "kein Produkt-GPUlauf"
+  },
+  {
+    "id": "T004",
+    "title": "Capability-, Node- und Modellidentitäten",
+    "phase": "P1",
+    "deps": [
+      "T003"
+    ],
+    "req": [
+      "FR-002",
+      "TR-004"
+    ],
+    "story": "US1",
+    "modify": [],
+    "create": [
+      "src/pb_studio/comfyui/capabilities.py",
+      "Tests/test_comfyui_capabilities.py"
+    ],
+    "test": "Tests/test_comfyui_capabilities.py",
+    "assert": "Node vorhanden/Modell defekt bleibt unqualified; gleicher Modellname anderer Hash unterscheidbar; extensions ist keine vollständige Custom-Node-Liste; Unknownversion nur lesend.",
+    "produce": "DiscoverySnapshot mit readiness, Profilbindung und Missing-/Unknowngründen",
+    "consume": "ComfyClient.inspect",
+    "risk": "Fake-ready oder falscher Paket-/Modellraum",
+    "rollback": "Discoveryprofil unqualified, kein Submit",
+    "size": "mittel",
+    "gates": "geprüftes versionspezifisches APIprofil"
+  },
+  {
+    "id": "T005",
+    "title": "Workflowregistry, Revisionen und typed Mapping",
+    "phase": "P1",
+    "deps": [
+      "T004"
+    ],
+    "req": [
+      "FR-003",
+      "TR-003"
+    ],
+    "story": "US1",
+    "modify": [],
+    "create": [
+      "src/pb_studio/comfyui/workflow_registry.py",
+      "src/pb_studio/comfyui/workflow_parameters.py",
+      "src/pb_studio/comfyui/result_parser.py",
+      "Tests/test_comfyui_workflow_bundle.py"
+    ],
+    "test": "Tests/test_comfyui_workflow_bundle.py",
+    "assert": "UI-Graph als APIprompt abgewiesen; Node-ID/Slots/Outputindex/type/Frameconstraint korrekt; Enable-off verhindert neue Dispatches, pinned Attempts bleiben; unbekannter Outputadapter fail-closed.",
+    "produce": "WorkflowRegistry.get/validate/register/set_enabled, resolve_parameters, parse_outputs",
+    "consume": "DiscoverySnapshot, WorkflowRevisionKey, typed Adapterfamilien",
+    "risk": "Graphdrift oder freier Code aus Metadaten",
+    "rollback": "betroffene Revision deaktivieren, alte Bundles behalten",
+    "size": "groß",
+    "gates": "keine Phantommodelle/-Nodes im Bundle"
+  },
+  {
+    "id": "T006",
+    "title": "Local-only, Trust, Egress und Redaction",
+    "phase": "P1",
+    "deps": [
+      "T005"
+    ],
+    "req": [
+      "TR-001",
+      "OR-005"
+    ],
+    "story": "US1",
+    "modify": [
+      "backend/dependencies.py"
+    ],
+    "create": [
+      "src/pb_studio/comfyui/workflow_policy.py",
+      "Tests/test_comfyui_workflow_policy.py"
+    ],
+    "test": "Tests/test_comfyui_workflow_policy.py",
+    "assert": "Manifest/declared Local-only-Policy, Redirectziele und verschachtelte Secrets prüfen; Callback/Replacement, der Prompt/Seed/Localnode ändert, invalidiert Profil/effective Identity. Deklarationsprüfung ist keine Egresssperre; declared_only bleibt unqualified. Audited-frozen Alternative oder separat erzwungener pre-enqueue/Egressvertrag ausdrücklich nachweisen.",
+    "produce": "check_workflow_policy(WorkflowBundle, EndpointIdentity) → ValidationReport",
+    "consume": "D01/D02, Registry und bestehender SSELogHandler; Backendredaction gezielt ergänzen, vorhandene WPFredaction separat erhalten",
+    "risk": "ungenehmigte Kosten/Uploads oder Geheimnislogs",
+    "rollback": "Ausführung deaktivieren; Credential-/Provenancedaten nicht loggen",
+    "size": "groß",
+    "gates": "Cloud bleibt gesperrt; neue Dependencyfreigabe falls notwendig"
+  },
+  {
+    "id": "T007",
+    "title": "Früher lokaler Hardware- und Medien-Smoke",
+    "phase": "P1",
+    "deps": [
+      "T002",
+      "T005",
+      "T006"
+    ],
+    "req": [
+      "FR-009",
+      "RR-004"
+    ],
+    "story": "US1",
+    "modify": [],
+    "create": [
+      "workflows/generation/pilot/manifest.json",
+      "workflows/generation/pilot/api_prompt.json",
+      "specs/00037-comfyui-control-center/evidence/g1-profile.json",
+      "Tests/test_comfyui_smoke_profile_contract.py"
+    ],
+    "test": "Tests/test_comfyui_smoke_profile_contract.py",
+    "assert": "Source/API/Node/Model/Runtimeprofile exakt; geprüft lokales audited-frozen oder enforced Profil; veränderter effective Graph nicht als submitted hash. Realer kleiner lokaler Lauf, Output geöffnet/Full Decode, echte Peak-Ressourcen; keine Fremdqueue gestört; statischer PASS kein G1.",
+    "produce": "G1-Receipt, gebundene ResourceProfile/WorkflowBundle-Revision",
+    "consume": "autorisierte Referenz/Qualityprofile und Local-only-Bundle",
+    "risk": "Hardware ungeeignet oder fremde Last beeinträchtigt",
+    "rollback": "Profil unqualified, keine großen DB-/WPFpakete starten",
+    "size": "groß",
+    "gates": "O03, bewusster separat autorisierter Smoke; nicht während Planung"
+  },
+  {
+    "id": "T008",
+    "title": "Result-, Zeit- und Embeddingvalidatoren",
+    "phase": "P2",
+    "deps": [
+      "T005"
+    ],
+    "req": [
+      "TR-005",
+      "TR-006",
+      "TR-012"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "src/pb_studio/providers/contracts.py",
+      "Tests/test_comfyui_result_contracts.py"
+    ],
+    "test": "Tests/test_comfyui_result_contracts.py",
+    "assert": "ms als s, Chunkoffsetfehler, NaN, Out-of-range, null/empty/unavailable, anderer Raum gleicher Dimension und unkalibrierte Motion abgewiesen; T2V ohne Source gültig.",
+    "produce": "ResultEnvelope/AnalysisRun/StageResult/EmbeddingPayload, validate_result/validate_embedding",
+    "consume": "bestehende Audio-/Video-Schemas und P-Typkatalog",
+    "risk": "syntaktisch gültige fachlich falsche Daten",
+    "rollback": "externes Result quarantined; Nativepfad unverändert",
+    "size": "groß",
+    "gates": "kein produktives Umschreiben bestehender APIfelder",
+    "parallel": true
+  },
+  {
+    "id": "T009",
+    "title": "Immutable Analyse-Runs und Cacheidentität",
+    "phase": "P2",
+    "deps": [
+      "T008",
+      "T010",
+      "T011"
+    ],
+    "req": [
+      "TR-007",
+      "RR-003"
+    ],
+    "story": "US3",
+    "modify": [
+      "src/pb_studio/storage/embedding_cache.py"
+    ],
+    "create": [
+      "src/pb_studio/providers/analysis_runs.py",
+      "Tests/test_comfyui_analysis_runs.py"
+    ],
+    "test": "Tests/test_comfyui_analysis_runs.py",
+    "assert": "Geänderter Hop/Processor/LoRA/Workflow/range invalidiert; Vergleich überschreibt aktiven Nativepointer nicht; gleiche Modellnamen kein Lookupalias; Sourcehash gewechselt kein Reuse.",
+    "produce": "AnalysisRunRepository.put/set_active, vollständiger fingerprint",
+    "consume": "TR-005/006-Typen und additiver Job-/Runstore",
+    "risk": "Cachevermischung oder verlorene Originalanalyse",
+    "rollback": "aktiven Stagepointer auf erhaltene Native-Runrevision",
+    "size": "groß",
+    "gates": "Gmigration bei neuer Persistenz; keine fausse Native-Modellidentität"
+  },
+  {
+    "id": "T010",
+    "title": "Persistente Projektidentität und drei Automaten",
+    "phase": "P2",
+    "deps": [
+      "T001",
+      "T008"
+    ],
+    "req": [
+      "TR-008",
+      "TR-009",
+      "OR-004"
+    ],
+    "story": "US2",
+    "modify": [],
+    "create": [
+      "src/pb_studio/jobs/models.py",
+      "Tests/test_comfyui_job_state_machine.py"
+    ],
+    "test": "Tests/test_comfyui_job_state_machine.py",
+    "assert": "Jede nicht aufgeführte Q-Transition verboten; terminales Event reaktiviert nicht; Epoch nach Restart keine UUID; cancelled Job bleibt cancelled bei Remoteerfolg; Progress kein Importready.",
+    "produce": "ProjectIdentity, ProductionBatch-Minimalmodell, LogicalJobSnapshot, AttemptIdentity, ArtifactReceipt und Q-Transitions",
+    "consume": "aktueller project_id/root/epoch-Guard und bestätigte O02-Policy",
+    "risk": "gemischte Zustände oder stale Projektcommits",
+    "rollback": "neue Jobs gesperrt; vorhandene lokale Zustände erhalten",
+    "size": "groß",
+    "gates": "O02 operative Pause/Shutdown/Late-output-Policy"
+  },
+  {
+    "id": "T011",
+    "title": "Additiver Store, UUIDmapping und Migrationsvertrag",
+    "phase": "P2",
+    "deps": [
+      "T007",
+      "T010"
+    ],
+    "req": [
+      "TR-008",
+      "TR-009",
+      "RR-001"
+    ],
+    "story": "US2",
+    "modify": [
+      "src/pb_studio/data/database_core.py"
+    ],
+    "create": [
+      "src/pb_studio/jobs/repository.py",
+      "specs/00037-comfyui-control-center/schema-contract.md",
+      "Tests/test_comfyui_job_repository.py"
+    ],
+    "test": "Tests/test_comfyui_job_repository.py",
+    "assert": "Job/Attempt/Outbox atomic; CAS Revisionrace; gleiche client_request_id anderer Payload Konflikt; alte Projekte öffnen; zukünftige JSONschema nicht still herunterstufen; FK-/UUID-/ReaderWritervertrag.",
+    "produce": "JobRepository.create/prepare_attempt/transition/record_cancel, minimale production_batch/production_batch_job-Persistenz und additive Tabellen",
+    "consume": "Q-Modelle, ProjectIdentity, G1",
+    "risk": "Datenmigration/inkompatibler Binärdowngrade",
+    "rollback": "neue Dispatches stoppen; konsistente Generation erhalten, kein DB-only-Restore",
+    "size": "groß",
+    "gates": "Gmigration: konkrete SQL zuerst reviewen, Kopie testen, gesondert freigeben"
+  },
+  {
+    "id": "T012",
+    "title": "Scheduler, Submitoutbox und bounded Dispatch",
+    "phase": "P2",
+    "deps": [
+      "T006",
+      "T007",
+      "T011",
+      "T015"
+    ],
+    "req": [
+      "FR-013",
+      "TR-009",
+      "OR-003"
+    ],
+    "story": "US2",
+    "modify": [],
+    "create": [
+      "src/pb_studio/jobs/scheduler.py",
+      "Tests/test_comfyui_submit_outbox.py"
+    ],
+    "test": "Tests/test_comfyui_submit_outbox.py",
+    "assert": "Crash nach Send/Accept vor Receipt →submission_unknown; keine Leaseexpiry-Doppelsendung; kein Networkwait in DBtransaction; Shape/Inputhash/Policy vor Send gebunden.",
+    "produce": "PinnedSubmission und ComfyClient.submit-Aufruf unter Dispatch-/Admissionvertrag",
+    "consume": "JobRepository.prepare_attempt, WorkflowBundle, ResourceProfile",
+    "risk": "doppelte Generation nach Timeout",
+    "rollback": "Dispatch deaktivieren, Outbox/Unknownattempts reconciliieren",
+    "size": "groß",
+    "gates": "G1+O01; kein blindes Interrupted-Requeue"
+  },
+  {
+    "id": "T013",
+    "title": "Remote-Beobachtung und Reconciliation",
+    "phase": "P2",
+    "deps": [
+      "T012"
+    ],
+    "req": [
+      "TR-009",
+      "OR-004",
+      "RR-002"
+    ],
+    "story": "US2",
+    "modify": [],
+    "create": [
+      "src/pb_studio/jobs/reconciliation.py",
+      "Tests/test_comfyui_reconciliation.py"
+    ],
+    "test": "Tests/test_comfyui_reconciliation.py",
+    "assert": "Leere History nach Serverrestart →unknown; falsche Instanz/session/UUID kein Match; fehlende Outputs kein Erfolg; bounded Probes; kein zweiter Submit nach verlorener Antwort.",
+    "produce": "reconcile_attempt(AttemptIdentity) →RemoteJobSnapshot/needs_decision",
+    "consume": "ComfyClient.observe, durable receipts/pinned identity",
+    "risk": "False never-run oder duplizierte Ausführung",
+    "rollback": "needs_decision sichtbar, keine automatische Neuberechnung",
+    "size": "groß",
+    "gates": "versionsgebundene WS/Queue/Historyverträge"
+  },
+  {
+    "id": "T014",
+    "title": "Own-Cancel, Pause, Retry und Priorität",
+    "phase": "P2",
+    "deps": [
+      "T013",
+      "T010"
+    ],
+    "req": [
+      "FR-013",
+      "OR-002",
+      "RR-002"
+    ],
+    "story": "US2",
+    "modify": [],
+    "create": [
+      "src/pb_studio/jobs/control.py",
+      "Tests/test_comfyui_job_control.py"
+    ],
+    "test": "Tests/test_comfyui_job_control.py",
+    "assert": "PBqueued neben fremdem running: nur PBID geändert; Cancel vor Send atomar sperrt Outbox; Unknown hält Cancelintent und cancelt nach Reconciliation; Cancel gegen fertige ID trifft Nachfolger nicht; HTTP200 kein terminal; Reorder nur undispatched; Retry nur definitiver alter Attempt+Budget. Terminalfailed Retry erzeugt neuen linked Intent; ready/cancelled/obsolete/unresolved →409. Minimale Batchpause/Reorder/Restart funktionieren ohne T041.",
+    "produce": "record_cancel, cancel_owned, set_priority/reorder/pause_batch gemäß Q",
+    "consume": "Job-/Attemptstore, Reconciliation und O02",
+    "risk": "fremder Abbruch oder verlorene Nutzerentscheidung",
+    "rollback": "neue Aktionen disable; Cancelintent und Verlauf bleiben",
+    "size": "groß",
+    "gates": "O02 bestätigt; kein globaler clear/free/interrupt"
+  },
+  {
+    "id": "T015",
+    "title": "Shared Admission, Budget und Ressourcenprofil",
+    "phase": "P2",
+    "deps": [
+      "T001",
+      "T007",
+      "T011"
+    ],
+    "req": [
+      "OR-001",
+      "OR-003"
+    ],
+    "story": "US2",
+    "modify": [
+      "src/pb_studio/core/vram_budget_manager.py",
+      "src/pb_studio/core/model_loader.py",
+      "backend/dependencies.py"
+    ],
+    "create": [
+      "src/pb_studio/jobs/admission.py",
+      "Tests/test_comfyui_resource_admission.py"
+    ],
+    "test": "Tests/test_comfyui_resource_admission.py",
+    "assert": "Fremdsubmit zwischen Poll und PBstart nicht als garantiert exklusiv labeln; LHMunknown/Leaseexpiry kein Freibeweis; RAM/Disk/Batchlimits stoppen neue Dispatches; Locks nicht umgangen.",
+    "produce": "check_admission(ResourceProfile, job) →ValidationReport + gebundener Admissionreceipt",
+    "consume": "G1 gemessenes Profil, Native-Locks/Sensoren und O01",
+    "risk": "OOM/deadlock/unwahre Garantie",
+    "rollback": "externe Dispatches stoppen; Native-Locks unverändert wirksam",
+    "size": "groß",
+    "gates": "O01 Modus festgelegt; kein harter Shared-Exklusivitätsclaim"
+  },
+  {
+    "id": "T016",
+    "title": "Optionaler kooperativer Managed-GPU-Gate",
+    "phase": "OPTIONAL",
+    "deps": [
+      "T015",
+      "T014"
+    ],
+    "req": [
+      "OR-001",
+      "OR-002"
+    ],
+    "story": "US4",
+    "modify": [
+      "src/pb_studio/jobs/admission.py"
+    ],
+    "create": [
+      "integrations/comfyui/pb_admission_gate/__init__.py",
+      "Tests/test_comfyui_managed_lease.py"
+    ],
+    "test": "Tests/test_comfyui_managed_lease.py",
+    "assert": "Alle Clients im garantierten Scope müssen vor GPUstart Lease erwerben; Fencing stale owner sperrt; Expiry bei aktivem Modell kein PBoverlap; fremde Clients außerhalb Scope sichtbar nicht garantiert.",
+    "produce": "versionierter kooperativer Admission-/Lease-/Unloadreceiptvertrag",
+    "consume": "O01 ausdrücklich managed, Native Admission und Own-Cancel",
+    "risk": "externe Pluginänderung oder Deadlock",
+    "rollback": "observed_shared mit eingeschränkten Garantien, keine Fremdjobs entladen",
+    "size": "sehr groß",
+    "gates": "eigene externe Plugin-/Betriebsfreigabe; optional für MVP"
+  },
+  {
+    "id": "T017",
+    "title": "Sicherer Input-/Outputtransport",
+    "phase": "P2",
+    "deps": [
+      "T005",
+      "T006",
+      "T011"
+    ],
+    "req": [
+      "TR-011",
+      "OR-005"
+    ],
+    "story": "US1",
+    "modify": [],
+    "create": [
+      "src/pb_studio/comfyui/media_transport.py",
+      "Tests/test_comfyui_media_transport.py"
+    ],
+    "test": "Tests/test_comfyui_media_transport.py",
+    "assert": "Traversal/Junction/Reparse/UNC/Redirect, wechselnde Source und Byteüberlauf fail-closed; kein Audio-/Video-Upload aus image-Route voraussetzen; Crossvolume Zielstaging; Originalhash bleibt.",
+    "produce": "ComfyClient.acquire_output/OutputReference →StagedArtifact, InputArtifactRef",
+    "consume": "Workflow-Loadervertrag/Local-only-Policy und Inputhashes",
+    "risk": "unkontrollierter Dateizugriff/Sourceveränderung",
+    "rollback": "Staging quarantined, Originale und bestätigte Medien bleiben",
+    "size": "groß",
+    "gates": "Root-/Transportprofil konkret; Remote erst ausdrücklich konfiguriert"
+  },
+  {
+    "id": "T018",
+    "title": "Technische QC und rationale Medienzeit",
+    "phase": "P2",
+    "deps": [
+      "T002",
+      "T008",
+      "T017"
+    ],
+    "req": [
+      "OR-007",
+      "TR-012"
+    ],
+    "story": "US1",
+    "modify": [],
+    "create": [
+      "src/pb_studio/jobs/media_quality.py",
+      "Tests/test_comfyui_media_quality.py"
+    ],
+    "test": "Tests/test_comfyui_media_quality.py",
+    "assert": "Truncated/defekte Frames/Framezahl/FPS/Duration erkannt; Full Decode Pflicht; bewusst dunkel/static nach Profilregel; NaNmetadata/zu große Decodermenge kein PASS; rationale Frame/Samplegrenzen.",
+    "produce": "ImportService.validate →ArtifactReceipt mit QC-/actual metadata",
+    "consume": "StagedArtifact, QualityProfile/ResourceProfile",
+    "risk": "ungültiger Clip trotz oberflächlicher Probe",
+    "rollback": "quarantine/rejected, keine Librarybereitschaft",
+    "size": "groß",
+    "gates": "O03 QCgrenzen vor Test; technische QC keine visuelle Qualifikation"
+  },
+  {
+    "id": "T019",
+    "title": "Canonical Import, Provenance und Ownership",
+    "phase": "P2",
+    "deps": [
+      "T010",
+      "T011",
+      "T017",
+      "T018",
+      "T009"
+    ],
+    "req": [
+      "FR-010",
+      "FR-011",
+      "TR-010",
+      "OR-008"
+    ],
+    "story": "US1",
+    "modify": [
+      "src/pb_studio/data/repositories/media_repository.py",
+      "backend/routers/video_router.py"
+    ],
+    "create": [
+      "src/pb_studio/jobs/import_service.py",
+      "Tests/test_comfyui_canonical_import.py"
+    ],
+    "test": "Tests/test_comfyui_canonical_import.py",
+    "assert": "Doppelcallback gleicher Claim ein Media; anderer Hash Konflikt; Projekt A→B kein Bcommit; immutable Namen/Parent erhalten; failed QC/Cancelled late output keine automatische Timelinefreigabe. Cancel-vs-Catalog-CAS: davor kein Medium, danach Medium erhalten/Eligibility gesperrt/locally_cancelled. Manueller Import eigener lokaler Intent; ein Canonical-Medium je Projekt+Artifact.",
+    "produce": "ImportService.commit →ImportCommitResult(artifact, media_import_receipt), vollständige Herkunft",
+    "consume": "ProjectCommitContext, published Artifact/QCreceipt und Jobintent",
+    "risk": "falsches Projekt/overwrite/dangling Medien",
+    "rollback": "lokale Saga repair/quarantine; akzeptierte Outputs erhalten",
+    "size": "groß",
+    "gates": "O02 Late-output und Gmigration; Origincontext neu erwerben"
+  },
+  {
+    "id": "T020",
+    "title": "Durable ADD-Vektorsaga im Native-SigLIP-Raum",
+    "phase": "P2",
+    "deps": [
+      "T008",
+      "T019",
+      "T009"
+    ],
+    "req": [
+      "TR-006",
+      "TR-010",
+      "RR-002"
+    ],
+    "story": "US1",
+    "modify": [
+      "src/pb_studio/data/vector_store.py",
+      "backend/routers/video_router.py",
+      "src/pb_studio/ai/video_specialist.py",
+      "src/pb_studio/pacing/clip_selector.py"
+    ],
+    "create": [
+      "src/pb_studio/data/vector_add_operation_outbox.py",
+      "Tests/test_comfyui_vector_add_saga.py"
+    ],
+    "test": "Tests/test_comfyui_vector_add_saga.py",
+    "assert": "Q5 Crashmatrix jede Publish/Mappinggrenze; genau ein Operationmarker/Vector/Mapping oder repair_required; alter Writerclone kann neuen Snapshot nicht überschreiben; Concurrent Nativeadd/Close/Compaction gatekoordiniert. Persistierten AnalysisRun zuerst prüfen; VideoRouter drain außerhalb Projektguard; endliche Writerdeadline bei Publishfehler; Compaction/Reindex bis qualifiziertem Remapvertrag gesperrt.",
+    "produce": "durable_add_embedding →VectorOperationReceipt mit Generation/Marker und Mapping",
+    "consume": "validierter Native EmbeddingPayload+immutable AnalysisRun/Importclaim",
+    "risk": "Index-/Mappingkorruption; zentraler Writervertrag",
+    "rollback": "Schreibgate sperren, konsistente Generation/reconciliation, kein blindes Readd",
+    "size": "sehr groß",
+    "gates": "Q5 konkreter Writer-/Generationvertrag und isolierte Failuretests"
+  },
+  {
+    "id": "T021",
+    "title": "Recoveryinventar, Remoteactivity und Shutdown",
+    "phase": "P2",
+    "deps": [
+      "T013",
+      "T014",
+      "T019",
+      "T020"
+    ],
+    "req": [
+      "OR-004",
+      "RR-001",
+      "RR-002"
+    ],
+    "story": "US2",
+    "modify": [
+      "backend/recovery_runtime.py",
+      "backend/main.py",
+      "src/pb_studio/storage/recovery_adapters.py",
+      "src/pb_studio/storage/recovery_generation.py"
+    ],
+    "create": [
+      "src/pb_studio/jobs/lifecycle.py",
+      "Tests/test_comfyui_recovery_lifecycle.py"
+    ],
+    "test": "Tests/test_comfyui_recovery_lifecycle.py",
+    "assert": "Snapshot wartet nur lokale bounded Commits, nicht Remoteende; WPFclose mit Runningjob richtige Detached/Pausestatuspersistenz; Sidecars/Ownmedia inventarisiert; Restore missingoutput ehrlich, kein alter Epochcommit. Restore prüft Operation/Media/Space/Vectorhash, nicht bloß IDs; vertauschte Media-ID/Marker/Bytes fail-closed. Diskfull/RecoveryBusy/Writerdeadline ohne unbounded join.",
+    "produce": "JobActivitySnapshot und bounded quiesce/reconcile owner integration",
+    "consume": "O02 Shutdownpolicy, durable Attempts/Import-/Vectorreceipts",
+    "risk": "Recoveryrollback oder unbounded Shutdown",
+    "rollback": "Dispatch gesperrt, gültige Recoverygeneration erhalten",
+    "size": "groß",
+    "gates": "shared main/recovery Zone sequenziell; keine harten Normalprozesskills"
+  },
+  {
+    "id": "T022",
+    "title": "PB REST-, Snapshot- und SSE-Jobverträge",
+    "phase": "P2",
+    "deps": [
+      "T014",
+      "T019",
+      "T021"
+    ],
+    "req": [
+      "TR-002",
+      "OR-006"
+    ],
+    "story": "US2",
+    "modify": [
+      "backend/dependencies.py",
+      "backend/routers/events_router.py",
+      "backend/main.py"
+    ],
+    "create": [
+      "backend/routers/comfyui_router.py",
+      "backend/routers/jobs_router.py",
+      "backend/schemas/comfyui_schemas.py",
+      "backend/schemas/jobs_schemas.py",
+      "Tests/test_comfyui_jobs_api.py"
+    ],
+    "test": "Tests/test_comfyui_jobs_api.py",
+    "assert": "202durable Job ohne minutenlange Request; duplicate key gleicher/anderer Payload 200/409; Scopeowner und erwartete Revision; >500 verlorene Events durch Snapshot heilbar; sampling100 nicht ready. Echte App/OpenAPI enthält Settings/Register/Enable/Batchcreate/Priority/Reorder/manualImport-Routes; WPF ausschließlich PB; Scope/CAS/Idempotencytests.",
+    "produce": "PB Routes D, LogicalJobSnapshot und ProviderJobEvent",
+    "consume": "Repository/control/Registry; vorhandener Owner-/Projektguard",
+    "risk": "APIbruch oder fehlende UIevents",
+    "rollback": "neue Routes disable, alte API unverändert; persistente Jobs erhalten",
+    "size": "groß",
+    "gates": "OpenAPI-/Consumervertrag; Gapi vor IApiClient-Änderung"
+  },
+  {
+    "id": "T023",
+    "title": "WPF Verbindung, Settings und Installationshilfe",
+    "phase": "P3",
+    "deps": [
+      "T007",
+      "T022"
+    ],
+    "req": [
+      "FR-002",
+      "FR-016",
+      "OR-006"
+    ],
+    "story": "US1",
+    "modify": [
+      "PBStudio.UI/Services/ApiClient.cs",
+      "PBStudio.UI/Services/IApiClient.cs",
+      "PBStudio.UI/ViewModels/SettingsViewModel.cs",
+      "PBStudio.UI/Views/SettingsView.xaml",
+      "PBStudio.UI/App.xaml.cs"
+    ],
+    "create": [
+      "PBStudio.UI/Models/ComfyStatusResponse.cs",
+      "PBStudio.UI.Tests/ComfySettingsTests.cs",
+      "docs/comfyui/installation.md"
+    ],
+    "test": "PBStudio.UI.Tests/ComfySettingsTests.cs",
+    "assert": "Offline/Missinginstallation verständlich; getrennte readinessstufen; URL next_job statt running umbiegen; Backend URLowner, WPF nur Anzeige; kein zweites Frontend/Grapheditor.",
+    "produce": "Settingsflow und DiscoverySnapshot-basierter StatusDTO",
+    "consume": "GET comfyui/status/capabilities und ConfigManager owner",
+    "risk": "WPFAPIbruch/irreführend bereit",
+    "rollback": "neuer Bereich Featureflag off, vorhandene Settings weiter",
+    "size": "groß",
+    "gates": "Gapi; Releasebuild+native WPFtests+sichtbarer Flow"
+  },
+  {
+    "id": "T024",
+    "title": "WPF Workflowlibrary und manuelle Generation",
+    "phase": "P3",
+    "deps": [
+      "T023",
+      "T005",
+      "T019"
+    ],
+    "req": [
+      "FR-003",
+      "FR-009",
+      "FR-016"
+    ],
+    "story": "US1",
+    "modify": [
+      "PBStudio.UI/ViewModels/VideoLibraryViewModel.cs",
+      "PBStudio.UI/Views/VideoLibraryView.xaml",
+      "PBStudio.UI/Services/ApiClient.cs",
+      "PBStudio.UI/Services/IApiClient.cs",
+      "PBStudio.UI/App.xaml.cs"
+    ],
+    "create": [
+      "PBStudio.UI/ViewModels/WorkflowLibraryViewModel.cs",
+      "PBStudio.UI/Views/WorkflowLibraryView.xaml",
+      "PBStudio.UI.Tests/WorkflowLibraryTests.cs"
+    ],
+    "test": "PBStudio.UI.Tests/WorkflowLibraryTests.cs",
+    "assert": "Revision/Enable/Disable/Register/typed Promptinputs; In Comfy bearbeiten→neue Revision; Jobstart local-only; Autoimport und Autoanalyse getrennt; keine ungefragten Downloads.",
+    "produce": "Workflowlibrary integriert in vorhandene Navigation; Generate-Aktion",
+    "consume": "WorkflowRegistry/PB Routes, CreateJobRequest",
+    "risk": "Tabflut/falsche Defaults/Livegraphmutation",
+    "rollback": "Generation/UIflag off, native Library weiter",
+    "size": "groß",
+    "gates": "Gapi; UIflowdefinition keine zusätzliche Tabanzahl behaupten"
+  },
+  {
+    "id": "T025",
+    "title": "WPF Jobs, Queue-Reorder und Herkunftsfilter",
+    "phase": "P3",
+    "deps": [
+      "T023",
+      "T024",
+      "T014"
+    ],
+    "req": [
+      "FR-013",
+      "FR-016",
+      "OR-006"
+    ],
+    "story": "US2",
+    "modify": [
+      "PBStudio.UI/Services/SSEClient.cs",
+      "PBStudio.UI/ViewModels/ProductionViewModel.cs",
+      "PBStudio.UI/Views/ProductionView.xaml",
+      "PBStudio.UI/ViewModels/MainViewModel.cs",
+      "PBStudio.UI/ViewModels/VideoLibraryViewModel.cs",
+      "PBStudio.UI/App.xaml.cs",
+      "PBStudio.UI/Services/ApiClient.cs",
+      "PBStudio.UI/Services/IApiClient.cs"
+    ],
+    "create": [
+      "PBStudio.UI/Models/ProviderJobResponse.cs",
+      "PBStudio.UI/Services/ProviderJobStateService.cs",
+      "PBStudio.UI.Tests/ProviderJobStateTests.cs"
+    ],
+    "test": "PBStudio.UI.Tests/ProviderJobStateTests.cs",
+    "assert": "Reconnectgap Snapshot korrekt; project/revisionstale Event ignoriert; Dispose kein Duplicate; indeterminate progress; undispatched reorder CAS, running immutable; Imported/Generated/Processed/Variants/Favorites/Used/Unused/BadRating. Reale App-DI/Navigation statt manuell konstruiertem VM; PBcontrols und Snapshot erreichbar.",
+    "produce": "Job-/Queueansicht, StateService und stabile Navigations-ID",
+    "consume": "ProviderJobEvent/LogicalJobSnapshot/PB Jobcontrol",
+    "risk": "falscher Finalstatus oder Indexnavigation",
+    "rollback": "neue Jobansicht aus, durable Status bleibt backendlesbar",
+    "size": "groß",
+    "gates": "Releasebuild sequenziell, sichtbare GUIabnahme"
+  },
+  {
+    "id": "T026",
+    "title": "Integrierten lokalen Generation-MVP abnehmen",
+    "phase": "P3a",
+    "deps": [
+      "T007",
+      "T009",
+      "T020",
+      "T021",
+      "T025"
+    ],
+    "req": [
+      "FR-009",
+      "FR-010",
+      "RR-004",
+      "RR-005"
+    ],
+    "story": "US1",
+    "modify": [],
+    "create": [
+      "specs/00037-comfyui-control-center/evidence/g3-media-flow.md",
+      "scripts/dev/comfyui_media_acceptance.py",
+      "Tests/test_comfyui_media_acceptance_contract.py"
+    ],
+    "test": "Tests/test_comfyui_media_acceptance_contract.py",
+    "assert": "Echter autorisierter Flow Clip→Library→native Analyse/SigLIP/FAISS→Director→Timeline→Preview→AMF→Full Decode/Reopen; Originalhashes unverändert; Cancel/Retry/Restart sichtbar; ein T2VProfil kein I2Vnachweis.",
+    "produce": "G3 und Qualified-Profile-Receipt; erster eigener Produktfreigabekandidat",
+    "consume": "G1 und alle verpflichtenden P2-Belege sowie T023–T025; T027 ist nachgelagerter P3b-Ausbau, keine MVPvoraussetzung",
+    "risk": "Tests/build als Nutzerabnahme ausgeben",
+    "rollback": "Profil unqualified, akzeptierte Medien behalten",
+    "size": "groß",
+    "gates": "O03 echte Medien/Humanquality; .completed vor QC, .qc-passed erst nach T045"
+  },
+  {
+    "id": "T027",
+    "title": "Varianten, Regenerate und weitere Inputfamilien",
+    "phase": "P3b",
+    "deps": [
+      "T026",
+      "T019"
+    ],
+    "req": [
+      "FR-009",
+      "FR-011",
+      "FR-012"
+    ],
+    "story": "US3",
+    "modify": [
+      "src/pb_studio/jobs/repository.py",
+      "PBStudio.UI/ViewModels/VideoLibraryViewModel.cs"
+    ],
+    "create": [
+      "src/pb_studio/jobs/derivations.py",
+      "Tests/test_comfyui_variants.py",
+      "workflows/generation/reference/manifest.json",
+      "workflows/generation/i2v/manifest.json",
+      "workflows/generation/i2v/api_prompt.json",
+      "workflows/generation/i2v/test-fixture.json",
+      "workflows/generation/i2v/profile-receipt.json",
+      "workflows/generation/v2v/manifest.json",
+      "workflows/generation/v2v/api_prompt.json",
+      "workflows/generation/v2v/test-fixture.json",
+      "workflows/generation/v2v/profile-receipt.json",
+      "workflows/generation/reference/api_prompt.json",
+      "workflows/generation/reference/test-fixture.json",
+      "workflows/generation/reference/profile-receipt.json"
+    ],
+    "test": "Tests/test_comfyui_variants.py",
+    "assert": "Neue Seed/Prompt/Model/Workflow/Quality/Motionvariation neuer Intent/Child; Parent unverändert; I2V/V2V/Reference je eigenes tatsächliches Profil; Inputroles/maxcount/crop/LoRA gebunden; keine automatische Timelineübernahme. Ladbares APIbundle+Fixture+Adapter/Node/Model/Resourcebinding Pflicht; Manifest-only kein qualified.",
+    "produce": "Derivation-DAG und geprüfte Input-/Variant-Profile",
+    "consume": "Qualified Pilotbundle, InputArtifactRef, immutable Job-/Artifactrecords",
+    "risk": "Provenanceverlust/Parentoverwrite",
+    "rollback": "Parent weiter verwenden, neue Profile deaktivieren",
+    "size": "groß",
+    "gates": "Profile familyweise abnehmen; nicht vorhandene Inputs unavailable"
+  },
+  {
+    "id": "T028",
+    "title": "Upscale als qualifiziertes Derivat",
+    "phase": "P4",
+    "deps": [
+      "T027"
+    ],
+    "req": [
+      "FR-012",
+      "TR-012"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "workflows/postprocess/upscale/manifest.json",
+      "workflows/postprocess/upscale/api_prompt.json",
+      "Tests/test_comfyui_upscale_contract.py"
+    ],
+    "test": "Tests/test_comfyui_upscale_contract.py",
+    "assert": "Reale Targetresolution/Color/Codec/Dauer gemessen, Childhash/Parentlink korrekt; Parentbytes bleiben; Artefakt-/Qualitygate; kein Name→1080pClaim.",
+    "produce": "qualified media.upscale WorkflowBundle/ArtifactReceipt",
+    "consume": "Derivation, MediaQC, ResourceProfile",
+    "risk": "Qualitätsverlust/unpassende Sourcegröße",
+    "rollback": "Parent auswählen; Upscaleprofil unqualified",
+    "size": "mittel",
+    "gates": "G4 einzelne Operation Real-Media"
+  },
+  {
+    "id": "T029",
+    "title": "Interpolation und rationales FPS-Derivat",
+    "phase": "P4",
+    "deps": [
+      "T027",
+      "T018"
+    ],
+    "req": [
+      "FR-012",
+      "TR-012"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "workflows/postprocess/interpolate/manifest.json",
+      "workflows/postprocess/interpolate/api_prompt.json",
+      "Tests/test_comfyui_interpolation_contract.py"
+    ],
+    "test": "Tests/test_comfyui_interpolation_contract.py",
+    "assert": "Rationale In-/OutFPS, tatsächliche Frames/PTS/Duration, AVsync; 23.976/29.97 kein kumulativer Drift; Parent und Originalaudio bleiben; Flowartefakte bewertet.",
+    "produce": "qualified media.interpolate Bundle/Childartifact",
+    "consume": "Derivation/Timebase/QCprofile",
+    "risk": "Zeitdrift oder Ghosting",
+    "rollback": "Parent verwenden",
+    "size": "mittel",
+    "gates": "G4 FPS-/Qualityprofil abnehmen"
+  },
+  {
+    "id": "T030",
+    "title": "Begrenzter Reshot und Kontinuitätsprüfung",
+    "phase": "P4",
+    "deps": [
+      "T027",
+      "T018"
+    ],
+    "req": [
+      "FR-012",
+      "TR-011",
+      "TR-012"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "workflows/postprocess/reshot/manifest.json",
+      "workflows/postprocess/reshot/api_prompt.json",
+      "Tests/test_comfyui_reshot_contract.py"
+    ],
+    "test": "Tests/test_comfyui_reshot_contract.py",
+    "assert": "5sReshot in Stundenquelle dekodiert nur Range+Handles; Full-source-node ungeeignet/fail; Übergänge/Unchanged-Bereich gemäß Encodingvertrag; Parentbytes unverändert, Herkunft vollständig.",
+    "produce": "qualified media.reshot Bundle mit Window-/Handlevertrag",
+    "consume": "Derivation/References und bounded Transport/QC",
+    "risk": "Full-source-RAM/OOM/Nahtbruch",
+    "rollback": "Parent und unveränderte Timeline verwenden",
+    "size": "groß",
+    "gates": "G4 Window/RAM/Continuity-Humanquality"
+  },
+  {
+    "id": "T031",
+    "title": "Native Stageadapter und Consumerdurchleitung",
+    "phase": "P5",
+    "deps": [
+      "T008",
+      "T009",
+      "T026"
+    ],
+    "req": [
+      "FR-005",
+      "TR-005",
+      "TR-007"
+    ],
+    "story": "US3",
+    "modify": [
+      "backend/routers/audio_router.py",
+      "backend/routers/video_router.py",
+      "backend/routers/pacing_router.py",
+      "backend/schemas/audio_schemas.py",
+      "backend/schemas/video_schemas.py"
+    ],
+    "create": [
+      "src/pb_studio/providers/native_adapters.py",
+      "Tests/test_comfyui_native_stage_wiring.py"
+    ],
+    "test": "Tests/test_comfyui_native_stage_wiring.py",
+    "assert": "Feldwerte Router→AppState→Pacing→DTO→ViewModel tatsächlich durchgeleitet; kick_times/energy_curve/structure_segments korrekt; missing/derived/partial ehrlich; aktiver Nativecache unverändert.",
+    "produce": "Native capabilityadapter →AnalysisRun/StageResult",
+    "consume": "bestehende Schemas/Stageprovenance und gemeinsame Validatoren",
+    "risk": "Producer ohne Consumer/Api-Doppelstruktur",
+    "rollback": "Nativepointer erhalten, neue Adapterdisable",
+    "size": "groß",
+    "gates": "Gapi falls öffentliche DTOs ändern; keine separator.py-Änderung"
+  },
+  {
+    "id": "T032",
+    "title": "Alternative Beat-/Downbeat-/Timingprovider",
+    "phase": "P5",
+    "deps": [
+      "T002",
+      "T031"
+    ],
+    "req": [
+      "FR-006",
+      "FR-005",
+      "RR-003"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "src/pb_studio/providers/audio_timing.py",
+      "workflows/audio/timing/manifest.json",
+      "Tests/test_comfyui_audio_timing.py",
+      "workflows/audio/timing/api_prompt.json",
+      "workflows/audio/timing/test-fixture.json",
+      "workflows/audio/timing/profile-receipt.json"
+    ],
+    "test": "Tests/test_comfyui_audio_timing.py",
+    "assert": "BPM/Tempoabschnitte/Beatphase/Downbeat/Grid/Onsets/Transienten mit Sourceoffset und Chunknähte; Half-/Doubletempo getrennt; unabhängige Labels; kein BPMallein-Abnahme. Ladbares APIbundle+Fixture+Adapter/Node/Model/Resourcebinding Pflicht; Manifest-only kein qualified.",
+    "produce": "capabilityweise Timing-StageResults+Benchmarkreceipts",
+    "consume": "Nativeadapter/Qualityprofile/SharedAdmission",
+    "risk": "musikalisch falsche Trigger bei formalem PASS",
+    "rollback": "aktive Native-Timingrevision auswählen",
+    "size": "groß",
+    "gates": "G5 jede in O gelistete Timingfähigkeit einzeln; kein stilles Nativeersetzen"
+  },
+  {
+    "id": "T033",
+    "title": "Stems und Drumtriggerprovider",
+    "phase": "P5",
+    "deps": [
+      "T002",
+      "T031",
+      "T019"
+    ],
+    "req": [
+      "FR-006",
+      "FR-007",
+      "RR-003"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "src/pb_studio/providers/audio_stems_drums.py",
+      "workflows/audio/stems/manifest.json",
+      "Tests/test_comfyui_stems_drums.py",
+      "workflows/audio/stems/api_prompt.json",
+      "workflows/audio/stems/test-fixture.json",
+      "workflows/audio/stems/profile-receipt.json",
+      "workflows/audio/drums/manifest.json",
+      "workflows/audio/drums/api_prompt.json",
+      "workflows/audio/drums/test-fixture.json",
+      "workflows/audio/drums/profile-receipt.json"
+    ],
+    "test": "Tests/test_comfyui_stems_drums.py",
+    "assert": "Drums/Bass/Other/Vocals und zusätzliche Rollen tatsächlich verfügbar; SR/Channels/Samplecount/Delayalignment, Leakage und Triggerqualität getrennt; Cachefingerprint verhindert unnötige Separation. Ladbares APIbundle+Fixture+Adapter/Node/Model/Resourcebinding Pflicht; Manifest-only kein qualified.",
+    "produce": "StageResults+StemArtifactrollen+Drumtiming",
+    "consume": "Nativeadapter, Input-/Artifactvertrag; locked separator nur außen wrappen",
+    "risk": "misaligned Stems oder False-Drums",
+    "rollback": "Nativeprovider/stems erhalten; Comfyresult nicht aktivieren",
+    "size": "groß",
+    "gates": "G5 Rollen/Drumpräzision/Delay jede Fähigkeit"
+  },
+  {
+    "id": "T034",
+    "title": "Energie, Struktur, Harmonie und Longmixprovider",
+    "phase": "P5",
+    "deps": [
+      "T002",
+      "T031",
+      "T032"
+    ],
+    "req": [
+      "FR-006",
+      "TR-005",
+      "RR-003"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "src/pb_studio/providers/audio_features.py",
+      "workflows/audio/features/manifest.json",
+      "Tests/test_comfyui_audio_features.py",
+      "workflows/audio/energy/manifest.json",
+      "workflows/audio/energy/api_prompt.json",
+      "workflows/audio/energy/test-fixture.json",
+      "workflows/audio/energy/profile-receipt.json",
+      "workflows/audio/structure/manifest.json",
+      "workflows/audio/structure/api_prompt.json",
+      "workflows/audio/structure/test-fixture.json",
+      "workflows/audio/structure/profile-receipt.json",
+      "workflows/audio/harmony/manifest.json",
+      "workflows/audio/harmony/api_prompt.json",
+      "workflows/audio/harmony/test-fixture.json",
+      "workflows/audio/harmony/profile-receipt.json",
+      "workflows/audio/longmix/manifest.json",
+      "workflows/audio/longmix/api_prompt.json",
+      "workflows/audio/longmix/test-fixture.json",
+      "workflows/audio/longmix/profile-receipt.json"
+    ],
+    "test": "Tests/test_comfyui_audio_features.py",
+    "assert": "RMS/Peak/LUFS/Bandenergie skalengültig; neutrale Struktur bei unsicherem Drop; Key/Mode/Camelotversion/Keychange; annotierte Mixblenden/equalBPM/Tempoänderungen; bounded Speicher. Ladbares APIbundle+Fixture+Adapter/Node/Model/Resourcebinding Pflicht; Manifest-only kein qualified.",
+    "produce": "familyweise Feature-/Harmony-/Longmix-StageResults und qualify matrix",
+    "consume": "Native-Timing/Qualityprofile/Chunkcontracts",
+    "risk": "semantisch erfundene Struktur oder lange Mix-OOM",
+    "rollback": "Nativeaktive Stages zurückwählen",
+    "size": "sehr groß",
+    "gates": "G5 je einzelne Fähigkeit, keine pauschale Sammelfreigabe"
+  },
+  {
+    "id": "T035",
+    "title": "Alternative Caption-/Inhalts-/Moodprovider",
+    "phase": "P5",
+    "deps": [
+      "T002",
+      "T031"
+    ],
+    "req": [
+      "FR-008",
+      "TR-005",
+      "RR-003"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "src/pb_studio/providers/video_contents.py",
+      "workflows/video/contents/manifest.json",
+      "Tests/test_comfyui_video_contents.py",
+      "workflows/video/contents/api_prompt.json",
+      "workflows/video/contents/test-fixture.json",
+      "workflows/video/contents/profile-receipt.json"
+    ],
+    "test": "Tests/test_comfyui_video_contents.py",
+    "assert": "Caption/Tags/Person/Objekt/Umgebung/Licht/Farbe/Style/Mood/visuelle Energie gegen menschliche Referenz; scope Frames/Scene/Asset; Unknown statt Halluzination; Fehler einer Stage kein Gesamtausfall. Ladbares APIbundle+Fixture+Adapter/Node/Model/Resourcebinding Pflicht; Manifest-only kein qualified.",
+    "produce": "Video-Contents-StageResults und Prompt-/Modellprofile",
+    "consume": "Nativeadapter/Resultvalidator/Holdout",
+    "risk": "Halluzinationen beeinflussen Director",
+    "rollback": "Nativeaccepted Inhaltsrevision behalten",
+    "size": "groß",
+    "gates": "G5 je Inhaltsfähigkeit und menschliche Qualität"
+  },
+  {
+    "id": "T036",
+    "title": "Szenen, Motion, Technik und Qualityprovider",
+    "phase": "P5",
+    "deps": [
+      "T002",
+      "T031",
+      "T018"
+    ],
+    "req": [
+      "FR-008",
+      "TR-005",
+      "OR-007"
+    ],
+    "story": "US3",
+    "modify": [],
+    "create": [
+      "src/pb_studio/providers/video_measurements.py",
+      "workflows/video/measurements/manifest.json",
+      "Tests/test_comfyui_video_measurements.py",
+      "workflows/video/scenes/manifest.json",
+      "workflows/video/scenes/api_prompt.json",
+      "workflows/video/scenes/test-fixture.json",
+      "workflows/video/scenes/profile-receipt.json",
+      "workflows/video/motion/manifest.json",
+      "workflows/video/motion/api_prompt.json",
+      "workflows/video/motion/test-fixture.json",
+      "workflows/video/motion/profile-receipt.json",
+      "workflows/video/quality/manifest.json",
+      "workflows/video/quality/api_prompt.json",
+      "workflows/video/quality/test-fixture.json",
+      "workflows/video/quality/profile-receipt.json"
+    ],
+    "test": "Tests/test_comfyui_video_measurements.py",
+    "assert": "SceneF1/Boundaries/VFR; Flow/Intensity/Direction/Camera mit Sampling/Normunit; technische Codec/FPS/Dauer gemessen; Sharp/Blur/Noise/Compression/Freeze/AIartefakthinweise getrennt mit Ausnahmen. Ladbares APIbundle+Fixture+Adapter/Node/Model/Resourcebinding Pflicht; Manifest-only kein qualified.",
+    "produce": "Video-Measurement-StageResults+Kalibrationsrevisionen",
+    "consume": "Nativeprobe/Motioncontract/Qualityprofile",
+    "risk": "fremde Motion0–1 als RAFT/30 oder falsche QC",
+    "rollback": "native Messung/Qualityprofil zurückwählen",
+    "size": "groß",
+    "gates": "G5 jede Fähigkeit; Feldskalen nicht heimlich ändern"
+  },
+  {
+    "id": "T037",
+    "title": "Optionale alternative und segmentweise Embeddingräume",
+    "phase": "OPTIONAL",
+    "deps": [
+      "T002",
+      "T020",
+      "T031"
+    ],
+    "req": [
+      "TR-006",
+      "RR-001"
+    ],
+    "story": "US4",
+    "modify": [
+      "src/pb_studio/data/database_core.py",
+      "src/pb_studio/data/vector_store.py",
+      "src/pb_studio/brain/post_processor.py",
+      "src/pb_studio/storage/embedding_cache.py",
+      "src/pb_studio/pacing/clip_selector.py"
+    ],
+    "create": [
+      "src/pb_studio/providers/embedding_spaces.py",
+      "Tests/test_comfyui_embedding_spaces.py"
+    ],
+    "test": "Tests/test_comfyui_embedding_spaces.py",
+    "assert": "Gleiche Dim anderer Raum abgewiesen; lokale FAISSIDs verschiedener Indizes kollidieren nicht; asset/scene/window-Dedupe korrekt; Query/Projectorcache passenden Raum; Tombstone/Restore/retrievalHoldout.",
+    "produce": "getrennte EmbeddingSpace-/Indexidentitäten und passende Consumer",
+    "consume": "NativeADD/Operation-/Spacecontract und gelabelte Retrievaldaten",
+    "risk": "Such-/Brainkorruption, invasive Migration",
+    "rollback": "Nativeindex unverändert weiter; neue Räume isolieren",
+    "size": "sehr groß",
+    "gates": "eigene Multi-space-Spec/Gmigration/Brainqualifikation; optional"
+  },
+  {
+    "id": "T038",
+    "title": "Vergleichsmodus und Kohortenqualifikation",
+    "phase": "P5",
+    "deps": [
+      "T002",
+      "T009",
+      "T031"
+    ],
+    "req": [
+      "FR-004",
+      "FR-005",
+      "RR-003"
+    ],
+    "story": "US3",
+    "modify": [
+      "PBStudio.UI/ViewModels/SettingsViewModel.cs"
+    ],
+    "create": [
+      "src/pb_studio/providers/benchmarks.py",
+      "Tests/test_comfyui_provider_qualification.py",
+      "docs/comfyui/provider-system.md"
+    ],
+    "test": "Tests/test_comfyui_provider_qualification.py",
+    "assert": "Identische Quellen/Versionen/sampling; cold/warm/cache und E2Egetrennt; Mittel/Tail/Peak/Fehlerquote; schwierige Kohorte nicht im Mittel verdeckt; absent expectation niemals PASS.",
+    "produce": "Qualified-Profile-Registry und auditierbare Benchmarkreceipts",
+    "consume": "je Capability resultadapter; T032–T036 Ergebnisse wenn gewählt",
+    "risk": "unberechtigte globale Qualitätsrangfolge",
+    "rollback": "Qualifikation entziehen; Native bleibt explizit auswählbar",
+    "size": "groß",
+    "gates": "G5 pro gewählter Capability; optional T037 nicht pauschal voraussetzen"
+  },
+  {
+    "id": "T039",
+    "title": "Qualifiziertes AUTO und sichtbares Degrade",
+    "phase": "P6",
+    "deps": [
+      "T038",
+      "T031",
+      "T015"
+    ],
+    "req": [
+      "FR-004",
+      "RR-003"
+    ],
+    "story": "US3",
+    "modify": [
+      "src/pb_studio/config_manager.py",
+      "PBStudio.UI/ViewModels/SettingsViewModel.cs"
+    ],
+    "create": [
+      "src/pb_studio/providers/routing.py",
+      "Tests/test_comfyui_auto_selection.py"
+    ],
+    "test": "Tests/test_comfyui_auto_selection.py",
+    "assert": "Unqualified/Unknown nicht automatisch; harte Quality/Budgetgates zuerst; besserer Offlineprovider →wait oder genehmigtes Degrade mit Receipt; laufender Attempt unverändert; LLM ai.provider nicht mitumstellen.",
+    "produce": "select_provider →ProviderSelectionReceipt pro Capability",
+    "consume": "Qualified registry/Kohorte/Configrevision/Resourcepolicy",
+    "risk": "stiller Qualitätsverlust oder Providerkonflikt",
+    "rollback": "manuelle/Native-Auswahl",
+    "size": "mittel",
+    "gates": "G6 bestätigte Degradepolicy, nicht pauschal bestesModell"
+  },
+  {
+    "id": "T040",
+    "title": "Director Coverage, Asset-DAG und Timelinebindung",
+    "phase": "P7",
+    "deps": [
+      "T026",
+      "T027",
+      "T031",
+      "T038",
+      "T043"
+    ],
+    "req": [
+      "FR-014",
+      "TR-012",
+      "RR-002"
+    ],
+    "story": "US3",
+    "modify": [
+      "src/pb_studio/services/pacing_service.py",
+      "src/pb_studio/pacing/clip_selector.py",
+      "PBStudio.UI/ViewModels/DirectorViewModel.cs"
+    ],
+    "create": [
+      "src/pb_studio/pacing/coverage.py",
+      "src/pb_studio/pacing/asset_plan.py",
+      "Tests/test_comfyui_director_coverage.py"
+    ],
+    "test": "Tests/test_comfyui_director_coverage.py",
+    "assert": "Fehlende Semantik→unknown statt Generate; insufficient nach Holdoutthreshold; Asset statt Cutjob; ReferenceDAG/Handles/Seeds unverändert bei Reorder; Timelineedit/Planrevision keine stale Slotübernahme.",
+    "produce": "evaluate_coverage, AssetPlan und budgetgebundene Generationsjobs",
+    "consume": "gültige AnalysisRuns/Qualityprofile/qualified generation/Derivation",
+    "risk": "unbegrenzte Generation oder falsche Szenenzuordnung",
+    "rollback": "Library-only Director, Jobs/Outputs bleiben",
+    "size": "sehr groß",
+    "gates": "G7 Coverage-/Kontinuitätslabels; AUTO nur falls T039 qualifiziert"
+  },
+  {
+    "id": "T041",
+    "title": "Bounded Longform-Automation und Gesamtvideo",
+    "phase": "P8",
+    "deps": [
+      "T021",
+      "T026",
+      "T040",
+      "T043"
+    ],
+    "req": [
+      "FR-015",
+      "OR-003",
+      "TR-012",
+      "RR-005"
+    ],
+    "story": "US3",
+    "modify": [
+      "src/pb_studio/jobs/scheduler.py",
+      "src/pb_studio/services/pacing_service.py",
+      "src/pb_studio/rendering/render_service.py"
+    ],
+    "create": [
+      "src/pb_studio/jobs/production_batches.py",
+      "Tests/test_comfyui_longform_batches.py",
+      "specs/00037-comfyui-control-center/evidence/g8-longform.md"
+    ],
+    "test": "Tests/test_comfyui_longform_batches.py",
+    "assert": "1h/2h/3h jeweils realer Komplettlauf; Dispatchfenster/RAM/Disk/Retrybudget begrenzt; Lücke Shot17 nicht blind ab343; akzeptierte Assets kein Neurechnen; Originalmasteraudio/Trims/Übergänge/AVsync/Reopen. Je Receipt tatsächliche Laufzeit/Videodauer, fresh/reused/importierte Assets, Samplingprofile und ausgeübte Restart/Unknown/Failurefenster; Reuse-only keine Fresh-Generation-Endurance.",
+    "produce": "Longform-Orchestrierung auf bestehendem ProductionBatch-Grundmodell und G8receipts tatsächlicher Workloadkomposition",
+    "consume": "AssetDAG, Activity/Recovery, qualified bundles und Retentionpins",
+    "risk": "langfristiger Drift/Leck/Budgetüberschreitung",
+    "rollback": "Batchpause, valide Assets/Library/Timeline weiterverwenden",
+    "size": "sehr groß",
+    "gates": "G8 reale Gesamtproduktion, keine Kurzclip-Abnahme als3hClaim"
+  },
+  {
+    "id": "T042",
+    "title": "Optionales Generatorfeedback und Lernen",
+    "phase": "OPTIONAL",
+    "deps": [
+      "T027",
+      "T038",
+      "T040"
+    ],
+    "req": [
+      "FR-016",
+      "RR-003"
+    ],
+    "story": "US4",
+    "modify": [
+      "src/pb_studio/brain/post_processor.py"
+    ],
+    "create": [
+      "src/pb_studio/providers/generation_feedback.py",
+      "Tests/test_comfyui_generation_feedback.py"
+    ],
+    "test": "Tests/test_comfyui_generation_feedback.py",
+    "assert": "Humanrating getrennt QC/Selbstrating; Exposure/Impression/Selectionreason und Workflow/Style gespeichert; Holdout kein Training; höhere Positivanzahl ohne Nenner kein Rankingvorteil; Seeds nicht global guteSeeds.",
+    "produce": "gesonderte Feedbackevents/Generatorprofile, keine falsche Brainencoderidentität",
+    "consume": "Derivation/Libraryratings und unabhängige Coveragebaseline",
+    "risk": "Selbstbestätigung oder Brainvertragsbruch",
+    "rollback": "Generatorlearning disable, vorhandenes Schnittfeedback erhalten",
+    "size": "groß",
+    "gates": "eigene Learning-Spec/Datenfreigabe; optional nach lokaler Produktabnahme"
+  },
+  {
+    "id": "T043",
+    "title": "Retention, Ownership, Archivierung und sichere GC",
+    "phase": "P3/P8-PRE",
+    "deps": [
+      "T019",
+      "T020",
+      "T021"
+    ],
+    "req": [
+      "OR-008",
+      "OR-003",
+      "RR-001"
+    ],
+    "story": "US2",
+    "modify": [
+      "src/pb_studio/storage/recovery_adapters.py",
+      "src/pb_studio/jobs/repository.py"
+    ],
+    "create": [
+      "src/pb_studio/jobs/retention.py",
+      "Tests/test_comfyui_artifact_retention.py"
+    ],
+    "test": "Tests/test_comfyui_artifact_retention.py",
+    "assert": "Dryrun pins Activejobs/References/Stems/Timeline/Derivatparents/Recovery; Externaloriginale nie Kandidat; Projektarchiv kein cascade acceptedmedia; missingartifact sichtbar statt stille Regeneration; Diskreserve vor Decode.",
+    "produce": "Ownedartifactinventar/Pins/Archivepolicy und getrennte GC-Freigabeliste",
+    "consume": "Artifact-/Vector-/Recoveryreceipts und grundlegendes Ownership T019",
+    "risk": "Daten-/Provenancelöschung",
+    "rollback": "GC aus, Pin-/Inventarrecords und akzeptierte Medien erhalten",
+    "size": "groß",
+    "gates": "vor T040/T041; echte Löschung nur Gdelete, Dryrun ohne destructive Aktion"
+  },
+  {
+    "id": "T044",
+    "title": "Optionaler Setupwizard und Entwicklerhilfe",
+    "phase": "OPTIONAL",
+    "deps": [
+      "T005",
+      "T023",
+      "T026"
+    ],
+    "req": [
+      "FR-016",
+      "TR-004"
+    ],
+    "story": "US4",
+    "modify": [
+      "PBStudio.UI/Views/SettingsView.xaml",
+      "PBStudio.UI/ViewModels/SettingsViewModel.cs"
+    ],
+    "create": [
+      "PBStudio.UI/ViewModels/ComfySetupWizardViewModel.cs",
+      "PBStudio.UI/Views/ComfySetupWizardView.xaml",
+      "PBStudio.UI.Tests/ComfySetupWizardTests.cs",
+      "docs/comfyui/developer-guide.md"
+    ],
+    "test": "PBStudio.UI.Tests/ComfySetupWizardTests.cs",
+    "assert": "Pfad/Endpoint/Nodes/Modelle/Workflow getrennt geprüft; Test ausdrücklich gestartet; nur real geprüftes Medienreceipt Fertig; Missingkomponenten erklärbar, keine automatische Installation oder Downloads.",
+    "produce": "Setupflow und dokumentierter Workflow→Manifest→Test→Qualify-Developerflow",
+    "consume": "Discovery/Registry/Qualified Pilot",
+    "risk": "Wizard behauptet unbelegte Bereitschaft",
+    "rollback": "Wizard hide; Pflicht-Installationshilfe T023 bleibt",
+    "size": "mittel",
+    "gates": "eigenes UXscope; optional kein lokaler MVPblocker"
+  },
+  {
+    "id": "T045",
+    "title": "Phasenweise Regression, QC und Liefernachweis",
+    "phase": "RECURRING",
+    "deps": [],
+    "req": [
+      "RR-005",
+      "RR-006"
+    ],
+    "story": "OBJ-1",
+    "modify": [],
+    "create": [
+      "docs/comfyui/architecture.md",
+      "docs/comfyui/workflow-format.md",
+      "docs/comfyui/troubleshooting.md",
+      "specs/00037-comfyui-control-center/evidence/phase-qc-index.md"
+    ],
+    "test": "phase_manifest_verify",
+    "assert": "Gewählte Phase-Pflichttasks/evidence abgeschlossen; Source/Build/nativeGUI/HW/RealMediaquality getrennt; gesamte relevante Regression isoliert; keine optionalen Nichtscopepakete als Fehler oder FakePASS; exakter geprüfter Stand.",
+    "produce": "qc-report pro tatsächlicher Phase; .completed/.qc-passed ausschließlich nach Gate",
+    "consume": "explizite Phasen-Pflichtmenge und deren wirkliche Nachweise",
+    "risk": "falsche Vollabnahme oder verfrühte Marker",
+    "rollback": "QCFAIL/NOT_RUN offen lassen; keine alten Belege löschen",
+    "size": "groß",
+    "gates": "Phase-Manifest; ohne Umsetzung/ .completed keine Produkt-QC, jetzt nur Planstrukturcheck"
+  }
+]

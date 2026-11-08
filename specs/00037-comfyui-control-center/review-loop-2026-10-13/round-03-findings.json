@@ -1,0 +1,15 @@
+[
+  {
+    "id": "L07",
+    "severity": "medium",
+    "title": "Native-Ausführungsidentität im gemeinsamen Envelope undefiniert",
+    "baseline_evidence": "round03 plan E247–264/P519–520/557, T031, FP18",
+    "tasks": [
+      "T008",
+      "T009",
+      "T020",
+      "T031"
+    ],
+    "status": "plan corrected; full review pending"
+  }
+]

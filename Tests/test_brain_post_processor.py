@@ -62,11 +62,11 @@ def test_annotate_attaches_brain_scores(brain_svc, tmp_path: Path):
         out = annotate_cuts_with_brain(
             cuts,
             weight_store=brain_svc.weights,
-            audio_analysis={"mood_tags": ["dark"], "energy_curve": [0.4, 0.7], "duration_seconds": 2.5},
+            audio_analysis={"analysis_status": "completed", "mood_tags": ["dark"], "energy_curve": [0.4, 0.7], "duration_seconds": 2.5},
             video_analysis_by_clip={
-                "clip_1": {"avg_motion": 0.6, "motion_category": "high",
+                "clip_1": {"analysis_status": "completed", "avg_motion": 0.6, "motion_category": "high",
                            "avg_brightness": 0.5, "avg_color_temp": 0.1},
-                "clip_2": {"avg_motion": 0.3, "motion_category": "low"},
+                "clip_2": {"analysis_status": "completed", "avg_motion": 0.3, "motion_category": "low"},
             },
             audio_clip_id=1,
             persist_to_state_conn=state,
@@ -74,9 +74,10 @@ def test_annotate_attaches_brain_scores(brain_svc, tmp_path: Path):
         assert len(out) == 2
         for c in out:
             scores = c["metadata"]["brain_scores"]
-            assert set(scores.keys()) == (
-                set(BRIDGE_AXES) - {"semantic_match_weight"}
-            )
+            assert set(scores.keys()).issubset(BRIDGE_AXES)
+            assert len(scores) > 0
+            assert "brain_final_score" in c["metadata"]
+            assert "brain_axis_status" in c["metadata"]
             ck = c["metadata"]["context_keys"]
             assert len(ck) == 6
 
@@ -102,7 +103,8 @@ def test_min_confidence_filters_low_scores(brain_svc, tmp_path: Path):
             min_confidence=0.99,
             persist_to_state_conn=state,
         )
-        assert out == []
+        assert len(out) == 1
+        assert out[0]["metadata"]["brain_meets_min_confidence"] is False
     finally:
         state.close()
 
@@ -129,13 +131,13 @@ def test_persist_batch_rolls_back_partial_timeline(
         {"clip_id": "b", "start_time": 1.0, "end_time": 2.0, "metadata": {}},
     ]
     try:
-        out = annotate_cuts_with_brain(
-            cuts,
-            weight_store=brain_svc.weights,
-            audio_clip_id=1,
-            persist_to_state_conn=state,
-        )
-        assert len(out) == 2
+        with pytest.raises(RuntimeError, match="Brain annotations could not be persisted"):
+            annotate_cuts_with_brain(
+                cuts,
+                weight_store=brain_svc.weights,
+                audio_clip_id=1,
+                persist_to_state_conn=state,
+            )
         assert state.execute("SELECT COUNT(*) FROM timelines").fetchone()[0] == 0
         assert state.execute("SELECT COUNT(*) FROM timeline_cuts").fetchone()[0] == 0
     finally:

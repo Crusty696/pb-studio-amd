@@ -1,0 +1,51 @@
+{
+  "selected_hash_checks": [
+    {
+      "id": "V01",
+      "sha256_after": "94b6b86dee5a070c4fd3c9e238f42942528b8f691a4c80b93b582f3a3ea06d86",
+      "matches_before": true
+    },
+    {
+      "id": "V02",
+      "sha256_after": "0e90426ea60f375ff34bf6a9e6f626c2d6c9609aa5cdfd1ff95a10db99ced681",
+      "matches_before": true
+    },
+    {
+      "id": "V03",
+      "sha256_after": "67738c870c8113dccff1d5df65bff43fcb99cfd5cea9c1a287eeabed4ce763a3",
+      "matches_before": true
+    },
+    {
+      "id": "V04",
+      "sha256_after": "5dfcb265e883f948c0c5b90325ad3d5d9c9275058862882251d19de1cf519768",
+      "matches_before": true
+    },
+    {
+      "id": "V05",
+      "sha256_after": "e849909ac2a288b9f3b52bfec06d87dff91b0126e5e10e96188ff4b8d3cfbb07",
+      "matches_before": true
+    },
+    {
+      "id": "V06",
+      "sha256_after": "5caf7db708810c7f601a5dc61990d6b944fb10889c948c19c89c037cd36ae5cc",
+      "matches_before": true
+    },
+    {
+      "id": "A01",
+      "sha256_after": "ca654204f059faa4409d66e6546f20131c091f7a0c1acaa66401b340e6ff12b3",
+      "matches_before": true
+    },
+    {
+      "id": "A02",
+      "sha256_after": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+      "matches_before": true
+    },
+    {
+      "id": "A03",
+      "sha256_after": "41deb4bce172438e08fcf522f0e6132eedb9d515dfc1d5dc878116d91e970c8f",
+      "matches_before": true
+    }
+  ],
+  "all424_size_mtime_changes": [],
+  "scope": "full before/after SHA256 selected9; size/mtime all424; no full posthash of unselected sources"
+}

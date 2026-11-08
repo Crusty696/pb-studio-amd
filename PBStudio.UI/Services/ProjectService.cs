@@ -97,28 +97,61 @@ public class ProjectService : IDisposable
 
     public async Task<bool> SaveProjectAsync()
     {
+        ProjectOperationContext context;
+        try
+        {
+            context = CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
         var result = await _api.SaveProjectAsync().ConfigureAwait(false);
-        if (result?.Success != true)
+        if (result?.Success != true || !IsCurrent(context))
             return false;
 
         var refreshedProject = await _api.GetProjectInfoAsync().ConfigureAwait(false);
-        RunOnUiThread(() =>
+        if (refreshedProject == null
+            || !string.Equals(refreshedProject.Path, context.ProjectPath, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return TryCommit(context, () =>
         {
-            CurrentProject = refreshedProject ?? CurrentProject;
-            ProjectChanged?.Invoke(this, CurrentProject);
+            RunOnUiThread(() =>
+            {
+                CurrentProject = refreshedProject;
+                ProjectChanged?.Invoke(this, CurrentProject);
+            });
+            _logger.LogInformation("Projekt gespeichert: {Path}", context.ProjectPath);
         });
-        _logger.LogInformation("Projekt gespeichert: {Path}", CurrentProject?.Path);
-        return true;
     }
 
     public async Task<bool> RefreshProjectInfoAsync()
     {
+        ProjectOperationContext context;
+        try
+        {
+            context = CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
         var project = await _api.GetProjectInfoAsync().ConfigureAwait(false);
-        if (project == null)
+        if (project == null
+            || !string.Equals(project.Path, context.ProjectPath, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        SwitchToProject(project);
-        return true;
+        return TryCommit(context, () =>
+        {
+            RunOnUiThread(() =>
+            {
+                CurrentProject = project;
+                ProjectChanged?.Invoke(this, CurrentProject);
+            });
+        });
     }
 
     public async Task<bool> CloseProjectAsync()
@@ -156,6 +189,66 @@ public class ProjectService : IDisposable
             {
                 _projectTransitionGate.Release();
             }
+        }
+    }
+
+    /// <summary>
+    /// Adopt a project the backend opened or closed outside the WPF (API, chat
+    /// tool project.open). Before 2026-10-01 the WPF never learned about it and
+    /// showed an empty AUDIO tab for an open project with its mix loaded.
+    /// Skipped while the WPF runs its own transition: that path already sends
+    /// ProjectOpenedMessage/ProjectClosedMessage, and the event it triggers
+    /// arrives afterwards as a no-op (same path / already closed).
+    /// </summary>
+    public async Task AdoptBackendProjectAsync(string action, string path)
+    {
+        if (!await _projectTransitionGate.WaitAsync(0).ConfigureAwait(false))
+            return;
+        try
+        {
+            if (string.Equals(action, "closed", StringComparison.OrdinalIgnoreCase))
+            {
+                if (CurrentProject == null)
+                    return;
+                RunOnUiThread(() =>
+                {
+                    WeakReferenceMessenger.Default.Send(new ProjectClosingMessage());
+                    CurrentProject = null;
+                    ProjectChanged?.Invoke(this, null);
+                    WeakReferenceMessenger.Default.Send(new ProjectClosedMessage());
+                });
+                _logger.LogInformation("Projekt vom Backend geschlossen übernommen");
+                return;
+            }
+
+            if (!string.Equals(action, "opened", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(path)
+                || (CurrentProject != null
+                    && string.Equals(CurrentProject.Path, path, StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            var stableProject = CurrentProject;
+            var completed = false;
+            BeginProjectTransition();
+            try
+            {
+                var project = await _api.GetProjectInfoAsync().ConfigureAwait(false);
+                if (project == null
+                    || !string.Equals(project.Path, path, StringComparison.OrdinalIgnoreCase))
+                    return;
+                SwitchToProject(project);
+                completed = true;
+                _logger.LogInformation("Projekt vom Backend übernommen: {Path}", path);
+            }
+            finally
+            {
+                if (!completed)
+                    RestoreStableProject(stableProject);
+            }
+        }
+        finally
+        {
+            _projectTransitionGate.Release();
         }
     }
 

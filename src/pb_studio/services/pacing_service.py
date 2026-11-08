@@ -9,15 +9,15 @@ Kein RLStyleModel (AMD Version hat keins).
 import json
 import logging
 import random
-import subprocess
 import re
-from copy import deepcopy
 from pathlib import Path
 from typing import Any, List, Dict, Callable, Optional
 import numpy as np
 
 from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
 from pb_studio.pacing.pacing_models import CutListEntry
+from pb_studio.pacing.media_duration import get_clip_duration
+from pb_studio.pacing.timeline_finalizer import finalize_cut_list
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,33 @@ def _uses_advanced_pacing(pacing_config: dict, semantic_enabled: bool) -> bool:
     )
 
 
+def _repair_legacy_trigger_settings(settings: dict | None) -> dict:
+    """Make persisted/Brain settings internally usable before engine creation.
+
+    API schemas reject this contradiction, but older snapshots can still carry
+    max values below the effective minimum. Preserve the requested minimum and
+    raise only the affected upper bounds; direct engine callers still receive
+    strict validation.
+    """
+    repaired = dict(settings or {})
+    effective_min = max(
+        float(repaired.get("min_cut_interval", 0.5)),
+        float(repaired.get("min_clip_length", 2.0)),
+    )
+    changed = False
+    for key in ("max_cut_interval", "max_clip_length"):
+        value = float(repaired.get(key, 8.0 if key == "max_clip_length" else 10.0))
+        if value < effective_min:
+            repaired[key] = effective_min
+            changed = True
+    if changed:
+        logger.warning(
+            "Pacing legacy settings normalized: upper bounds raised to %.3fs",
+            effective_min,
+        )
+    return repaired
+
+
 class PacingService:
     """Service-Layer für Cut-List-Generierung."""
 
@@ -86,6 +113,18 @@ class PacingService:
         # Audit L-M1: Test-Hint — wurde cached tempo_curve (SubtrackDetector
         # DJ-Tempo-Variation) in den Engine injiziert (fuer varying-BPM mixes)?
         self._last_used_cached_tempo: bool = False
+
+    @staticmethod
+    def _resolve_target_duration(
+        total_duration: float,
+        duration_limit: float | None,
+    ) -> float:
+        """Limit caps source duration; it must never extend audio."""
+        total = max(0.0, float(total_duration or 0.0))
+        if duration_limit is None or float(duration_limit) <= 0.0:
+            return total
+        limit = float(duration_limit)
+        return min(total, limit) if total > 0.0 else limit
 
     def _resolve_semantic_audio(
         self,
@@ -159,23 +198,7 @@ class PacingService:
 
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
-        key = str(clip_path)
-        if key in self._duration_cache:
-            return self._duration_cache[key]
-        from pb_studio.video.encoder_utils import _get_ffprobe_path
-        cmd = [
-            _get_ffprobe_path(), "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "json", str(clip_path)
-        ]
-        try:
-            res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
-            dur = float(json.loads(res)["format"]["duration"])
-            self._duration_cache[key] = dur
-            return dur
-        except Exception as e:
-            logger.error(f"Clip-Dauer nicht ermittelbar: {clip_path}: {e}")
-            raise ValueError(f"Konnte Dauer nicht lesen: {Path(clip_path).name}") from e
+        return get_clip_duration(clip_path, self._duration_cache, logger)
 
     def _get_random_clip_start(self, clip_path: str, required_duration: float) -> float:
         """Berechnet zufällige Start-Position im Clip."""
@@ -209,7 +232,7 @@ class PacingService:
                 break
 
             duration = next_cut.time - current_cut.time
-            if duration < 0.5:
+            if duration <= 1e-6:
                 continue
             if not clip_path:
                 continue
@@ -282,97 +305,8 @@ class PacingService:
         return cut_list
 
     def _finalize_cut_list(self, cut_list: list, target_duration: float) -> list:
-        """Single exit-point post-processing for all auto-pacing return paths.
-        Future cut-list invariants (e.g. min-gap normalization, last-cut stretch)
-        belong here, not at each return site.
-
-        BUGFIX H1: target_duration MUST be the same budget the cuts were generated
-        against (duration_limit or total_duration), NOT the full song length.
-        Passing total_duration here stretched the last cut of a duration_limit'd
-        (preview/short) render across the entire song -> giant runaway final clip.
-        """
-        if not cut_list or target_duration <= 0.0:
-            return cut_list
-
-        cut_list[:] = [
-            cut for cut in cut_list
-            if float(cut.start_time) < target_duration
-        ]
-        if not cut_list:
-            return cut_list
-
-        originals = sorted(cut_list, key=lambda cut: float(cut.start_time))
-        finalized: list[CutListEntry] = []
-
-        for index, original in enumerate(originals):
-            interval_start = 0.0 if index == 0 else max(
-                0.0, float(original.start_time)
-            )
-            if finalized:
-                interval_start = max(interval_start, finalized[-1].end_time)
-            interval_end = (
-                min(target_duration, float(originals[index + 1].start_time))
-                if index + 1 < len(originals)
-                else target_duration
-            )
-            if interval_end <= interval_start + 1e-9:
-                continue
-
-            base_metadata = deepcopy(
-                original.metadata if isinstance(original.metadata, dict) else {}
-            )
-            original_start = float(original.start_time)
-            original_end = float(original.end_time)
-            clip_start = max(0.0, float(base_metadata.get("clip_start", 0.0) or 0.0))
-            if index == 0 and abs(original_start) > 0.001:
-                if original_start > 0.0:
-                    clip_start = max(0.0, clip_start - original_start)
-                else:
-                    clip_start += abs(original_start)
-                base_metadata["boundary_original_start"] = original_start
-                base_metadata["boundary_normalized_start"] = 0.0
-
-            source_duration = float(base_metadata.get("source_duration", 0.0) or 0.0)
-            if source_duration <= 0.0:
-                file_path = str(base_metadata.get("file_path", "") or "")
-                if file_path and Path(file_path).is_file():
-                    source_duration = self._get_clip_duration(file_path)
-                    if source_duration > 0.0:
-                        base_metadata["source_duration"] = source_duration
-
-            cursor = interval_start
-            segment_clip_start = clip_start
-            while cursor < interval_end - 1e-9:
-                remaining = interval_end - cursor
-                if source_duration > 0.0:
-                    available = source_duration - segment_clip_start
-                    if available <= 1e-9:
-                        segment_clip_start = 0.0
-                        available = source_duration
-                    segment_duration = min(remaining, available)
-                else:
-                    # Legacy/manual entries can lack resolvable media metadata.
-                    # Preserve compatibility; generated entries always carry a
-                    # measured source_duration from the conversion step above.
-                    segment_duration = remaining
-
-                metadata = deepcopy(base_metadata)
-                metadata["clip_start"] = segment_clip_start
-                if index == len(originals) - 1 and abs(original_end - target_duration) > 0.001:
-                    metadata["boundary_original_end"] = original_end
-                    metadata["boundary_normalized_end"] = target_duration
-                segment_end = min(interval_end, cursor + segment_duration)
-                finalized.append(CutListEntry(
-                    clip_id=original.clip_id,
-                    start_time=cursor,
-                    end_time=segment_end,
-                    metadata=metadata,
-                ))
-                cursor = segment_end
-                segment_clip_start = 0.0
-
-        cut_list[:] = finalized
-        return cut_list
+        """Compatibility entry point for the shared timeline finalizer."""
+        return finalize_cut_list(cut_list, target_duration, self._get_clip_duration)
 
     def _inject_cached_into_engine(
         self,
@@ -645,6 +579,7 @@ class PacingService:
         
         # Finde durchschnittliche Energie für jedes Kapitel
         energy_data = energy_curve if energy_curve is not None and len(energy_curve) > 0 else None
+        energy_duration = float(getattr(self, "_chapter_energy_duration", 0.0) or duration)
         
         for i in range(0, num_beats, beats_per_chapter):
             start_beat_idx = i
@@ -667,8 +602,8 @@ class PacingService:
             avg_energy = 0.5
             if energy_data is not None:
                 curve_len = len(energy_data)
-                start_idx = int((start_time / duration) * curve_len) if duration > 0 else 0
-                end_idx = int((end_time / duration) * curve_len) if duration > 0 else curve_len
+                start_idx = int((start_time / energy_duration) * curve_len) if energy_duration > 0 else 0
+                end_idx = int((end_time / energy_duration) * curve_len) if energy_duration > 0 else curve_len
                 start_idx = max(0, min(curve_len - 1, start_idx))
                 end_idx = max(start_idx + 1, min(curve_len, end_idx))
                 avg_energy = float(np.mean(energy_data[start_idx:end_idx]))
@@ -769,6 +704,7 @@ class PacingService:
                 "file_path": file_path,
                 "mix_start": start,
                 "mix_end": end,
+                "anchor_source": "ui",
             })
 
         merged.sort(key=lambda anchor: anchor["mix_start"])
@@ -804,8 +740,8 @@ class PacingService:
         for n in nodes:
             if n.get("type") == "text":
                 text = n.get("text", "")
-                m = re.search(r"@(\d{1,2}):(\d{2})", text)
-                if m:
+                m = re.search(r"@(\d{1,3}):(\d{2})(?!\d)", text)
+                if m and int(m.group(2)) < 60:
                     minutes = int(m.group(1))
                     seconds = int(m.group(2))
                     anchors.append({
@@ -842,9 +778,6 @@ class PacingService:
                 y = float(n.get("y", 999))
                 if y < 520: # Clip-Lobby-Grenze
                     file_rel = n.get("file", "")
-                    if not file_rel.lower().endswith(".mp4"):
-                        continue
-                        
                     x = float(n.get("x", 0))
                     sec = x_to_seconds(x)
                     
@@ -864,7 +797,8 @@ class PacingService:
                                 "mix_start": sec,
                                 "duration": float(clip_info.get("duration", 5.0) or 5.0),
                                 "cluster": clip_info.get("cluster"),
-                                "clip_info": clip_info
+                                "clip_info": clip_info,
+                                "anchor_source": "canvas",
                             })
                             
         manual_clips.sort(key=lambda c: c["mix_start"])
@@ -940,7 +874,12 @@ class PacingService:
         )
 
         pacing_engine = AdvancedPacingEngine(
-            trigger_settings=pacing_config["trigger_settings"]
+            trigger_settings=_repair_legacy_trigger_settings(
+                pacing_config.get("trigger_settings")
+            )
+        )
+        pacing_engine.enable_motion_matching(
+            bool(pacing_config.get("use_motion_matching", False))
         )
         pacing_engine.clip_selector.vector_store = vstore
         pacing_engine.clip_selector.use_semantic = semantic_enabled
@@ -973,7 +912,10 @@ class PacingService:
             song_mood,
         )
 
-        target_duration = duration_limit or total_duration
+        target_duration = self._resolve_target_duration(
+            total_duration,
+            duration_limit,
+        )
         min_cut_interval = float(pacing_config.get("min_cut_interval", 0.5))
         expected_bpm = pacing_config.get("expected_bpm", 120)
         song_sections = None
@@ -1017,6 +959,9 @@ class PacingService:
                     else:
                         pre_cached_beats_stems.append(float(b))
 
+            self._chapter_energy_duration = float(
+                getattr(pacing_engine, "_pre_cached_duration", 0.0) or total_duration
+            )
             chapters = self.segment_timeline_into_chapters(
                 pacing_engine._pre_cached_energy if hasattr(pacing_engine, "_pre_cached_energy") else None,
                 pre_cached_beats_stems,
@@ -1052,7 +997,12 @@ class PacingService:
                 if active_anchor:
                     # Verwende den manuellen Storyboard-Clip
                     anchor_clip_id = active_anchor.get("clip_id", active_anchor["id"])
-                    cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{anchor_clip_id}"))
+                    cut_with_clips.append((
+                        cut,
+                        active_anchor["file_path"],
+                        f"clip_{anchor_clip_id}",
+                        {"anchor_source": active_anchor.get("anchor_source", "manual")},
+                    ))
                     last_manual_end = active_anchor["mix_end"]
                     last_manual_clip = active_anchor
                     continue
@@ -1112,17 +1062,17 @@ class PacingService:
                 cut_list = self._generate_time_grid_fallback(
                     clips, pacing_config, target_duration,
                 )
-                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
+                return self._finalize_cut_list(cut_list, target_duration)
 
             cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-            return self._finalize_cut_list(cut_list, duration_limit or total_duration)
+            return self._finalize_cut_list(cut_list, target_duration)
         except Exception as e:
             logger.error(f"L-K5 Stem-Cut-Generierung fehlgeschlagen: {e}", exc_info=True)
             try:
                 cut_list = self._generate_time_grid_fallback(
                     clips, pacing_config, target_duration,
                 )
-                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
+                return self._finalize_cut_list(cut_list, target_duration)
             except Exception as final_e:
                 raise RuntimeError(
                     f"L-K5 Stem-Cut-Generierung endgueltig fehlgeschlagen: {final_e}"
@@ -1193,16 +1143,17 @@ class PacingService:
                         pass  # ffprobe failed — let render handle it
 
                     final_cuts.append(cut)
-            return self._finalize_cut_list(
-                final_cuts,
-                duration_limit or total_duration,
+            target_duration = self._resolve_target_duration(
+                total_duration,
+                duration_limit,
             )
+            return self._finalize_cut_list(final_cuts, target_duration)
 
         # 2. Rule Engine (mittlere Priorität)
         if rule_engine and hasattr(rule_engine, "rules") and rule_engine.rules:
             logger.info(f"Rule Engine mit {len(rule_engine.rules)} Regeln.")
             rule_engine.available_clips = clips
-            target = duration_limit or total_duration
+            target = self._resolve_target_duration(total_duration, duration_limit)
             return self._finalize_cut_list(
                 rule_engine.apply_rules(duration=target),
                 target,
@@ -1227,13 +1178,21 @@ class PacingService:
         )
 
         pacing_engine = AdvancedPacingEngine(
-            trigger_settings=pacing_config["trigger_settings"]
+            trigger_settings=_repair_legacy_trigger_settings(
+                pacing_config.get("trigger_settings")
+            )
+        )
+        pacing_engine.enable_motion_matching(
+            bool(pacing_config.get("use_motion_matching", False))
         )
         # VectorStore für semantische Auswahl injizieren
         pacing_engine.clip_selector.vector_store = vstore
         pacing_engine.clip_selector.use_semantic = semantic_enabled
 
-        target_duration = duration_limit or total_duration
+        target_duration = self._resolve_target_duration(
+            total_duration,
+            duration_limit,
+        )
 
         # Gecachte Beats aus vorheriger Audio-Analyse extrahieren
         pre_cached_beats: List[float] = []
@@ -1320,9 +1279,6 @@ class PacingService:
             use_advanced = _uses_advanced_pacing(pacing_config, semantic_enabled)
 
             if use_advanced:
-                if pacing_config.get("use_motion_matching", False):
-                    pacing_engine.enable_motion_matching(True)
-                
                 if pacing_config.get("use_structure_awareness", False):
                     # Audit A3: structure_segments wird in audio_router persistiert
                     # (state.update_audio_analysis(...structure_segments=...)) — wenn
@@ -1371,6 +1327,9 @@ class PacingService:
                         else:
                             pre_cached_beats_adv.append(float(b))
 
+                self._chapter_energy_duration = float(
+                    getattr(pacing_engine, "_pre_cached_duration", 0.0) or total_duration
+                )
                 chapters = self.segment_timeline_into_chapters(
                     pacing_engine._pre_cached_energy if hasattr(pacing_engine, "_pre_cached_energy") else None,
                     pre_cached_beats_adv,
@@ -1404,7 +1363,12 @@ class PacingService:
                     if active_anchor:
                         # Verwende den manuellen Storyboard-Clip
                         anchor_clip_id = active_anchor.get("clip_id", active_anchor["id"])
-                        cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{anchor_clip_id}"))
+                        cut_with_clips.append((
+                            cut,
+                            active_anchor["file_path"],
+                            f"clip_{anchor_clip_id}",
+                            {"anchor_source": active_anchor.get("anchor_source", "manual")},
+                        ))
                         last_manual_end = active_anchor["mix_end"]
                         last_manual_clip = active_anchor
                         continue
@@ -1465,10 +1429,10 @@ class PacingService:
                     cut_list = self._generate_time_grid_fallback(
                         clips, pacing_config, target_duration,
                     )
-                    return self._finalize_cut_list(cut_list, duration_limit or total_duration)
+                    return self._finalize_cut_list(cut_list, target_duration)
 
                 cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
+                return self._finalize_cut_list(cut_list, target_duration)
             else:
                 cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
@@ -1476,7 +1440,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
+                return self._finalize_cut_list(cut_list, target_duration)
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
             # Letzter Rettungsanker: generator-unabhaengiges Zeitraster.
@@ -1484,7 +1448,7 @@ class PacingService:
                 cut_list = self._generate_time_grid_fallback(
                     clips, pacing_config, target_duration,
                 )
-                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
+                return self._finalize_cut_list(cut_list, target_duration)
             except Exception as final_e:
                 raise RuntimeError(f"Cut-List-Generierung endgültig fehlgeschlagen: {final_e}") from e
 
@@ -1510,7 +1474,7 @@ class PacingService:
             if target_duration and cur.time >= target_duration:
                 break
             dur = nxt.time - cur.time
-            if dur < 0.5:
+            if dur <= 1e-6:
                 continue
 
             clip = clips[idx % len(clips)]
@@ -1562,10 +1526,16 @@ class PacingService:
             raise ValueError("Positive Zieldauer erforderlich.")
 
         settings = pacing_config.get("trigger_settings") or {}
-        min_length = float(settings.get("min_clip_length", 1.0))
+        min_length = max(
+            float(settings.get("min_clip_length", 1.0)),
+            float(settings.get("min_cut_interval", 0.5)),
+            float(pacing_config.get("min_cut_interval", 0.5)),
+        )
         max_length = float(settings.get("max_clip_length", 8.0))
         max_interval = float(settings.get("max_cut_interval", 10.0))
-        configured_interval = max(min_length, min(max_length, max_interval))
+        configured_max = min(max_length, max_interval)
+        if configured_max < min_length:
+            raise ValueError("Widersprüchliche Schnittlängen für Zeitraster-Fallback.")
 
         candidates = []
         for clip in clips:
@@ -1582,15 +1552,38 @@ class PacingService:
         if not candidates:
             raise ValueError("Kein Clip mit gueltiger Dauer fuer Zeitraster-Fallback.")
 
-        usable = [item for item in candidates if item[2] >= min_length] or candidates
-        grid_interval = min(configured_interval, min(item[2] for item in usable))
-        slot_count = max(1, int(np.ceil(float(target_duration) / grid_interval)))
-        slot_duration = float(target_duration) / slot_count
+        max_source_duration = max(item[2] for item in candidates)
+        slot_max = min(configured_max, max_source_duration)
+        if target_duration > slot_max and slot_max < min_length:
+            raise ValueError(
+                "Kein Video-Clip erfüllt die konfigurierte Mindestlänge."
+            )
+
+        slot_durations: list[float] = []
+        remaining = float(target_duration)
+        while remaining > slot_max + 1e-9:
+            if remaining - slot_max >= min_length:
+                duration = slot_max
+            else:
+                duration = min_length
+            slot_durations.append(duration)
+            remaining -= duration
+        if remaining > 1e-9:
+            slot_durations.append(remaining)
 
         cut_list: List[CutListEntry] = []
-        for index in range(slot_count):
-            clip, file_path, _ = usable[index % len(usable)]
-            start_time = index * slot_duration
+        start_time = 0.0
+        candidate_index = 0
+        for index, slot_duration in enumerate(slot_durations):
+            eligible = [item for item in candidates if item[2] >= slot_duration]
+            if not eligible:
+                raise ValueError(
+                    f"Kein Video-Clip deckt den {slot_duration:.3f}s-Slot ab."
+                )
+            clip, file_path, source_duration = eligible[
+                candidate_index % len(eligible)
+            ]
+            candidate_index += 1
             clip_id = str(clip.get("id", index))
             if not clip_id.startswith("clip_"):
                 clip_id = f"clip_{clip_id}"
@@ -1602,10 +1595,12 @@ class PacingService:
                     "file_path": file_path,
                     "clip_name": clip.get("name", Path(file_path).stem),
                     "clip_start": 0.0,
+                    "source_duration": source_duration,
                     "trigger_type": "time_grid_fallback",
                     "trigger_strength": 0.0,
                 },
             ))
+            start_time += slot_duration
 
         logger.warning("Generator-unabhaengiger Zeitraster-Fallback: %d Cuts", len(cut_list))
         return cut_list
