@@ -7,3 +7,4 @@
 - [X] T005 [OBJ-1] {(TR-001)} SCA und Regressionen dokumentieren; `specs/00040-security-dependency-refresh/verification.md` erstellen.
 - [ ] T006 [OBJ-1] {(OR-001)} Geprueften Stand committen/pushen, GitHub-Pflichtchecks pruefen und PR 34 mergen; `docs/security-review-2026-11-08.md` und Vault synchronisieren.
 - [X] T007 [OBJ-1] {TR-001} CI-Ursache des optionalen madmom-Imports beheben, Python-Skip-Guard und Allowlist bis 2026-12-08 nachweisen; finale Checks und Merge fortsetzen.
+- [X] T008 [OBJ-1] {TR-001} Recovery-Concurrency-Test an den isolierten LOCALAPPDATA-Control-Root anbinden; gezielter Windows-Test bestanden.

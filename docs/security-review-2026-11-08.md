@@ -118,3 +118,7 @@ Legacy-Skips bleiben explizite Testluecken, keine bestandenen Funktionstests.
 ## CI-Nachlauf am 08.11.2026
 
 Der erste vollstaendige PR-Lauf hatte 2237 Python-Tests bestanden, 35 genehmigte Skips, 9 Deselections und einen Fehler: der optionale madmom-Import im echten BeatNet-PF-State-Test war nicht abgefangen. Der Test ueberspringt diesen optionalen Fall nun, wenn madmom fehlt. Eine exakte Skip-Freigabe fuer diesen einzelnen Test ist bis 2026-12-08 befristet; synthetische State-Tests laufen weiter. Der Gatevertragstest besteht lokal 8/8; der BeatNet-State-Test besteht lokal 9/9 mit madmom installiert. Finale Clean-CI-Verifikation steht aus.
+
+## Zweiter CI-Nachlauf am 08.11.2026
+
+Der Fix fuer den optionalen madmom-Import beseitigte den ersten CI-Fehler. Der zweite volle Lauf bestand 2236 Tests und meldete danach WinError 5 in 	est_atomic_json_write_uses_independent_temp_files_under_concurrency, weil der Test %TEMP% statt des isolierten %LOCALAPPDATA%-Recovery-Control-Roots verwendete. Der Test nutzt jetzt ixed_control_root(); gezielter Windows-Test bestanden. Erneuter vollstaendiger CI-Lauf offen.

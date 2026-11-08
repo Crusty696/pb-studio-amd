@@ -72,10 +72,11 @@ def test_missing_control_root_is_uninitialized(tmp_path: Path) -> None:
 
 
 def test_atomic_json_write_uses_independent_temp_files_under_concurrency(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    target = tmp_path / "journal.json"
+    control_root = recovery_bootstrap.fixed_control_root()
+    control_root.mkdir(parents=True, exist_ok=True)
+    target = control_root / "parallel-journal-test.json"
     barrier = threading.Barrier(2)
     original_fsync_file = recovery_bootstrap._fsync_file
 
